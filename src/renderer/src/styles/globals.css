@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background-color: #0a1628;
+  color: #e2e8f0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a1628;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e3a5f;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a4f7a;
+}
+
+.glass-card {
+  background: rgba(17, 34, 64, 0.8);
+  border: 1px solid rgba(30, 58, 95, 0.6);
+  backdrop-filter: blur(8px);
+}
+
+.btn-primary {
+  @apply bg-accent-blue hover:bg-accent-blue-light text-white font-semibold px-6 py-2.5 rounded-full transition-all duration-200 text-sm;
+}
+
+.btn-ghost {
+  @apply text-navy-400 hover:text-white text-sm transition-colors duration-200 underline underline-offset-2;
+}
+
+.card {
+  @apply rounded-xl p-5;
+  background: #112240;
+  border: 1px solid rgba(30, 58, 95, 0.8);
+}
+
+.sidebar-item {
+  @apply flex items-center gap-3 px-4 py-2.5 rounded-lg cursor-pointer transition-all duration-150 text-sm font-medium;
+  color: #94a3b8;
+}
+
+.sidebar-item:hover {
+  background: rgba(30, 58, 95, 0.4);
+  color: #e2e8f0;
+}
+
+.sidebar-item.active {
+  background: rgba(33, 150, 243, 0.15);
+  color: #e2e8f0;
+  border-left: 2px solid #2196f3;
+  padding-left: calc(1rem - 2px);
+}
+
+.status-badge {
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+}
+
+.status-new {
+  @apply bg-accent-amber text-navy-900;
+}
+
+@keyframes scanLine {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(100vh); opacity: 0; }
+}
+
+.scan-line {
+  animation: scanLine 2s ease-in-out infinite;
+}
+
+@keyframes progressFill {
+  from { stroke-dashoffset: 440; }
+  to { stroke-dashoffset: var(--target-offset); }
+}
+
+.arc-progress {
+  animation: progressFill 1.2s ease-out forwards;
+}
+
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+
+.titlebar-nodrag {
+  -webkit-app-region: no-drag;
+}
