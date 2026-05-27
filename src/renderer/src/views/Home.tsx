@@ -54,18 +54,24 @@ function renderMarkdown(content: string): React.ReactNode {
 
 // ── Switch rate metric ────────────────────────────────────────────────────────
 function SwitchRateMetric({ rate }: { rate: number }): React.ReactElement {
-  const color  = rate === 0 ? '#7a9ab5' : rate < 20 ? '#4ade80' : rate < 60 ? '#fbbf24' : '#f97316'
-  const status = rate === 0 ? 'no data yet' : rate < 20 ? 'deep work' : rate < 60 ? 'moderate' : 'fragmented'
+  const color  = rate === 0 ? 'rgba(0,200,255,0.3)' : rate < 20 ? '#00e676' : rate < 60 ? '#ffaa00' : '#ff4444'
+  const status = rate === 0 ? 'standby' : rate < 20 ? 'deep work' : rate < 60 ? 'moderate' : 'fragmented'
   return (
     <div
       className="flex items-baseline gap-1.5"
       title="Context switches per hour. Knowledge workers avg 60–80/h · Deep work lives below 20/h"
     >
-      <span className="text-2xl font-black tabular-nums leading-none" style={{ color }}>
+      <span
+        className="text-xl font-black tabular-nums leading-none data-value"
+        style={{ color, textShadow: rate > 0 ? `0 0 12px ${color}60` : 'none' }}
+      >
         {rate > 0 ? rate : '—'}
       </span>
-      <span className="text-[11px] font-medium leading-none" style={{ color: '#7a9ab5' }}>/h</span>
-      <span className="text-[11px] font-semibold leading-none" style={{ color }}>
+      <span className="text-[9px] leading-none data-value" style={{ color: 'rgba(0,200,255,0.3)' }}>/h</span>
+      <span
+        className="text-[9px] leading-none uppercase tracking-widest"
+        style={{ color, fontFamily: '"Share Tech Mono", monospace' }}
+      >
         {status}
       </span>
     </div>
@@ -269,20 +275,26 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div
-        className="flex-shrink-0 flex items-center px-5"
-        style={{ height: 44, background: 'rgba(8,15,30,0.85)', borderBottom: '1px solid rgba(30,58,95,0.35)' }}
+        className="flex-shrink-0 flex items-center px-5 gap-4"
+        style={{ height: 46, background: 'rgba(2,9,18,0.95)', borderBottom: '1px solid rgba(0,200,255,0.1)' }}
       >
         {/* Left: session status */}
-        <div className="flex items-center gap-2 min-w-0" style={{ flex: '0 0 auto', maxWidth: 220 }}>
+        <div className="flex items-center gap-2 flex-shrink-0" style={{ minWidth: 160 }}>
           {activeSession ? (
             <>
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#4ade80', boxShadow: '0 0 6px #4ade80' }} />
-              <div className="min-w-0">
-                <p className="text-[11px] font-semibold leading-none" style={{ color: '#4ade80' }}>
-                  {activeSession.mode === 'deep' ? 'Deep focus' : 'Focus session'}
+              <div
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0 animate-pulse"
+                style={{ background: '#00e676', boxShadow: '0 0 8px #00e676' }}
+              />
+              <div>
+                <p
+                  className="text-[9px] font-bold uppercase leading-none"
+                  style={{ color: '#00e676', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.18em' }}
+                >
+                  {activeSession.mode === 'deep' ? 'Deep Focus' : 'Focus Active'}
                 </p>
                 {sessionRemaining !== null && (
-                  <p className="text-[10px] leading-none mt-0.5" style={{ color: '#7a9ab5' }}>
+                  <p className="text-[9px] leading-none mt-0.5 data-value" style={{ color: 'rgba(0,200,255,0.5)' }}>
                     {formatMs(sessionRemaining)} remaining
                   </p>
                 )}
@@ -290,35 +302,57 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
             </>
           ) : (
             <>
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: 'rgba(50,80,130,0.6)' }} />
-              <p className="text-[11px]" style={{ color: '#7a9ab5' }}>No active session</p>
+              <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: 'rgba(0,200,255,0.2)' }} />
+              <p
+                className="text-[9px] uppercase"
+                style={{ color: 'rgba(0,200,255,0.3)', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.15em' }}
+              >
+                Standby
+              </p>
             </>
           )}
         </div>
+
+        {/* Divider */}
+        <div className="w-px h-5 flex-shrink-0" style={{ background: 'rgba(0,200,255,0.1)' }} />
 
         {/* Center: switch rate */}
         <div className="flex-1 flex justify-center">
           {todayStats !== null
             ? <SwitchRateMetric rate={todayStats.switchRate} />
-            : <span className="text-[11px]" style={{ color: '#7a9ab5' }}>Collecting data…</span>}
+            : <span className="text-[9px] uppercase tracking-widest" style={{ color: 'rgba(0,200,255,0.3)', fontFamily: '"Share Tech Mono", monospace' }}>Collecting data…</span>}
         </div>
 
+        {/* Divider */}
+        <div className="w-px h-5 flex-shrink-0" style={{ background: 'rgba(0,200,255,0.1)' }} />
+
         {/* Right: focused time + scan */}
-        <div className="flex items-center gap-3" style={{ flex: '0 0 auto' }}>
+        <div className="flex items-center gap-3 flex-shrink-0">
           {todayStats !== null && todayStats.focusedTime > 0 && (
             <div className="flex items-center gap-1.5" title="Focused time today">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#3b82f6' }} />
-              <span className="text-[11px]" style={{ color: '#8faac4' }}>{formatMs(todayStats.focusedTime)} focused</span>
+              <div className="w-1 h-1" style={{ background: 'rgba(0,200,255,0.6)' }} />
+              <span
+                className="text-[9px] data-value"
+                style={{ color: 'rgba(0,200,255,0.55)' }}
+              >
+                {formatMs(todayStats.focusedTime)} focused
+              </span>
             </div>
           )}
           <button
             onClick={handleRunScan}
             disabled={scanning}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all disabled:opacity-50 hover:scale-105"
-            style={{ background: 'rgba(33,150,243,0.1)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.22)' }}
+            className="flex items-center gap-1.5 px-3 py-1 text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-40 hover:scale-105"
+            style={{
+              background: 'rgba(0,200,255,0.06)',
+              color: 'rgba(0,200,255,0.7)',
+              border: '1px solid rgba(0,200,255,0.2)',
+              fontFamily: '"Share Tech Mono", monospace',
+              letterSpacing: '0.18em',
+            }}
           >
-            <ScanLine size={10} />
-            {scanning ? 'Scanning…' : 'Focus Scan'}
+            <ScanLine size={9} />
+            {scanning ? 'Scanning…' : 'Scan'}
           </button>
         </div>
       </div>
@@ -327,24 +361,29 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
       {(store.elevation === 'soft' || store.elevation === 'unknown') && (
         <div
           className="flex-shrink-0 flex items-center justify-between px-5 py-1.5 gap-4"
-          style={{ background: 'rgba(255,184,0,0.05)', borderBottom: '1px solid rgba(255,184,0,0.12)' }}
+          style={{ background: 'rgba(255,107,53,0.04)', borderBottom: '1px solid rgba(255,107,53,0.15)' }}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <Activity size={12} style={{ color: '#ffb800', flexShrink: 0 }} />
-            <p className="text-[11px] font-medium" style={{ color: '#ffb800' }}>
-              Soft protection active — app blocking on
-              <span className="font-normal" style={{ color: '#8faac4' }}> · site blocking needs admin</span>
+            <Activity size={11} style={{ color: '#ff6b35', flexShrink: 0 }} />
+            <p className="text-[9px] uppercase tracking-widest" style={{ color: '#ff6b35', fontFamily: '"Share Tech Mono", monospace' }}>
+              Soft Mode
+              <span style={{ color: 'rgba(0,200,255,0.35)' }}> · site blocking requires admin</span>
             </p>
           </div>
           <button
             onClick={async () => { setRelaunching(true); try { await api.relaunchAsAdmin() } catch { setRelaunching(false) } }}
             disabled={relaunching}
-            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-60"
-            style={{ background: 'rgba(255,107,53,0.12)', color: '#ff6b35', border: '1px solid rgba(255,107,53,0.25)' }}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-60"
+            style={{
+              background: 'rgba(255,107,53,0.1)',
+              color: '#ff6b35',
+              border: '1px solid rgba(255,107,53,0.25)',
+              fontFamily: '"Share Tech Mono", monospace',
+            }}
           >
             {relaunching
-              ? <><RefreshCw size={9} className="animate-spin" /> Relaunching…</>
-              : <><Shield size={9} /> Enable Full</>}
+              ? <><RefreshCw size={8} className="animate-spin" /> Relaunching…</>
+              : <><Shield size={8} /> Enable Full</>}
           </button>
         </div>
       )}
@@ -357,20 +396,30 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
 
           {/* Empty state */}
           {showQuickCommands && (
-            <div className="flex flex-col items-center justify-center h-full gap-5 pb-6">
-              <p className="text-sm font-medium" style={{ color: '#8faac4' }}>
-                What would you like to focus on today?
-              </p>
+            <div className="flex flex-col items-center justify-center h-full gap-6 pb-8">
+              <div className="flex flex-col items-center gap-1.5">
+                <p
+                  className="text-[11px] uppercase tracking-widest"
+                  style={{ color: 'rgba(0,200,255,0.45)', fontFamily: '"Share Tech Mono", monospace' }}
+                >
+                  Daemon Online
+                </p>
+                <p className="text-[13px] font-medium" style={{ color: 'rgba(200,230,255,0.6)' }}>
+                  What are you working on today?
+                </p>
+              </div>
               <div className="flex flex-wrap justify-center gap-2 max-w-[480px]">
                 {quickCommands.map((cmd) => (
                   <button
                     key={cmd.label}
                     onClick={() => sendMessage(cmd.text)}
-                    className="px-3.5 py-2 rounded-xl text-[12px] font-medium transition-all duration-200 hover:scale-105"
+                    className="px-3.5 py-2 text-[11px] font-medium transition-all duration-200 hover:scale-105"
                     style={{
-                      background: 'rgba(33,150,243,0.09)',
-                      border: '1px solid rgba(59,130,246,0.22)',
-                      color: '#7eb8f5',
+                      background: 'rgba(0,200,255,0.05)',
+                      border: '1px solid rgba(0,200,255,0.2)',
+                      color: 'rgba(0,200,255,0.7)',
+                      fontFamily: '"Share Tech Mono", monospace',
+                      letterSpacing: '0.06em',
                     }}
                   >
                     {cmd.label}
@@ -379,14 +428,15 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
                 {!activeSession && (
                   <button
                     onClick={() => onNavigate('deep-focus')}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[12px] font-medium transition-all duration-200 hover:scale-105"
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-[11px] font-medium transition-all duration-200 hover:scale-105"
                     style={{
-                      background: 'rgba(129,140,248,0.08)',
-                      border: '1px solid rgba(129,140,248,0.22)',
-                      color: '#a5b4fc',
+                      background: 'rgba(0,229,200,0.05)',
+                      border: '1px solid rgba(0,229,200,0.2)',
+                      color: 'rgba(0,229,200,0.7)',
+                      fontFamily: '"Share Tech Mono", monospace',
                     }}
                   >
-                    <Lock size={11} />
+                    <Lock size={10} />
                     Deep Focus
                   </button>
                 )}
@@ -401,17 +451,20 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
             </div>
           ))}
 
-          {/* Thinking indicator — inline bubble */}
+          {/* Thinking indicator */}
           {phase === 'thinking' && (
             <div className="flex items-start gap-2.5 animate-fade-in">
               <OrbAvatar />
               <div
-                className="px-4 py-3 text-[13px]"
+                className="px-4 py-3 text-[12px]"
                 style={{
-                  background: 'rgba(14,26,50,0.95)',
-                  border: '1px solid rgba(38,65,108,0.65)',
-                  borderRadius: '4px 16px 16px 16px',
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+                  background: 'rgba(4,11,22,0.97)',
+                  border: '1px solid rgba(0,200,255,0.18)',
+                  borderTopLeftRadius: 2,
+                  borderTopRightRadius: 12,
+                  borderBottomLeftRadius: 12,
+                  borderBottomRightRadius: 12,
+                  boxShadow: '0 0 16px rgba(0,200,255,0.04)',
                 }}
               >
                 <div className="flex items-center gap-2.5">
@@ -419,12 +472,19 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
                     {[0, 1, 2].map((i) => (
                       <div
                         key={i}
-                        className="w-1.5 h-1.5 rounded-full animate-bounce"
-                        style={{ background: '#5b8fd4', animationDelay: `${i * 150}ms` }}
+                        className="w-1.5 h-1.5 animate-bounce"
+                        style={{
+                          background: '#00c8ff',
+                          boxShadow: '0 0 6px rgba(0,200,255,0.6)',
+                          animationDelay: `${i * 150}ms`,
+                        }}
                       />
                     ))}
                   </div>
-                  <span className="text-[11px]" style={{ color: '#7a9ab5' }}>
+                  <span
+                    className="text-[9px] uppercase tracking-widest"
+                    style={{ color: 'rgba(0,200,255,0.5)', fontFamily: '"Share Tech Mono", monospace' }}
+                  >
                     {THINKING_PHASES[thinkingStep] ?? THINKING_PHASES[0]}
                   </span>
                 </div>
@@ -439,17 +499,20 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
               <div
                 className="max-w-[84%] px-4 py-3 text-[13px] leading-relaxed"
                 style={{
-                  background: 'rgba(14,26,50,0.95)',
-                  border: '1px solid rgba(38,65,108,0.65)',
-                  color: '#c4d4e8',
-                  borderRadius: '4px 16px 16px 16px',
-                  boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+                  background: 'rgba(4,11,22,0.97)',
+                  border: '1px solid rgba(0,200,255,0.18)',
+                  color: '#b8d4ec',
+                  borderTopLeftRadius: 2,
+                  borderTopRightRadius: 12,
+                  borderBottomLeftRadius: 12,
+                  borderBottomRightRadius: 12,
+                  boxShadow: '0 0 16px rgba(0,200,255,0.04)',
                 }}
               >
                 {renderMarkdown(streamedText)}
                 <span
                   className="inline-block w-0.5 h-3.5 ml-0.5 align-text-bottom animate-pulse"
-                  style={{ background: '#5b8fd4' }}
+                  style={{ background: '#00c8ff', boxShadow: '0 0 6px rgba(0,200,255,0.8)' }}
                 />
               </div>
             </div>
@@ -462,13 +525,28 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
       {/* ── Input bar ───────────────────────────────────────────────────────── */}
       <div className="flex-shrink-0 px-4 pb-4 pt-2">
         <div
-          className="flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200"
+          className="flex items-center gap-3 px-4 py-3 transition-all duration-200"
           style={{
-            background: 'rgba(11,20,42,0.97)',
-            border: `1px solid ${inputFocused ? 'rgba(59,130,246,0.5)' : 'rgba(38,65,108,0.55)'}`,
-            boxShadow: inputFocused ? '0 0 0 3px rgba(59,130,246,0.08), 0 2px 16px rgba(0,0,0,0.3)' : '0 2px 12px rgba(0,0,0,0.2)',
+            background: 'rgba(3,9,18,0.98)',
+            border: `1px solid ${inputFocused ? 'rgba(0,200,255,0.45)' : 'rgba(0,200,255,0.14)'}`,
+            boxShadow: inputFocused
+              ? '0 0 0 2px rgba(0,200,255,0.06), 0 0 20px rgba(0,200,255,0.08)'
+              : '0 2px 12px rgba(0,0,0,0.3)',
           }}
         >
+          {/* Left corner accent when focused */}
+          {inputFocused && (
+            <>
+              <div
+                className="absolute bottom-4 left-4 w-3 h-3 pointer-events-none"
+                style={{ borderBottom: '1px solid rgba(0,200,255,0.5)', borderLeft: '1px solid rgba(0,200,255,0.5)' }}
+              />
+              <div
+                className="absolute bottom-4 right-4 w-3 h-3 pointer-events-none"
+                style={{ borderBottom: '1px solid rgba(0,200,255,0.3)', borderRight: '1px solid rgba(0,200,255,0.3)' }}
+              />
+            </>
+          )}
           <input
             ref={inputRef}
             type="text"
@@ -480,28 +558,27 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
             onBlur={() => setInputFocused(false)}
             disabled={isProcessing}
             className="flex-1 bg-transparent text-[13px] outline-none disabled:opacity-40"
-            style={{ color: '#e2e8f0', caretColor: '#5b8fd4' }}
-            // inline style for placeholder color via CSS custom property trick
-            // using a data attribute approach to style placeholder
+            style={{ color: '#cce4f6', caretColor: '#00c8ff' }}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isProcessing}
-            className="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded-xl transition-all duration-200 disabled:opacity-25 hover:scale-110 active:scale-95"
+            className="w-7 h-7 flex-shrink-0 flex items-center justify-center transition-all duration-200 disabled:opacity-20 hover:scale-110 active:scale-95"
             style={{
               background: input.trim() && !isProcessing
-                ? 'linear-gradient(135deg, rgba(59,130,246,0.9), rgba(37,99,235,0.95))'
-                : 'rgba(30,58,95,0.5)',
-              boxShadow: input.trim() && !isProcessing ? '0 0 12px rgba(59,130,246,0.3)' : 'none',
+                ? 'rgba(0,200,255,0.15)'
+                : 'rgba(0,200,255,0.04)',
+              border: `1px solid ${input.trim() && !isProcessing ? 'rgba(0,200,255,0.5)' : 'rgba(0,200,255,0.12)'}`,
+              boxShadow: input.trim() && !isProcessing ? '0 0 12px rgba(0,200,255,0.2)' : 'none',
+              color: input.trim() && !isProcessing ? '#00c8ff' : 'rgba(0,200,255,0.3)',
             }}
           >
             {isProcessing
-              ? <div className="w-3.5 h-3.5 border border-white/40 border-t-white rounded-full animate-spin" />
-              : <Send size={13} className="text-white" style={{ marginLeft: 1 }} />}
+              ? <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+              : <Send size={12} style={{ marginLeft: 1 }} />}
           </button>
         </div>
-        {/* Placeholder color fix via global style injection */}
-        <style>{`input::placeholder { color: #4e6880; }`}</style>
+        <style>{`input::placeholder { color: rgba(0,200,255,0.2); }`}</style>
       </div>
     </div>
   )
@@ -523,47 +600,54 @@ function MessageBubble({ msg }: { msg: ChatMessage }): React.ReactElement {
       {!isUser && <OrbAvatar />}
 
       <div className="flex flex-col gap-1 max-w-[84%]">
-        {/* Bubble */}
         <div
           className="px-4 py-3 text-[13px] leading-relaxed relative"
           style={isUser ? {
-            background: 'rgba(46,100,190,0.28)',
-            border: '1px solid rgba(70,130,230,0.4)',
-            color: '#dce8f8',
-            borderRadius: '16px 16px 4px 16px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.2)',
+            background: 'rgba(0,144,180,0.12)',
+            border: '1px solid rgba(0,200,255,0.28)',
+            color: '#cce8f8',
+            borderTopLeftRadius: 12,
+            borderTopRightRadius: 12,
+            borderBottomLeftRadius: 12,
+            borderBottomRightRadius: 2,
+            boxShadow: '0 0 12px rgba(0,200,255,0.05)',
           } : {
-            background: 'rgba(14,26,50,0.95)',
-            border: '1px solid rgba(38,65,108,0.65)',
-            color: '#c4d4e8',
-            borderRadius: '4px 16px 16px 16px',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+            background: 'rgba(4,11,22,0.97)',
+            border: '1px solid rgba(0,200,255,0.16)',
+            color: '#b8d4ec',
+            borderTopLeftRadius: 2,
+            borderTopRightRadius: 12,
+            borderBottomLeftRadius: 12,
+            borderBottomRightRadius: 12,
+            boxShadow: '0 0 12px rgba(0,200,255,0.04)',
           }}
         >
           {renderMarkdown(msg.content)}
 
-          {/* Copy button — appears in corner on hover, doesn't overlap text */}
+          {/* Copy button */}
           <button
             onClick={copy}
-            className="absolute -top-2.5 opacity-0 group-hover:opacity-100 transition-all duration-150 flex items-center gap-1 px-1.5 py-0.5 rounded-md"
+            className="absolute -top-2.5 opacity-0 group-hover:opacity-100 transition-all duration-150 flex items-center gap-1 px-1.5 py-0.5"
             style={{
               right: isUser ? 4 : 'auto',
               left: isUser ? 'auto' : 4,
-              background: 'rgba(12,22,45,0.95)',
-              border: '1px solid rgba(50,80,130,0.6)',
-              color: copied ? '#4ade80' : '#8faac4',
+              background: 'rgba(2,9,18,0.97)',
+              border: '1px solid rgba(0,200,255,0.2)',
+              color: copied ? '#00e676' : 'rgba(0,200,255,0.6)',
             }}
             title="Copy"
           >
             {copied ? <Check size={9} /> : <Copy size={9} />}
-            <span className="text-[8px] font-medium">{copied ? 'Copied' : 'Copy'}</span>
+            <span className="text-[8px]" style={{ fontFamily: '"Share Tech Mono", monospace' }}>
+              {copied ? 'Copied' : 'Copy'}
+            </span>
           </button>
         </div>
 
         {/* Timestamp */}
         <span
-          className={`text-[10px] px-1 ${isUser ? 'text-right' : 'text-left'}`}
-          style={{ color: '#546a80' }}
+          className={`text-[9px] px-1 data-value ${isUser ? 'text-right' : 'text-left'}`}
+          style={{ color: 'rgba(0,200,255,0.2)' }}
         >
           {fmtTime(msg.timestamp)}
         </span>
@@ -576,10 +660,12 @@ function MessageBubble({ msg }: { msg: ChatMessage }): React.ReactElement {
 function OrbAvatar(): React.ReactElement {
   return (
     <div
-      className="w-6 h-6 rounded-full flex-shrink-0 self-start mt-1"
+      className="flex-shrink-0 self-start mt-1"
       style={{
-        background: 'radial-gradient(circle at 38% 30%, #bfdbfe, #3b82f6 55%, #1d4ed8)',
-        boxShadow: '0 0 8px rgba(59,130,246,0.45)',
+        width: 22, height: 22,
+        background: 'radial-gradient(circle at 38% 30%, rgba(0,200,255,0.9), rgba(0,144,190,0.95) 60%, rgba(0,80,130,1))',
+        boxShadow: '0 0 10px rgba(0,200,255,0.4), 0 0 4px rgba(0,200,255,0.6)',
+        clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
       }}
     />
   )

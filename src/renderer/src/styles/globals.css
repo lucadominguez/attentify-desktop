@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Share+Tech+Mono&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -16,97 +16,182 @@ body,
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background-color: #0a1628;
-  color: #e2e8f0;
+  background-color: #020912;
+  color: #cce4f6;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: #0a1628;
-}
+/* ── Scrollbar ─────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #020912; }
 ::-webkit-scrollbar-thumb {
-  background: #1e3a5f;
-  border-radius: 3px;
+  background: rgba(0,200,255,0.18);
+  border-radius: 2px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #2a4f7a;
+::-webkit-scrollbar-thumb:hover { background: rgba(0,200,255,0.38); }
+
+/* ── HUD Panel — the cornerstone design element ────────────────────────────── */
+/*   Adds glowing corner brackets (TL + BR) to any element via pseudo-elements */
+.hud-panel {
+  position: relative;
+  background: rgba(4, 11, 22, 0.97);
+  border: 1px solid rgba(0, 200, 255, 0.16);
 }
 
+.hud-panel::before,
+.hud-panel::after {
+  content: '';
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  pointer-events: none;
+  z-index: 1;
+}
+.hud-panel::before {
+  top: -1px; left: -1px;
+  border-top:  2px solid rgba(0, 200, 255, 0.75);
+  border-left: 2px solid rgba(0, 200, 255, 0.75);
+}
+.hud-panel::after {
+  bottom: -1px; right: -1px;
+  border-bottom: 2px solid rgba(0, 200, 255, 0.55);
+  border-right:  2px solid rgba(0, 200, 255, 0.55);
+}
+
+/* Glow variant — more prominent for key panels */
+.hud-panel-glow {
+  box-shadow: 0 0 20px rgba(0, 200, 255, 0.06), inset 0 0 20px rgba(0, 200, 255, 0.03);
+}
+
+/* ── HUD Rule — glowing horizontal divider ─────────────────────────────────── */
+.hud-rule {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,200,255,0.35) 20%, rgba(0,200,255,0.35) 80%, transparent);
+  margin: 2px 0;
+}
+
+/* ── HUD Label — section label style ──────────────────────────────────────── */
+.hud-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(0, 200, 255, 0.6);
+  font-family: 'Share Tech Mono', monospace;
+}
+
+/* ── Data value — monospace numerics ───────────────────────────────────────── */
+.data-value {
+  font-family: 'Share Tech Mono', 'Consolas', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+/* ── Glass card ────────────────────────────────────────────────────────────── */
 .glass-card {
-  background: rgba(17, 34, 64, 0.8);
-  border: 1px solid rgba(30, 58, 95, 0.6);
-  backdrop-filter: blur(8px);
+  background: rgba(6, 14, 28, 0.92);
+  border: 1px solid rgba(0, 200, 255, 0.14);
+  backdrop-filter: blur(12px);
 }
 
+/* ── Card ──────────────────────────────────────────────────────────────────── */
+.card {
+  @apply rounded-xl p-5;
+  background: #060f1e;
+  border: 1px solid rgba(0, 200, 255, 0.13);
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
 .btn-primary {
-  @apply bg-accent-blue hover:bg-accent-blue-light text-white font-semibold px-6 py-2.5 rounded-full transition-all duration-200 text-sm;
+  @apply bg-accent-blue hover:bg-accent-blue-light text-white font-semibold px-6 py-2.5 rounded-lg transition-all duration-200 text-sm;
+  border: 1px solid rgba(0,200,255,0.25);
+  box-shadow: 0 0 16px rgba(0,200,255,0.08);
 }
 
 .btn-ghost {
   @apply text-navy-400 hover:text-white text-sm transition-colors duration-200 underline underline-offset-2;
 }
 
-.card {
-  @apply rounded-xl p-5;
-  background: #112240;
-  border: 1px solid rgba(30, 58, 95, 0.8);
-}
-
+/* ── Sidebar items ─────────────────────────────────────────────────────────── */
 .sidebar-item {
-  @apply flex items-center gap-3 px-4 py-2.5 rounded-lg cursor-pointer transition-all duration-150 text-sm font-medium;
-  color: #94a3b8;
+  @apply flex items-center gap-3 px-4 py-2 rounded-none cursor-pointer transition-all duration-150 text-xs font-medium;
+  color: #507090;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  position: relative;
 }
 
 .sidebar-item:hover {
-  background: rgba(30, 58, 95, 0.4);
-  color: #e2e8f0;
+  background: rgba(0, 200, 255, 0.05);
+  color: #a0cce8;
 }
 
 .sidebar-item.active {
-  background: rgba(33, 150, 243, 0.15);
-  color: #e2e8f0;
-  border-left: 2px solid #2196f3;
-  padding-left: calc(1rem - 2px);
+  background: rgba(0, 200, 255, 0.07);
+  color: #e8f4ff;
 }
 
+/* Glowing left bar on active */
+.sidebar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 4px; bottom: 4px;
+  width: 2px;
+  background: #00c8ff;
+  box-shadow: 0 0 8px #00c8ff, 0 0 2px #00c8ff;
+  border-radius: 0 1px 1px 0;
+}
+
+/* ── Status badge ──────────────────────────────────────────────────────────── */
 .status-badge {
-  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium;
+  @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium;
 }
 
 .status-new {
-  @apply bg-accent-amber text-navy-900;
+  background: rgba(255,170,0,0.15);
+  color: #ffaa00;
+  border: 1px solid rgba(255,170,0,0.3);
 }
 
+/* ── Scan line overlay (optional bg effect) ────────────────────────────────── */
 @keyframes scanLine {
-  0% { transform: translateY(-100%); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
+  0%   { transform: translateY(-100%); opacity: 0; }
+  5%   { opacity: 0.4; }
+  95%  { opacity: 0.4; }
   100% { transform: translateY(100vh); opacity: 0; }
 }
-
 .scan-line {
-  animation: scanLine 2s ease-in-out infinite;
+  animation: scanLine 2.5s ease-in-out infinite;
 }
 
+/* ── Progress arc ──────────────────────────────────────────────────────────── */
 @keyframes progressFill {
   from { stroke-dashoffset: 440; }
-  to { stroke-dashoffset: var(--target-offset); }
+  to   { stroke-dashoffset: var(--target-offset); }
 }
-
 .arc-progress {
   animation: progressFill 1.2s ease-out forwards;
 }
 
-.titlebar-drag {
-  -webkit-app-region: drag;
+/* ── Window drag regions ───────────────────────────────────────────────────── */
+.titlebar-drag   { -webkit-app-region: drag; }
+.titlebar-nodrag { -webkit-app-region: no-drag; }
+
+/* ── Subtle dot-grid background pattern ────────────────────────────────────── */
+.bg-grid {
+  background-image: radial-gradient(rgba(0,200,255,0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-.titlebar-nodrag {
-  -webkit-app-region: no-drag;
-}
+/* ── Glow utilities ────────────────────────────────────────────────────────── */
+.glow-cyan  { box-shadow: 0 0 16px rgba(0,200,255,0.25), 0 0 4px rgba(0,200,255,0.4); }
+.glow-green { box-shadow: 0 0 12px rgba(0,230,118,0.25); }
+.glow-amber { box-shadow: 0 0 12px rgba(255,170,0,0.25); }
+.glow-red   { box-shadow: 0 0 12px rgba(255,68,68,0.25); }
+
+/* ── Text glow ─────────────────────────────────────────────────────────────── */
+.text-glow-cyan  { text-shadow: 0 0 10px rgba(0,200,255,0.6), 0 0 20px rgba(0,200,255,0.3); }
+.text-glow-green { text-shadow: 0 0 10px rgba(0,230,118,0.5); }
+.text-glow-amber { text-shadow: 0 0 10px rgba(255,170,0,0.5); }

@@ -95,24 +95,65 @@ export default function App(): React.ReactElement {
   }
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden bg-navy-850">
+    <div className="flex flex-col h-screen w-full overflow-hidden" style={{ background: '#020912' }}>
       {/* Custom title bar */}
-      <div className="titlebar-drag flex items-center justify-between h-8 bg-navy-900 px-4 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-          <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-          <div className="w-3 h-3 rounded-full bg-[#28c840]" />
+      <div
+        className="titlebar-drag flex items-center justify-between px-4 flex-shrink-0"
+        style={{
+          height: 32,
+          background: 'rgba(2,9,18,0.98)',
+          borderBottom: '1px solid rgba(0,200,255,0.1)',
+        }}
+      >
+        {/* Left: corner bracket accent + traffic lights */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" style={{ boxShadow: '0 0 4px rgba(255,95,87,0.4)' }} />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" style={{ boxShadow: '0 0 4px rgba(254,188,46,0.3)' }} />
+            <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" style={{ boxShadow: '0 0 4px rgba(40,200,64,0.3)' }} />
+          </div>
+          <div className="w-px h-3" style={{ background: 'rgba(0,200,255,0.15)' }} />
         </div>
-        <span className="text-navy-400 text-xs font-medium">Productivity Daemon</span>
-        <div className="titlebar-nodrag flex items-center gap-1">
-          <button onClick={() => api.minimizeWindow()} className="p-1 hover:text-white text-navy-400 transition-colors">
-            <Minus size={12} />
+
+        {/* Center: monospace title */}
+        <div className="flex items-center gap-2">
+          <div className="w-1 h-1 rounded-full" style={{ background: 'rgba(0,200,255,0.5)' }} />
+          <span
+            style={{
+              fontFamily: '"Share Tech Mono", monospace',
+              fontSize: 10,
+              letterSpacing: '0.25em',
+              color: 'rgba(0,200,255,0.55)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Productivity Daemon
+          </span>
+          <div className="w-1 h-1 rounded-full" style={{ background: 'rgba(0,200,255,0.5)' }} />
+        </div>
+
+        {/* Right: window controls */}
+        <div className="titlebar-nodrag flex items-center">
+          <button
+            onClick={() => api.minimizeWindow()}
+            className="flex items-center justify-center transition-colors hover:bg-white/5"
+            style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.35)' }}
+          >
+            <Minus size={11} />
           </button>
-          <button onClick={() => api.maximizeWindow()} className="p-1 hover:text-white text-navy-400 transition-colors">
-            <Square size={11} />
+          <button
+            onClick={() => api.maximizeWindow()}
+            className="flex items-center justify-center transition-colors hover:bg-white/5"
+            style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.35)' }}
+          >
+            <Square size={10} />
           </button>
-          <button onClick={() => api.closeWindow()} className="p-1 hover:text-red-400 text-navy-400 transition-colors">
-            <X size={12} />
+          <button
+            onClick={() => api.closeWindow()}
+            className="flex items-center justify-center transition-colors hover:bg-red-500/15"
+            style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.35)' }}
+          >
+            <X size={11} />
           </button>
         </div>
       </div>
@@ -127,26 +168,41 @@ export default function App(): React.ReactElement {
           elevation={store.elevation}
           alertCount={activeAlertCount}
         />
-        <main className="flex-1 overflow-hidden bg-navy-800 relative flex flex-col">
+        <main
+          className="flex-1 overflow-hidden relative flex flex-col"
+          style={{ background: '#030c1a' }}
+        >
           {activeSession && (
-            <div className="flex-shrink-0 flex items-center justify-between px-6 py-2 bg-accent-blue/10 border-b border-accent-blue/20">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />
-                <span className="text-xs text-accent-green font-medium">Focus session active</span>
+            <div
+              className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
+              style={{
+                background: 'rgba(0,230,118,0.04)',
+                borderBottom: '1px solid rgba(0,230,118,0.15)',
+              }}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-1.5 h-1.5 rounded-full animate-pulse"
+                  style={{ background: '#00e676', boxShadow: '0 0 6px #00e676' }}
+                />
+                <span
+                  className="text-[10px] font-bold uppercase tracking-widest"
+                  style={{ color: '#00e676', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
+                >
+                  Focus Session Active
+                </span>
                 {activeSession.endsAt && (
-                  <span className="text-xs text-navy-400">
+                  <span className="text-[10px]" style={{ color: 'rgba(0,200,255,0.45)', fontFamily: '"Share Tech Mono", monospace' }}>
                     · ends {new Date(activeSession.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 )}
               </div>
               <button
-                className="text-xs text-navy-400 hover:text-white transition-colors"
-                onClick={async () => {
-                  await api.stopSession(activeSession.id)
-                  refreshStore()
-                }}
+                className="text-[10px] uppercase tracking-widest transition-colors hover:text-white"
+                style={{ color: 'rgba(0,200,255,0.4)', fontFamily: '"Share Tech Mono", monospace' }}
+                onClick={async () => { await api.stopSession(activeSession.id); refreshStore() }}
               >
-                End session
+                End
               </button>
             </div>
           )}
@@ -163,29 +219,45 @@ export default function App(): React.ReactElement {
       {/* Heuristic alert toast */}
       {toastAlert && (
         <div
-          className="fixed bottom-6 right-6 max-w-[340px] rounded-2xl p-4 z-50 animate-fade-in"
+          className="fixed bottom-5 right-5 max-w-[320px] z-50 animate-fade-in hud-panel"
           style={{
-            background: 'rgba(12,20,35,0.96)',
-            border: '1px solid rgba(255,184,0,0.3)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+            background: 'rgba(8,14,26,0.98)',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 1px rgba(255,170,0,0.3)',
+            padding: '14px 16px',
           }}
         >
+          {/* TL corner accent override color for amber */}
+          <div className="absolute top-0 left-0 w-3 h-3 pointer-events-none" style={{ borderTop: '2px solid rgba(255,170,0,0.8)', borderLeft: '2px solid rgba(255,170,0,0.8)' }} />
+          <div className="absolute bottom-0 right-0 w-3 h-3 pointer-events-none" style={{ borderBottom: '2px solid rgba(255,170,0,0.5)', borderRight: '2px solid rgba(255,170,0,0.5)' }} />
+
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(255,184,0,0.15)' }}>
-              <AlertTriangle size={15} className="text-accent-amber" />
+            <div
+              className="flex-shrink-0 w-7 h-7 flex items-center justify-center"
+              style={{ border: '1px solid rgba(255,170,0,0.3)', background: 'rgba(255,170,0,0.08)' }}
+            >
+              <AlertTriangle size={13} style={{ color: '#ffaa00' }} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-semibold">{toastAlert.title}</p>
-              <p className="text-navy-400 text-xs mt-0.5 leading-relaxed">{toastAlert.description}</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#ffaa00', fontFamily: '"Share Tech Mono", monospace' }}>
+                {toastAlert.title}
+              </p>
+              <p className="text-[10px] mt-1 leading-relaxed" style={{ color: '#5a7a94' }}>
+                {toastAlert.description}
+              </p>
               <button
                 onClick={() => { setToastAlert(null); handleNavigate('patterns') }}
-                className="mt-2 text-accent-blue text-xs hover:underline"
+                className="mt-2 text-[9px] uppercase tracking-widest hover:text-white transition-colors"
+                style={{ color: 'rgba(0,200,255,0.6)', fontFamily: '"Share Tech Mono", monospace' }}
               >
-                View in Analytics →
+                View Patterns →
               </button>
             </div>
-            <button onClick={() => setToastAlert(null)} className="text-navy-600 hover:text-navy-400 transition-colors flex-shrink-0">
-              <X size={13} />
+            <button
+              onClick={() => setToastAlert(null)}
+              className="flex-shrink-0 transition-colors"
+              style={{ color: 'rgba(0,200,255,0.3)' }}
+            >
+              <X size={12} />
             </button>
           </div>
         </div>
