@@ -36,7 +36,9 @@ function switchRate(sessions: ActivitySession[]): number {
 }
 
 export class HeuristicEngine {
-  private siteVisitLog = new Map<string, number[]>()
+  // Use Set<number> per domain so the same session startTime is never double-counted
+  // across multiple analyze() calls (which run every 30s on the same session window).
+  private siteVisitLog = new Map<string, Set<number>>()
   private alerts: HeuristicAlert[] = []
   private lastChecked = 0
   private lastSwitchCount = 0
@@ -70,19 +72,22 @@ export class HeuristicEngine {
     this.lastSwitchCount = switchCount
 
     // ── 2. Compulsive checking (repeated site visits) ──────────────────────
+    // Count unique session startTimes per domain (Set deduplicates across analyze calls)
     const browserSessions = recent.filter((s) => isBrowser(s.app))
     for (const s of browserSessions) {
       const domain = extractDomain(s.title)
       if (!domain) continue
-      const visits = this.siteVisitLog.get(domain) ?? []
-      visits.push(s.startTime)
-      const recentVisits = visits.filter((t) => t >= w20)
-      this.siteVisitLog.set(domain, recentVisits)
-      if (recentVisits.length >= 5 && !this.alerts.some((a) => a.app === domain && a.detectedAt > now - 60_000)) {
+      const visits = this.siteVisitLog.get(domain) ?? new Set<number>()
+      visits.add(s.startTime)
+      // Purge timestamps older than 20-min window to keep the set lean
+      for (const t of visits) { if (t < w20) visits.delete(t) }
+      this.siteVisitLog.set(domain, visits)
+      const count = visits.size
+      if (count >= 5 && !this.alerts.some((a) => a.app === domain && a.detectedAt > now - 60_000)) {
         newAlerts.push({
           id: randomUUID(), type: 'repeated-visits', severity: 'high',
           title: `Compulsive checking: ${domain}`,
-          description: `Back to ${domain} ${recentVisits.length}× in 20 minutes. This is a dopamine loop — variable-reward conditioning identical to slot machine mechanics.`,
+          description: `Back to ${domain} ${count}× in 20 minutes. This is a dopamine loop — variable-reward conditioning identical to slot machine mechanics.`,
           detectedAt: now, app: domain, dismissed: false,
         })
       }

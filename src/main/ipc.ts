@@ -17,7 +17,7 @@ import {
   getInferences, resolveInference,
   getAgentMessages, insertAgentMessage, clearAgentMessages, getDomains,
 } from './data/repository'
-import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory } from '../shared/types'
+import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory, AppSettings } from '../shared/types'
 import { randomUUID } from 'crypto'
 
 let engine: BlockingEngine | null = null
@@ -250,6 +250,10 @@ export function initIpc(): void {
   })
   monitor.attachInference(inferenceEngine)
 
+  // Apply blocking mode from store
+  const storedMode = (store.settings as AppSettings & { blockingMode?: 'auto' | 'ask' }).blockingMode ?? 'auto'
+  inferenceEngine.setBlockingMode(storedMode)
+
   // Initialize agent + URL guard if API key exists
   const apiKey = loadApiKey()
   if (apiKey) {
@@ -291,7 +295,6 @@ export function initIpc(): void {
   })
 
   monitor.on('session', (session: ActivitySession) => {
-    sendMain('heuristic:alert', [])
     inferenceEngine?.analyzeSession(session)
   })
 
@@ -305,12 +308,31 @@ export function initIpc(): void {
 
   monitor.on('guard:alert', (alert: unknown) => {
     sendMain('guard:alert', alert)
+    const a = alert as { category?: string; message?: string; domain?: string }
+    if (Notification.isSupported()) {
+      const body = (a.message ?? '').replace(/\*\*(.*?)\*\*/g, '$1').slice(0, 120)
+      new Notification({
+        title: `Guard · ${a.category ?? 'Distraction detected'}`,
+        body: body || (a.domain ? `Potential distraction: ${a.domain}` : 'Distraction detected'),
+      }).show()
+    }
   })
 
   monitor.on('patterns', (alerts: unknown[]) => {
     const s = getStore()
     patchStore({ heuristicAlerts: [...s.heuristicAlerts, ...alerts as typeof s.heuristicAlerts].slice(-200) })
     sendMain('heuristic:alert', alerts)
+    // OS notification for high/medium severity patterns
+    if (Notification.isSupported()) {
+      const typed = alerts as import('../shared/types').HeuristicAlert[]
+      const top = typed.find((a) => a.severity === 'high') ?? typed.find((a) => a.severity === 'medium')
+      if (top) {
+        new Notification({
+          title: top.title,
+          body: top.description.slice(0, 120),
+        }).show()
+      }
+    }
   })
 
   // ── Store ──────────────────────────────────────────────────────────────────
@@ -320,6 +342,9 @@ export function initIpc(): void {
   ipcMain.handle('store:set', (_e, patch) => {
     const updated = patchStore(patch)
     engine?.loadState(updated.blocklist.domains, updated.blocklist.processes)
+    // Sync blocking mode if it was changed
+    const newMode = (updated.settings as AppSettings & { blockingMode?: 'auto' | 'ask' }).blockingMode
+    if (newMode) inferenceEngine?.setBlockingMode(newMode)
     return updated
   })
 

@@ -11,6 +11,7 @@ import Analytics from './views/Analytics'
 import FocusScanResults from './views/FocusScanResults'
 import Patterns from './views/Patterns'
 import Actions from './views/Actions'
+import SettingsView from './views/Settings'
 import Onboarding from './views/Onboarding'
 import ChatPanel from './chat/ChatPanel'
 import type { ViewName, AppStore, ScanResult, HeuristicAlert } from '@shared/types'
@@ -127,6 +128,7 @@ export default function App(): React.ReactElement {
       case 'algo-track': return <AlgoTrack store={store} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'patterns': return <Patterns heuristicAlerts={heuristicAlerts} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'actions': return <Actions onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} liveAutoBlocks={liveAutoBlocks} />
+      case 'settings': return <SettingsView store={store} onRefresh={refreshStore} />
       case 'focus-scan-results': return <FocusScanResults results={scanResults} store={store} onNavigate={handleNavigate} onRefresh={refreshStore} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       default: return <Home store={store} onNavigate={handleNavigate} onScanComplete={handleScanComplete} onRefresh={refreshStore} />
     }
@@ -459,6 +461,7 @@ declare global {
       onChatDone: (cb: (event: import('@shared/types').AgentDoneEvent) => void) => (() => void)
       onChatError: (cb: (err: string) => void) => (() => void)
       getAgentHistory: (limit?: number) => Promise<unknown[]>
+      clearChatHistory: () => Promise<{ ok: boolean }>
       dismissProactive: () => Promise<{ ok: boolean }>
       onAgentProactive: (cb: (evt: import('@shared/types').AgentProactiveEvent) => void) => (() => void)
       onStoreRefresh: (cb: () => void) => (() => void)

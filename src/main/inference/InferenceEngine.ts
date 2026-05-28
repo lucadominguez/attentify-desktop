@@ -279,6 +279,7 @@ export class InferenceEngine {
   private onAutoBlock?: (domain: string, confidence: number) => void
   private onSuggest?: (inf: DbInference) => void
   private onSearchAlert?: (query: string, predictedDomain: string, category: string) => void
+  private blockingMode: 'auto' | 'ask' = 'auto'
 
   // Dedup: recently processed keys
   private recentlyProcessed = new Map<string, number>()
@@ -314,6 +315,10 @@ export class InferenceEngine {
     this.onAutoBlock = opts.onAutoBlock
     this.onSuggest = opts.onSuggest
     this.onSearchAlert = opts.onSearchAlert
+  }
+
+  setBlockingMode(mode: 'auto' | 'ask'): void {
+    this.blockingMode = mode
   }
 
   start(): void {
@@ -747,7 +752,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
   ): void {
     const evidence = { source: meta.source, title: meta.title }
 
-    if (confidence >= CONFIDENCE_AUTO_BLOCK) {
+    if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto') {
       const existing = getInferences().find(
         (i) => i.value === value && ['pending', 'auto_applied'].includes(i.status)
       )
@@ -771,7 +776,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
           console.log(`[InferenceEngine] AUTO-BLOCKED ${value} via ${meta.source} (${Math.round(confidence * 100)}%)`)
         }
       }
-    } else if (confidence >= CONFIDENCE_SUGGEST) {
+    } else if (confidence >= CONFIDENCE_SUGGEST || (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'ask')) {
       const existing = getInferences().find(
         (i) => i.value === value && ['pending', 'auto_applied'].includes(i.status)
       )

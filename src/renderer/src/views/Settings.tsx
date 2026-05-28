@@ -1,0 +1,325 @@
+import React, { useState } from 'react'
+import { Shield, Zap, Bell, Key, CheckCircle } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
+import type { AppStore } from '@shared/types'
+
+const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
+
+interface SettingsProps {
+  store: AppStore
+  onRefresh: () => void
+}
+
+function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }): React.ReactElement {
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <span style={{ color: 'rgba(0,200,255,0.6)' }}>{icon}</span>
+      <span
+        className="text-[9px] font-bold uppercase tracking-widest"
+        style={{ color: 'rgba(0,200,255,0.5)', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
+      >
+        {label}
+      </span>
+      <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.08)' }} />
+    </div>
+  )
+}
+
+export default function SettingsView({ store, onRefresh }: SettingsProps): React.ReactElement {
+  const { colors } = useTheme()
+  const currentMode = store.settings.blockingMode ?? 'auto'
+  const [apiInput, setApiInput] = useState('')
+  const [apiSaved, setApiSaved] = useState(false)
+  const [hasKey, setHasKey] = useState<boolean | null>(null)
+
+  React.useEffect(() => {
+    api.getApiKeyStatus().then((s) => setHasKey(s.hasKey))
+  }, [])
+
+  const setMode = async (mode: 'auto' | 'ask'): Promise<void> => {
+    await api.setStore({ settings: { ...store.settings, blockingMode: mode } })
+    onRefresh()
+  }
+
+  const saveApiKey = async (): Promise<void> => {
+    if (!apiInput.trim()) return
+    await api.setApiKey(apiInput.trim())
+    setApiInput('')
+    setApiSaved(true)
+    setHasKey(true)
+    setTimeout(() => setApiSaved(false), 2500)
+  }
+
+  const deleteApiKey = async (): Promise<void> => {
+    await api.deleteApiKey()
+    setHasKey(false)
+    onRefresh()
+  }
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden" style={{ background: colors.mainBg }}>
+      {/* Header */}
+      <div
+        className="flex-shrink-0 px-6 py-4"
+        style={{ borderBottom: '1px solid rgba(0,200,255,0.08)' }}
+      >
+        <h1
+          className="text-[13px] font-bold uppercase tracking-widest"
+          style={{ color: colors.textPrimary, fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
+        >
+          Settings
+        </h1>
+        <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+          Configure how the Daemon responds to threats
+        </p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
+
+        {/* ── Blocking Mode ─────────────────────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={<Shield size={11} />} label="Threat Response Mode" />
+          <div className="grid grid-cols-2 gap-3">
+
+            {/* Auto-Block */}
+            <button
+              onClick={() => void setMode('auto')}
+              className="relative text-left p-4 transition-all duration-200 hover:scale-[1.01]"
+              style={{
+                background: currentMode === 'auto' ? 'rgba(255,68,68,0.08)' : 'rgba(255,255,255,0.02)',
+                border: currentMode === 'auto' ? '1px solid rgba(255,68,68,0.4)' : '1px solid rgba(255,255,255,0.07)',
+              }}
+            >
+              {currentMode === 'auto' && (
+                <div className="absolute top-2.5 right-2.5">
+                  <CheckCircle size={11} style={{ color: '#ff4444' }} />
+                </div>
+              )}
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="w-6 h-6 flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: currentMode === 'auto' ? 'rgba(255,68,68,0.15)' : 'rgba(255,255,255,0.04)',
+                    border: currentMode === 'auto' ? '1px solid rgba(255,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <Zap size={11} style={{ color: currentMode === 'auto' ? '#ff4444' : colors.textMuted }} />
+                </div>
+                <span
+                  className="text-[11px] font-bold uppercase tracking-widest"
+                  style={{
+                    color: currentMode === 'auto' ? '#ff6666' : colors.textSecondary,
+                    fontFamily: '"Share Tech Mono", monospace',
+                  }}
+                >
+                  Auto-Block
+                </span>
+              </div>
+              <p className="text-[10px] leading-relaxed" style={{ color: colors.textMuted }}>
+                Sites above the confidence threshold are blocked immediately. No approval needed.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-1">
+                {['adult', 'gambling', 'social'].map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[8px] px-1.5 py-0.5 uppercase tracking-wide"
+                    style={{
+                      background: 'rgba(255,68,68,0.08)',
+                      border: '1px solid rgba(255,68,68,0.2)',
+                      color: 'rgba(255,100,100,0.7)',
+                      fontFamily: '"Share Tech Mono", monospace',
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+                <span
+                  className="text-[8px] px-1.5 py-0.5 uppercase tracking-wide"
+                  style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    color: colors.textMuted,
+                    fontFamily: '"Share Tech Mono", monospace',
+                  }}
+                >
+                  + more
+                </span>
+              </div>
+            </button>
+
+            {/* Ask First */}
+            <button
+              onClick={() => void setMode('ask')}
+              className="relative text-left p-4 transition-all duration-200 hover:scale-[1.01]"
+              style={{
+                background: currentMode === 'ask' ? 'rgba(0,200,255,0.06)' : 'rgba(255,255,255,0.02)',
+                border: currentMode === 'ask' ? '1px solid rgba(0,200,255,0.35)' : '1px solid rgba(255,255,255,0.07)',
+              }}
+            >
+              {currentMode === 'ask' && (
+                <div className="absolute top-2.5 right-2.5">
+                  <CheckCircle size={11} style={{ color: '#00c8ff' }} />
+                </div>
+              )}
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className="w-6 h-6 flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background: currentMode === 'ask' ? 'rgba(0,200,255,0.1)' : 'rgba(255,255,255,0.04)',
+                    border: currentMode === 'ask' ? '1px solid rgba(0,200,255,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                  }}
+                >
+                  <Bell size={11} style={{ color: currentMode === 'ask' ? '#00c8ff' : colors.textMuted }} />
+                </div>
+                <span
+                  className="text-[11px] font-bold uppercase tracking-widest"
+                  style={{
+                    color: currentMode === 'ask' ? '#00c8ff' : colors.textSecondary,
+                    fontFamily: '"Share Tech Mono", monospace',
+                  }}
+                >
+                  Ask First
+                </span>
+              </div>
+              <p className="text-[10px] leading-relaxed" style={{ color: colors.textMuted }}>
+                All detected threats are queued in the Actions tab. You decide what gets blocked.
+              </p>
+              <div className="mt-3">
+                <span
+                  className="text-[8px] px-1.5 py-0.5 uppercase tracking-wide"
+                  style={{
+                    background: 'rgba(0,200,255,0.06)',
+                    border: '1px solid rgba(0,200,255,0.18)',
+                    color: 'rgba(0,200,255,0.6)',
+                    fontFamily: '"Share Tech Mono", monospace',
+                  }}
+                >
+                  Review in Actions →
+                </span>
+              </div>
+            </button>
+          </div>
+
+          <div
+            className="mt-3 px-3 py-2.5 flex items-center gap-2"
+            style={{ background: 'rgba(0,200,255,0.03)', border: '1px solid rgba(0,200,255,0.07)' }}
+          >
+            <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: 'rgba(0,200,255,0.4)' }} />
+            <p className="text-[9px] leading-relaxed" style={{ color: colors.textMuted }}>
+              {currentMode === 'auto'
+                ? 'High-confidence threats (adult, gambling, dating ≥85%) are blocked instantly. Lower-confidence items are still queued in Actions for review.'
+                : 'All detected threats are queued as pending in the Actions tab regardless of confidence. Nothing is blocked without your approval.'}
+            </p>
+          </div>
+        </section>
+
+        {/* ── API Key ────────────────────────────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={<Key size={11} />} label="AI API Key" />
+          <div
+            className="p-4"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <div className="flex items-center gap-2 mb-3">
+              <div
+                className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: hasKey ? '#4caf50' : '#ffaa00', boxShadow: hasKey ? '0 0 6px #4caf50' : '0 0 6px #ffaa00' }}
+              />
+              <span className="text-[10px]" style={{ color: hasKey ? '#4caf50' : '#ffaa00' }}>
+                {hasKey === null ? 'Checking...' : hasKey ? 'API key configured' : 'No API key — AI features disabled'}
+              </span>
+            </div>
+
+            {hasKey ? (
+              <div className="flex items-center gap-2">
+                <div
+                  className="flex-1 px-3 py-2 text-[10px]"
+                  style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)', color: colors.textMuted }}
+                >
+                  ••••••••••••••••••••••••
+                </div>
+                <button
+                  onClick={() => void deleteApiKey()}
+                  className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest transition-all hover:scale-105"
+                  style={{
+                    background: 'rgba(255,68,68,0.08)',
+                    border: '1px solid rgba(255,68,68,0.25)',
+                    color: 'rgba(255,68,68,0.7)',
+                    fontFamily: '"Share Tech Mono", monospace',
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="password"
+                  value={apiInput}
+                  onChange={(e) => setApiInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && void saveApiKey()}
+                  placeholder="sk-ant-... or sk-or-..."
+                  className="flex-1 px-3 py-2 text-[10px] outline-none"
+                  style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: colors.textPrimary }}
+                />
+                <button
+                  onClick={() => void saveApiKey()}
+                  disabled={!apiInput.trim()}
+                  className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest transition-all hover:scale-105 disabled:opacity-40"
+                  style={{
+                    background: 'rgba(0,200,255,0.08)',
+                    border: '1px solid rgba(0,200,255,0.25)',
+                    color: '#00c8ff',
+                    fontFamily: '"Share Tech Mono", monospace',
+                  }}
+                >
+                  {apiSaved ? 'Saved ✓' : 'Save'}
+                </button>
+              </div>
+            )}
+            <p className="mt-2 text-[9px]" style={{ color: colors.textMuted }}>
+              Anthropic API key (sk-ant-...) or OpenRouter key (sk-or-...). Used for AI inference, guard alerts, and the Daemon Assistant.
+            </p>
+          </div>
+        </section>
+
+        {/* ── Elevation ─────────────────────────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={<Shield size={11} />} label="System Protection" />
+          <div
+            className="p-4"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold" style={{ color: colors.textPrimary }}>Admin Privileges</p>
+                <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+                  {store.elevation === 'full'
+                    ? 'Running elevated — hosts-file domain blocking active.'
+                    : 'Not elevated — domain blocking requires admin rights.'}
+                </p>
+              </div>
+              <div
+                className="flex-shrink-0 px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest"
+                style={{
+                  background: store.elevation === 'full' ? 'rgba(0,230,118,0.08)' : 'rgba(255,170,0,0.08)',
+                  border: `1px solid ${store.elevation === 'full' ? 'rgba(0,230,118,0.25)' : 'rgba(255,170,0,0.25)'}`,
+                  color: store.elevation === 'full' ? '#00e676' : '#ffaa00',
+                  fontFamily: '"Share Tech Mono", monospace',
+                }}
+              >
+                {store.elevation === 'full' ? 'Full' : 'Limited'}
+              </div>
+            </div>
+            {store.elevation !== 'full' && (
+              <p className="text-[9px] mt-3" style={{ color: 'rgba(255,170,0,0.6)' }}>
+                Run the app as Administrator once — it will register a Task Scheduler entry so future launches are automatically elevated without a UAC prompt.
+              </p>
+            )}
+          </div>
+        </section>
+
+      </div>
+    </div>
+  )
+}

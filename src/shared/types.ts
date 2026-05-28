@@ -147,6 +147,7 @@ export interface AppSettings {
   focusGoalHoursPerDay: number
   ollamaUrl: string
   ollamaModel: string
+  blockingMode?: 'auto' | 'ask'
 }
 
 export interface AppStore {
@@ -176,6 +177,7 @@ export type ViewName =
   | 'analytics'
   | 'patterns'
   | 'actions'
+  | 'settings'
   | 'focus-browser'
   | 'deep-focus'
   | 'schedule-manager'

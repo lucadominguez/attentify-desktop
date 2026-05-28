@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   Home, Shield, Zap, Lock, Calendar, TrendingUp,
-  MessageSquare, Activity, RefreshCw, Brain, Sun, Moon, ListChecks,
+  MessageSquare, Activity, RefreshCw, Brain, Sun, Moon, ListChecks, Settings,
 } from 'lucide-react'
 import type { ViewName, FocusSession, ElevationStatus } from '@shared/types'
 import PulsingSphere from './PulsingSphere'
@@ -32,6 +32,7 @@ const mainNav: NavItem[] = [
   { id: 'analytics',     label: 'Analytics',  icon: <Activity size={14} /> },
   { id: 'patterns',      label: 'Patterns',   icon: <Brain size={14} /> },
   { id: 'actions',       label: 'Actions',    icon: <ListChecks size={14} /> },
+  { id: 'settings',      label: 'Settings',   icon: <Settings size={14} /> },
 ]
 
 const toolsNav: NavItem[] = [
