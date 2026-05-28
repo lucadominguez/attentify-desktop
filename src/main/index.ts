@@ -8,18 +8,21 @@ import { getStore, patchStore } from './store'
 import { openDatabase, closeDatabase } from './data/db'
 import { migrateFromStateJson, purgeOldData } from './data/repository'
 
-// GPU shader disk cache causes "Access is denied" errors when the process runs
-// at a different privilege level than the session that originally created the
-// cache directory. Disable it so the GPU process never tries to move or create
-// those files under AppData.
+// GPU shader + HTTP disk cache cause "Access is denied" / "Unable to move the cache"
+// errors when the process switches between elevated and non-elevated integrity levels,
+// because AppData is per-user-per-integrity-level. Fix: point every cache Chromium
+// touches to C:\ProgramData\ProductivityDaemon which is accessible at both levels.
+if (process.platform === 'win32') {
+  const base = join('C:\\ProgramData', 'ProductivityDaemon')
+  app.setPath('userData', base)
+  app.setPath('cache', join(base, 'Cache'))
+  // Tell Chromium's network stack to use the same location for the HTTP disk cache
+  app.commandLine.appendSwitch('disk-cache-dir', join(base, 'Cache', 'Network'))
+}
+// Disable GPU shader disk cache — it's unnecessary for an Electron app and can't
+// be easily relocated on Windows before the GPU process spawns.
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disable-shader-disk-cache')
-
-// Point user-data to ProgramData on Windows so the same path is usable whether
-// the process is elevated or not (AppData is per-user-per-integrity-level).
-if (process.platform === 'win32') {
-  app.setPath('userData', join('C:\\ProgramData', 'ProductivityDaemon'))
-}
 
 const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
 

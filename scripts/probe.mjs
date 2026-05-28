@@ -22,7 +22,32 @@
  *   node scripts/probe.mjs break:end
  */
 
-const BASE = 'http://127.0.0.1:9119'
+const PORT_FILE = 'C:\\ProgramData\\ProductivityDaemon\\debug-port'
+const FALLBACK_PORTS = [9119, 9120, 9121, 9122, 9123]
+
+// Resolve the actual debug server port: check the port file first, then scan.
+async function resolveBase() {
+  // Try the port written by the running app
+  try {
+    const { readFileSync } = await import('fs')
+    const saved = parseInt(readFileSync(PORT_FILE, 'utf8').trim(), 10)
+    if (saved > 0) {
+      const r = await fetch(`http://127.0.0.1:${saved}/ping`, { signal: AbortSignal.timeout(600) })
+      if (r.ok) return `http://127.0.0.1:${saved}`
+    }
+  } catch { /* port file missing or stale */ }
+
+  // Scan the fallback range
+  for (const port of FALLBACK_PORTS) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/ping`, { signal: AbortSignal.timeout(600) })
+      if (r.ok) return `http://127.0.0.1:${port}`
+    } catch { continue }
+  }
+  return null
+}
+
+const BASE = await resolveBase()
 
 async function get(path) {
   const r = await fetch(`${BASE}${path}`)
@@ -48,11 +73,17 @@ function banner(title) {
 
 // ── Check app is running ──────────────────────────────────────────────────────
 
+if (!BASE) {
+  console.error('✗  App is NOT running (ports 9119-9123 all unreachable)')
+  console.error('   Start the app first:  npm run dev')
+  process.exit(1)
+}
+
 let ping
 try {
   ping = await get('/ping')
 } catch {
-  console.error('✗  App is NOT running (could not reach debug server on port 9119)')
+  console.error(`✗  App is NOT running (could not reach debug server at ${BASE})`)
   console.error('   Start the app first:  npm run dev')
   process.exit(1)
 }
@@ -245,5 +276,5 @@ for (const e of summary.logs.slice(-10)) {
   console.log(`  ${ts}  [${e.event}]  ${JSON.stringify(rest)}`)
 }
 
-console.log(`\n  Debug API: http://127.0.0.1:9119`)
+console.log(`\n  Debug API: ${BASE}`)
 console.log(`  Log file:  C:\\ProgramData\\ProductivityDaemon\\logs\\debug.log\n`)

@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
+import { writeFileSync } from 'fs'
+import { join } from 'path'
 import { randomUUID } from 'crypto'
 import { getStore, patchStore } from '../store'
 import { getInferences, getRecentEvents, getActiveGoals, getAgentMessages } from '../data/repository'
@@ -11,6 +13,8 @@ import type { AgentService } from '../agent/AgentService'
 import type { ActivitySession } from '../../shared/types'
 
 export const DEBUG_PORT = 9119
+const PORT_FILE = join('C:\\ProgramData', 'ProductivityDaemon', 'debug-port')
+const FALLBACK_PORTS = [9119, 9120, 9121, 9122, 9123]
 
 interface Deps {
   monitor: () => MonitorService | null
@@ -354,16 +358,33 @@ export function startDebugServer(deps: Deps): void {
     })
   })
 
-  server.once('error', (e: NodeJS.ErrnoException) => {
-    if (e.code === 'EADDRINUSE') {
-      console.warn(`[DebugServer] port ${DEBUG_PORT} in use — debug API unavailable`)
-    } else {
-      console.error('[DebugServer] error:', e.message)
-    }
-  })
+  // Try each port in sequence until one binds. Necessary because hot-reload in dev mode
+  // restarts the main process before the OS releases the previous port binding.
+  let portIdx = 0
 
-  server.listen(DEBUG_PORT, '127.0.0.1', () => {
-    debugLog('debug:server:started', { port: DEBUG_PORT, pid: process.pid })
-    console.log(`[DebugServer] http://127.0.0.1:${DEBUG_PORT} — GET /summary to start`)
-  })
+  const tryNext = (): void => {
+    if (portIdx >= FALLBACK_PORTS.length) {
+      console.warn('[DebugServer] all ports 9119-9123 in use — debug API unavailable')
+      return
+    }
+    const port = FALLBACK_PORTS[portIdx++]!
+
+    server.once('error', (e: NodeJS.ErrnoException) => {
+      if (e.code === 'EADDRINUSE') {
+        console.warn(`[DebugServer] port ${port} in use, trying ${FALLBACK_PORTS[portIdx] ?? '(none)'}…`)
+        tryNext()
+      } else {
+        console.error('[DebugServer] error:', e.message)
+      }
+    })
+
+    server.listen(port, '127.0.0.1', () => {
+      // Write the actual port to a well-known file so probe.mjs can find it
+      try { writeFileSync(PORT_FILE, String(port), 'utf8') } catch { /* non-fatal */ }
+      debugLog('debug:server:started', { port, pid: process.pid })
+      console.log(`[DebugServer] http://127.0.0.1:${port} — GET /summary to start`)
+    })
+  }
+
+  tryNext()
 }
