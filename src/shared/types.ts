@@ -150,6 +150,11 @@ export interface AppSettings {
   blockingMode?: 'auto' | 'ask'
 }
 
+export interface BreakMode {
+  endsAt: number
+  reason?: string
+}
+
 export interface AppStore {
   blocklist: {
     domains: BlockedDomain[]
@@ -168,6 +173,7 @@ export interface AppStore {
   chatHistory: ChatMessage[]
   settings: AppSettings
   blockEventCount: number
+  breakMode?: BreakMode
 }
 
 export type ViewName =

@@ -15,7 +15,7 @@ import SettingsView from './views/Settings'
 import Onboarding from './views/Onboarding'
 import ChatPanel from './chat/ChatPanel'
 import type { ViewName, AppStore, ScanResult, HeuristicAlert } from '@shared/types'
-import { Minus, Square, X, AlertTriangle, Eye, Shield } from 'lucide-react'
+import { Minus, Square, X, AlertTriangle, Eye, Shield, Coffee } from 'lucide-react'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -31,9 +31,22 @@ export default function App(): React.ReactElement {
   const [autoBlockToast, setAutoBlockToast] = useState<{ domain: string; confidence: number; ts: number } | null>(null)
   const [liveAutoBlocks, setLiveAutoBlocks] = useState<{ domain: string; confidence: number; ts: number }[]>([])
   const [pendingActionCount, setPendingActionCount] = useState(0)
+  const [breakMode, setBreakMode] = useState<{ endsAt: number; reason?: string } | null>(null)
 
   useEffect(() => {
-    api.getStore().then(setStore)
+    api.getStore().then((s) => {
+      setStore(s)
+      // Restore break mode if it's still active after a renderer reload
+      if (s.breakMode && Date.now() < s.breakMode.endsAt) {
+        setBreakMode(s.breakMode)
+      }
+    })
+  }, [])
+
+  useEffect(() => {
+    const offStart = api.onBreakStarted((evt) => setBreakMode(evt))
+    const offEnd = api.onBreakEnded(() => { setBreakMode(null); api.getStore().then(setStore) })
+    return () => { offStart(); offEnd() }
   }, [])
 
   // Listen for heuristic alert push events from main process
@@ -213,6 +226,33 @@ export default function App(): React.ReactElement {
           className="flex-1 overflow-hidden relative flex flex-col"
           style={{ background: colors.mainBg, transition: 'background 0.2s ease' }}
         >
+          {breakMode && Date.now() < breakMode.endsAt && (
+            <div
+              className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
+              style={{ background: 'rgba(255,170,0,0.05)', borderBottom: '1px solid rgba(255,170,0,0.18)' }}
+            >
+              <div className="flex items-center gap-2.5">
+                <Coffee size={12} style={{ color: '#ffaa00' }} />
+                <span
+                  className="text-[10px] font-bold uppercase tracking-widest"
+                  style={{ color: '#ffaa00', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
+                >
+                  Break Mode Active
+                </span>
+                <span className="text-[10px]" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
+                  · resumes {new Date(breakMode.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <button
+                className="text-[10px] uppercase tracking-widest transition-colors hover:text-white"
+                style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}
+                onClick={async () => { await api.endBreak(); setBreakMode(null) }}
+              >
+                End Break
+              </button>
+            </div>
+          )}
+
           {activeSession && (
             <div
               className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
@@ -448,6 +488,11 @@ declare global {
       exportPdf: () => Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }>
       hideInterstitial: () => Promise<void>
       proceedAnyway: () => Promise<void>
+      startBreak: (durationMs: number, reason?: string) => Promise<{ ok: boolean; endsAt: number }>
+      endBreak: () => Promise<{ ok: boolean }>
+      getBreakStatus: () => Promise<{ endsAt: number; reason?: string } | null>
+      onBreakStarted: (cb: (evt: { endsAt: number; reason?: string }) => void) => (() => void)
+      onBreakEnded: (cb: () => void) => (() => void)
       onInterstitialData: (cb: (data: { blocked: string; type: string; endsAt?: number }) => void) => void
       onHeuristicAlert: (cb: (alerts: import('@shared/types').HeuristicAlert[]) => void) => void
       onGuardAlert: (cb: (alert: { url: string; domain: string; title: string; category: string; message: string; searchQuery?: string; timestamp: number }) => void) => (() => void)

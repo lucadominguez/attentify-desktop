@@ -2,11 +2,11 @@ import { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } from 'ele
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { execSync } from 'child_process'
-import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine } from './ipc'
+import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine, getAgentSvc } from './ipc'
 import { startDebugServer } from './debug/DebugServer'
 import { getStore, patchStore } from './store'
 import { openDatabase, closeDatabase } from './data/db'
-import { migrateFromStateJson } from './data/repository'
+import { migrateFromStateJson, purgeOldData } from './data/repository'
 
 // GPU shader disk cache causes "Access is denied" errors when the process runs
 // at a different privilege level than the session that originally created the
@@ -167,6 +167,8 @@ app.whenReady().then(async () => {
         sessions: store.sessions,
       })
     }
+    // Purge events and messages older than 90 days to keep DB lean
+    purgeOldData()
   } catch (e) {
     console.error('[main] DB open failed:', e)
   }
@@ -182,6 +184,7 @@ app.whenReady().then(async () => {
     monitor: getMonitor,
     inference: getInferenceEngine,
     engine: getBlockingEngine,
+    agent: getAgentSvc,
   })
 
   app.on('activate', () => {

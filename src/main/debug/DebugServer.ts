@@ -1,10 +1,14 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
+import { randomUUID } from 'crypto'
 import { getStore, patchStore } from '../store'
-import { getInferences, getRecentEvents } from '../data/repository'
+import { getInferences, getRecentEvents, getActiveGoals, getAgentMessages } from '../data/repository'
 import { getRecentLogs, getLogPath, debugLog } from './logger'
+import { runFocusScan } from '../scanner/FocusScan'
 import type { MonitorService } from '../monitoring/MonitorService'
 import type { InferenceEngine } from '../inference/InferenceEngine'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
+import type { AgentService } from '../agent/AgentService'
+import type { ActivitySession } from '../../shared/types'
 
 export const DEBUG_PORT = 9119
 
@@ -12,6 +16,7 @@ interface Deps {
   monitor: () => MonitorService | null
   inference: () => InferenceEngine | null
   engine: () => BlockingEngine | null
+  agent: () => AgentService | null
 }
 
 // ── Route helpers ─────────────────────────────────────────────────────────────
@@ -108,6 +113,15 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       })
     }
 
+    if (path === '/agent/goals') {
+      return json(res, getActiveGoals())
+    }
+
+    if (path === '/agent/messages') {
+      const limit = parseInt(url.searchParams.get('limit') ?? '20', 10)
+      return json(res, getAgentMessages(limit))
+    }
+
     return json(res, { error: 'Not found', routes: ROUTES }, 404)
   }
 
@@ -192,6 +206,110 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       return json(res, { ok: true, message: 'Background sweep triggered — check /inferences shortly' })
     }
 
+    if (path === '/inject/session') {
+      // Inject a fake ActivitySession into the inference + heuristic engines.
+      // Repeat N times to simulate a pattern (e.g. compulsive checking).
+      const app = (body.app as string) ?? 'chrome'
+      const title = (body.title as string) ?? ''
+      const durationMs = (body.duration as number) ?? 60_000
+      const isDistraction = body.isDistraction !== false
+      const count = Math.min(Math.max(1, (body.count as number) ?? 1), 20)
+      const inf = deps.inference()
+      const mon = deps.monitor()
+
+      const sessions: ActivitySession[] = Array.from({ length: count }, (_, i) => ({
+        id: randomUUID(),
+        app,
+        title,
+        url: body.url as string | undefined,
+        category: (body.category as ActivitySession['category']) ?? 'browser',
+        startTime: Date.now() - (count - i) * (durationMs + 5000),
+        endTime: Date.now() - (count - i - 1) * (durationMs + 5000),
+        duration: durationMs,
+        isDistraction,
+      }))
+
+      const results: { inference?: unknown; heuristic?: unknown[] } = {}
+
+      for (const session of sessions) {
+        inf?.analyzeSession(session)
+      }
+      results.inference = { injected: count, message: 'check /inferences for results' }
+
+      if (mon) {
+        const heuristics = mon.getHeuristics()
+        const alerts = heuristics.analyze(sessions)
+        results.heuristic = alerts
+      }
+
+      debugLog('debug:inject-session', { app, count, durationMs, isDistraction })
+      return json(res, { ok: true, ...results })
+    }
+
+    if (path === '/inject/chat') {
+      const message = (body.message as string) ?? ''
+      if (!message) return json(res, { error: 'message required' }, 400)
+      const svc = deps.agent()
+      if (!svc) return json(res, { error: 'agent not ready — API key required' }, 503)
+      if (!svc.isReady()) return json(res, { error: 'agent not initialized (no API key)' }, 503)
+
+      let fullContent = ''
+      const toolsUsed: string[] = []
+
+      await new Promise<void>((resolve, reject) => {
+        svc.chat(message, {
+          onChunk: (c) => { fullContent += c },
+          onToolUse: (t) => { toolsUsed.push(t) },
+          onDone: () => resolve(),
+          onError: (e) => reject(new Error(e)),
+        })
+      })
+
+      debugLog('debug:chat', { message: message.slice(0, 80), toolsUsed })
+      return json(res, { ok: true, content: fullContent, toolsUsed })
+    }
+
+    if (path === '/inject/proactive') {
+      // Simulate a long distraction session to trigger the proactive agent callback.
+      const svc = deps.agent()
+      if (!svc) return json(res, { error: 'agent not ready' }, 503)
+      const session: ActivitySession = {
+        id: randomUUID(),
+        app: (body.app as string) ?? 'chrome',
+        title: (body.title as string) ?? 'Reddit - Front Page',
+        url: body.url as string | undefined,
+        category: 'entertainment',
+        startTime: Date.now() - 180_000,
+        endTime: Date.now(),
+        duration: 180_000,
+        isDistraction: true,
+      }
+      svc.notifyDistraction(session)
+      debugLog('debug:proactive', { app: session.app })
+      return json(res, { ok: true, message: 'Proactive check triggered — open the chat to see if the agent responded' })
+    }
+
+    if (path === '/inject/scan') {
+      const result = await runFocusScan()
+      patchStore({ lastScan: result })
+      debugLog('debug:scan', { issueCount: result.issueCount })
+      return json(res, result)
+    }
+
+    if (path === '/inject/break') {
+      // Start/end break mode via the debug API
+      const action = (body.action as string) ?? 'start'
+      const durationMs = (body.durationMs as number) ?? 5 * 60 * 1000
+      const store = getStore()
+      if (action === 'end') {
+        patchStore({ breakMode: undefined })
+        return json(res, { ok: true, action: 'ended' })
+      }
+      const endsAt = Date.now() + durationMs
+      patchStore({ breakMode: { endsAt } })
+      return json(res, { ok: true, action: 'started', endsAt })
+    }
+
     return json(res, { error: 'Not found' }, 404)
   }
 
@@ -201,24 +319,35 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
 // ── Available routes (for 404 hint) ──────────────────────────────────────────
 
 const ROUTES = {
-  'GET /ping':           'health check',
-  'GET /summary':        'full status snapshot (start here)',
-  'GET /state':          'raw app store',
-  'GET /blocklist':      'current domain + process blocklist',
-  'GET /inferences':     'all AI inferences (?status=pending|auto_applied|confirmed|rejected)',
-  'GET /events':         'recent activity events (?limit=N&since=epochMs)',
-  'GET /logs':           'structured debug log (?n=N)',
-  'GET /monitor':        'monitor service state',
-  'POST /inject/url':    '{ url, title? } — run URL through inference pipeline',
-  'POST /inject/search': '{ query } — run search query through inference',
-  'POST /inject/block':  '{ domain } — add domain to blocklist',
-  'POST /inject/unblock':'{ domain } — remove domain from blocklist',
-  'POST /inject/sweep':  'trigger background inference sweep immediately',
+  'GET /ping':              'health check',
+  'GET /summary':           'full status snapshot (start here)',
+  'GET /state':             'raw app store',
+  'GET /blocklist':         'current domain + process blocklist',
+  'GET /inferences':        'all AI inferences (?status=pending|auto_applied|confirmed|rejected)',
+  'GET /events':            'recent activity events (?limit=N&since=epochMs)',
+  'GET /logs':              'structured debug log (?n=N)',
+  'GET /monitor':           'monitor service state',
+  'GET /agent/goals':       'active focus goals',
+  'GET /agent/messages':    'agent conversation history (?limit=N)',
+  'POST /inject/url':       '{ url, title? } — run URL through inference pipeline',
+  'POST /inject/search':    '{ query } — run search query through inference',
+  'POST /inject/session':   '{ app, title, url?, duration?, isDistraction?, category?, count? } — inject N activity sessions for heuristic+inference testing',
+  'POST /inject/chat':      '{ message } — send message to agent, returns response',
+  'POST /inject/proactive': '{ app?, title?, url? } — simulate distraction session to trigger proactive intervention',
+  'POST /inject/scan':      'run FocusScan and return results',
+  'POST /inject/block':     '{ domain } — add domain to blocklist',
+  'POST /inject/unblock':   '{ domain } — remove domain from blocklist',
+  'POST /inject/sweep':     'trigger background inference sweep immediately',
+  'POST /inject/break':     '{ action:"start"|"end", durationMs? } — control break mode',
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
 export function startDebugServer(deps: Deps): void {
+  if (!deps.agent) {
+    // backfill for callers that haven't added agent yet
+    deps = { ...deps, agent: () => null }
+  }
   const server = createServer((req, res) => {
     handle(req, res, deps).catch((e) => {
       try { json(res, { error: String(e) }, 500) } catch { /* already sent */ }

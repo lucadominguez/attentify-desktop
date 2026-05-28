@@ -28,6 +28,14 @@ let inferenceEngine: InferenceEngine | null = null
 let interstitialWin: BrowserWindow | null = null
 let mainWin: BrowserWindow | null = null
 
+// Break mode — suppresses interstitials and new auto-blocks for a timed window
+let breakEndAt: number | null = null
+let breakTimer: ReturnType<typeof setTimeout> | null = null
+
+function isBreakActive(): boolean {
+  return breakEndAt !== null && Date.now() < breakEndAt
+}
+
 export function setInterstitialWindow(win: BrowserWindow | null): void {
   interstitialWin = win
 }
@@ -279,7 +287,7 @@ export function initIpc(): void {
   })
 
   engine.on('blocked', (event: { type: string; item: string }) => {
-    if (interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
+    if (!isBreakActive() && interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
       const session = getStore().sessions.find((s) => s.active)
       interstitialWin.webContents.send('interstitial:data', {
         blocked: event.item,
@@ -293,7 +301,7 @@ export function initIpc(): void {
 
   monitor.on('url:blocked', (data: { domain: string; url: string }) => {
     debugLog('monitor:url-blocked', { domain: data.domain, url: data.url })
-    if (interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
+    if (!isBreakActive() && interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
       const session = getStore().sessions.find((s) => s.active)
       interstitialWin.webContents.send('interstitial:data', {
         blocked: data.domain,
@@ -432,6 +440,39 @@ export function initIpc(): void {
     const s = getStore()
     patchStore({ sessions: s.sessions.map((sess) => (sess.id === id ? { ...sess, active: false } : sess)) })
     engine?.stop()
+  })
+
+  // ── Break mode ────────────────────────────────────────────────────────────
+
+  ipcMain.handle('break:start', (_e, durationMs: number, reason?: string) => {
+    if (breakTimer) clearTimeout(breakTimer)
+    breakEndAt = Date.now() + durationMs
+    patchStore({ breakMode: { endsAt: breakEndAt, reason } })
+    sendMain('break:started', { endsAt: breakEndAt, reason })
+    interstitialWin?.hide()
+    debugLog('break:start', { durationMs, endsAt: breakEndAt })
+    breakTimer = setTimeout(() => {
+      breakEndAt = null
+      breakTimer = null
+      patchStore({ breakMode: undefined })
+      sendMain('break:ended', {})
+      debugLog('break:end', { reason: 'timer' })
+    }, durationMs)
+    return { ok: true, endsAt: breakEndAt }
+  })
+
+  ipcMain.handle('break:end', () => {
+    if (breakTimer) { clearTimeout(breakTimer); breakTimer = null }
+    breakEndAt = null
+    patchStore({ breakMode: undefined })
+    sendMain('break:ended', {})
+    debugLog('break:end', { reason: 'manual' })
+    return { ok: true }
+  })
+
+  ipcMain.handle('break:status', () => {
+    const store = getStore()
+    return store.breakMode ?? null
   })
 
   // ── Chat (streaming agent) ────────────────────────────────────────────────

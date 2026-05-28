@@ -3,16 +3,23 @@
  * agent probe — one-shot status dump for Hermes/Claude Code
  *
  * Usage:
- *   node scripts/probe.mjs               # full summary
- *   node scripts/probe.mjs logs          # last 30 structured log entries
- *   node scripts/probe.mjs inferences    # all AI inferences
- *   node scripts/probe.mjs events        # last 20 activity events
- *   node scripts/probe.mjs blocklist     # current blocklist
+ *   node scripts/probe.mjs                      # full summary
+ *   node scripts/probe.mjs logs                 # last 30 structured log entries
+ *   node scripts/probe.mjs inferences           # all AI inferences
+ *   node scripts/probe.mjs events               # last 20 activity events
+ *   node scripts/probe.mjs blocklist            # current blocklist
+ *   node scripts/probe.mjs goals                # active focus goals
+ *   node scripts/probe.mjs chat "block YouTube for 2 hours"
  *   node scripts/probe.mjs inject:url https://reddit.com
  *   node scripts/probe.mjs inject:search "funny memes"
+ *   node scripts/probe.mjs inject:session chrome "Reddit - Front Page" 120000 5
+ *   node scripts/probe.mjs inject:proactive
+ *   node scripts/probe.mjs inject:scan
  *   node scripts/probe.mjs inject:block reddit.com
  *   node scripts/probe.mjs inject:unblock reddit.com
  *   node scripts/probe.mjs inject:sweep
+ *   node scripts/probe.mjs break:start 900000   # 15 min break
+ *   node scripts/probe.mjs break:end
  */
 
 const BASE = 'http://127.0.0.1:9119'
@@ -122,6 +129,69 @@ if (cmd === 'inject:unblock') {
   if (!arg) { console.error('Usage: probe.mjs inject:unblock <domain>'); process.exit(1) }
   const r = await post('/inject/unblock', { domain: arg })
   banner(`Unblock ${arg}`)
+  console.log(fmt(r))
+  process.exit(0)
+}
+
+if (cmd === 'goals') {
+  const goals = await get('/agent/goals')
+  banner('Active goals')
+  console.log(fmt(goals))
+  process.exit(0)
+}
+
+if (cmd === 'chat') {
+  if (!arg) { console.error('Usage: probe.mjs chat "<message>"'); process.exit(1) }
+  banner(`Chat: "${arg}"`)
+  console.log('Sending to agent (may take a few seconds)...')
+  const r = await post('/inject/chat', { message: arg })
+  if (r.toolsUsed?.length) console.log(`Tools used: ${r.toolsUsed.join(', ')}`)
+  console.log('\nAgent response:')
+  console.log(r.content ?? r.error ?? fmt(r))
+  process.exit(0)
+}
+
+if (cmd === 'inject:session') {
+  // args: app title durationMs count
+  const [, titleArg, durationArg, countArg] = process.argv.slice(2)
+  const app2 = arg ?? 'chrome'
+  const title2 = titleArg ?? 'Reddit - Front Page'
+  const dur = parseInt(durationArg ?? '120000', 10)
+  const cnt = parseInt(countArg ?? '5', 10)
+  const r = await post('/inject/session', { app: app2, title: title2, duration: dur, isDistraction: true, count: cnt })
+  banner(`Session injection: ${cnt}x ${dur/1000}s of ${app2}`)
+  console.log(fmt(r))
+  process.exit(0)
+}
+
+if (cmd === 'inject:proactive') {
+  const r = await post('/inject/proactive', {})
+  banner('Proactive intervention triggered')
+  console.log(fmt(r))
+  process.exit(0)
+}
+
+if (cmd === 'inject:scan') {
+  console.log('Running FocusScan (may take 5-10s)...')
+  const r = await post('/inject/scan', {})
+  banner('FocusScan results')
+  console.log(`Issues found: ${r.issueCount}`)
+  if (r.issues) for (const i of r.issues) console.log(`  [${i.severity}] ${i.title}`)
+  if (r.installedDistractors?.length) console.log(`\nInstalled distractors: ${r.installedDistractors.join(', ')}`)
+  process.exit(0)
+}
+
+if (cmd === 'break:start') {
+  const ms = parseInt(arg ?? '900000', 10)
+  const r = await post('/inject/break', { action: 'start', durationMs: ms })
+  banner(`Break mode started (${ms/60000} min)`)
+  console.log(fmt(r))
+  process.exit(0)
+}
+
+if (cmd === 'break:end') {
+  const r = await post('/inject/break', { action: 'end' })
+  banner('Break mode ended')
   console.log(fmt(r))
   process.exit(0)
 }

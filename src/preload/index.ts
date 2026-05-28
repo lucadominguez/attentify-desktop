@@ -128,6 +128,22 @@ const api = {
   hideInterstitial: (): Promise<void> => ipcRenderer.invoke('interstitial:hide'),
   proceedAnyway: (): Promise<void> => ipcRenderer.invoke('interstitial:proceed'),
 
+  startBreak: (durationMs: number, reason?: string): Promise<{ ok: boolean; endsAt: number }> =>
+    ipcRenderer.invoke('break:start', durationMs, reason),
+  endBreak: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('break:end'),
+  getBreakStatus: (): Promise<{ endsAt: number; reason?: string } | null> => ipcRenderer.invoke('break:status'),
+
+  onBreakStarted: (cb: (evt: { endsAt: number; reason?: string }) => void): (() => void) => {
+    const handler = (_e: unknown, evt: unknown): void => cb(evt as { endsAt: number; reason?: string })
+    ipcRenderer.on('break:started', handler)
+    return () => ipcRenderer.off('break:started', handler)
+  },
+  onBreakEnded: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('break:ended', handler)
+    return () => ipcRenderer.off('break:ended', handler)
+  },
+
   onInterstitialData: (cb: (data: { blocked: string; type: string; endsAt?: number }) => void) => {
     ipcRenderer.on('interstitial:data', (_e, data) => cb(data))
   },
