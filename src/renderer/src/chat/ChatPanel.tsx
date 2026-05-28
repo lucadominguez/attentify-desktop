@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Send, Shield, MessageSquare, Zap } from 'lucide-react'
+import { X, Send, Shield, MessageSquare, Zap, Trash2 } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -127,9 +127,11 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
   const [sending, setSending] = useState(false)
   const [activeToolName, setActiveToolName] = useState<string | null>(null)
   const [streamingId, setStreamingId] = useState<string | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const streamingIdRef = useRef<string | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Load history from SQLite on mount
   useEffect(() => {
@@ -144,10 +146,9 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
         }])
         return
       }
-      // history comes DESC; reverse to ASC, filter out tool messages
-      const visible = [...rows]
+      // history already comes ASC from the API (getAgentMessages reverses DESC→ASC)
+      const visible = rows
         .filter((r) => r.role === 'user' || r.role === 'assistant')
-        .reverse()
         .map((r) => ({
           id: r.id,
           role: r.role as 'user' | 'assistant',
@@ -188,6 +189,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
     })
 
     const offDone = api.onChatDone((evt) => {
+      const sid = streamingIdRef.current
       setSending(false)
       setStreamingId(null)
       streamingIdRef.current = null
@@ -195,7 +197,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
       // Finalize the streaming message with authoritative content from DB
       setMessages((prev) =>
         prev.map((m) =>
-          m.streaming
+          m.id === sid || m.streaming
             ? { ...m, id: evt.id, content: evt.content, streaming: false }
             : m
         )
@@ -223,8 +225,15 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
   }, [onRefresh])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    const container = scrollContainerRef.current
+    if (!container) return
+    const { scrollTop, scrollHeight, clientHeight } = container
+    const nearBottom = scrollHeight - scrollTop - clientHeight < 120
+    // Always scroll on new user message or end of stream; only scroll mid-stream if already near bottom
+    if (nearBottom || !sending) {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+    }
+  }, [messages, sending])
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -259,6 +268,18 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
     api.chatStart(text.trim())
   }, [sending])
 
+  const clearHistory = useCallback(async (): Promise<void> => {
+    if (!confirmClear) { setConfirmClear(true); setTimeout(() => setConfirmClear(false), 3000); return }
+    await api.clearChatHistory()
+    setConfirmClear(false)
+    setMessages([{
+      id: 'welcome',
+      role: 'assistant',
+      content: "History cleared. I'm your Daemon Assistant — tell me what you need to focus on.",
+      timestamp: Date.now(),
+    }])
+  }, [confirmClear])
+
   const showQuickCommands = messages.length <= 1 ||
     (messages.length === 1 && messages[0]?.id === 'welcome')
 
@@ -278,13 +299,23 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
             <p className="text-[10px]" style={{ color: colors.textMuted }}>Runs locally · No data leaves your device</p>
           </div>
         </div>
-        <button onClick={onClose} className="transition-colors p-1" style={{ color: colors.textMuted }}>
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => void clearHistory()}
+            title={confirmClear ? 'Click again to confirm' : 'Clear chat history'}
+            className="transition-colors p-1.5 rounded"
+            style={{ color: confirmClear ? '#ff4444' : colors.textMuted, background: confirmClear ? 'rgba(255,68,68,0.1)' : 'transparent' }}
+          >
+            <Trash2 size={13} />
+          </button>
+          <button onClick={onClose} className="transition-colors p-1" style={{ color: colors.textMuted }}>
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.map((msg) => (
           <div
             key={msg.id}

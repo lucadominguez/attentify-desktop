@@ -10,6 +10,7 @@ interface Inference {
   value: string
   confidence: number
   reasoning?: string
+  evidence?: { source?: string }
   status: 'pending' | 'confirmed' | 'rejected' | 'auto_applied'
   action?: 'auto_block' | 'suggest' | 'ignore'
   created_at: number
@@ -228,7 +229,7 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                   )}
 
                   <div className="flex items-center gap-2 mt-3">
-                    <SourceBadge source={(inf as Inference & { evidence?: { source?: string } }).evidence?.source ?? ''} />
+                    <SourceBadge source={inf.evidence?.source ?? ''} />
                     <div className="flex-1" />
                     <button
                       onClick={() => void resolve(inf.id, 'rejected')}

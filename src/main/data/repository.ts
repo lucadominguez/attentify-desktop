@@ -407,6 +407,11 @@ export function getAgentMessages(limit = 40): DbAgentMessage[] {
   }))
 }
 
+export function clearAgentMessages(): void {
+  getDb().run('DELETE FROM agent_messages')
+  markDirty()
+}
+
 // ── Inferences ─────────────────────────────────────────────────────────────────
 
 export function insertInference(inf: Omit<DbInference, 'id'>): DbInference {

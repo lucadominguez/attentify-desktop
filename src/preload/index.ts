@@ -73,6 +73,7 @@ const api = {
 
   // ── Agent history & proactive ─────────────────────────────────────────────
   getAgentHistory: (limit?: number) => ipcRenderer.invoke('agent:get-history', limit),
+  clearChatHistory: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:clear-history'),
   dismissProactive: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:dismiss-proactive'),
 
   onAgentProactive: (cb: (evt: AgentProactiveEvent) => void): (() => void) => {

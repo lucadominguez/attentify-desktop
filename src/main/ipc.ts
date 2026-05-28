@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow as ElectronBrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow as ElectronBrowserWindow, Notification } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { writeFile } from 'fs/promises'
 import { getStore, patchStore } from './store'
@@ -15,7 +15,7 @@ import {
   getActiveGoals, insertGoal, clearGoal,
   getPreferences, upsertPreference, deletePreference,
   getInferences, resolveInference,
-  getAgentMessages, insertAgentMessage, getDomains,
+  getAgentMessages, insertAgentMessage, clearAgentMessages, getDomains,
 } from './data/repository'
 import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory } from '../shared/types'
 import { randomUUID } from 'crypto'
@@ -181,7 +181,13 @@ export function initIpc(): void {
 
   // Auto-register startup daemon on first elevated run so future launches skip UAC
   if (actuallyElevated && !isStartupDaemonRegistered()) {
-    registerStartupDaemon(process.execPath)
+    const registered = registerStartupDaemon(process.execPath)
+    if (registered && Notification.isSupported()) {
+      new Notification({
+        title: 'Productivity Daemon',
+        body: 'Auto-elevation registered. The app will now launch with admin privileges automatically on login — no more UAC prompts.',
+      }).show()
+    }
   }
 
   monitor = new MonitorService()
@@ -196,12 +202,19 @@ export function initIpc(): void {
   inferenceEngine.setCallbacks({
     onAutoBlock: (domain, confidence) => {
       sendMain('inference:auto-blocked', { domain, confidence })
+      if (Notification.isSupported()) {
+        new Notification({
+          title: 'Site Auto-Blocked',
+          body: `${domain} was automatically blocked (${Math.round(confidence * 100)}% confidence).`,
+          urgency: 'critical',
+        }).show()
+      }
     },
     onSuggest: (inf) => {
       sendMain('inference:suggest', inf)
-      // Show a visible guard-style toast for anything >= 70% confidence
+      const pct = Math.round(inf.confidence * 100)
+      // In-app toast for anything >= 70%
       if (inf.confidence >= 0.70) {
-        const pct = Math.round(inf.confidence * 100)
         sendMain('guard:alert', {
           url: '',
           domain: inf.type === 'domain' ? inf.value : '',
@@ -212,6 +225,13 @@ export function initIpc(): void {
             : `${inf.value} looks like a distraction (${pct}% confidence).`,
           timestamp: Date.now(),
         })
+      }
+      // OS notification for high-confidence suggestions
+      if (inf.confidence >= 0.80 && Notification.isSupported()) {
+        new Notification({
+          title: 'Distraction Flagged',
+          body: `${inf.value} flagged as a distraction (${pct}%). Review in Actions tab.`,
+        }).show()
       }
     },
     onSearchAlert: (query, predictedDomain, category) => {
@@ -254,6 +274,20 @@ export function initIpc(): void {
       interstitialWin.show()
     }
     patchStore({ blockEventCount: (getStore().blockEventCount ?? 0) + 1 })
+  })
+
+  monitor.on('url:blocked', (data: { domain: string; url: string }) => {
+    if (interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
+      const session = getStore().sessions.find((s) => s.active)
+      interstitialWin.webContents.send('interstitial:data', {
+        blocked: data.domain,
+        type: 'domain',
+        endsAt: session?.endsAt,
+      })
+      interstitialWin.show()
+    }
+    patchStore({ blockEventCount: (getStore().blockEventCount ?? 0) + 1 })
+    sendMain('inference:auto-blocked', { domain: data.domain, confidence: 1.0 })
   })
 
   monitor.on('session', (session: ActivitySession) => {
@@ -474,6 +508,11 @@ export function initIpc(): void {
   // ── Agent messages history ─────────────────────────────────────────────────
 
   ipcMain.handle('agent:get-history', (_e, limit = 40) => getAgentMessages(limit))
+
+  ipcMain.handle('agent:clear-history', () => {
+    clearAgentMessages()
+    return { ok: true }
+  })
 
   // ── Proactive intervention dismiss ────────────────────────────────────────
 

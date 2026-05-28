@@ -6,6 +6,7 @@ import { HeuristicEngine } from '../heuristics/HeuristicEngine'
 import { UrlGuardService, extractSearchQuery } from '../guard/UrlGuardService'
 import { InferenceEngine } from '../inference/InferenceEngine'
 import { bufferEvent, flushEventBuffer, upsertApp, upsertDomain } from '../data/repository'
+import { getStore } from '../store'
 import type { ActivitySession } from '../../shared/types'
 
 // ── MonitorService ────────────────────────────────────────────────────────────
@@ -181,6 +182,16 @@ while ($true) {
             this.currentUrl = url
             const title = this.currentTitle ?? ''
             this.emit('url', url)
+
+            // Check if this URL's domain is in the blocklist → trigger interstitial
+            try {
+              const domain = new URL(url.startsWith('http') ? url : `https://${url}`)
+                .hostname.replace(/^www\./, '').toLowerCase()
+              const store = getStore()
+              if (store.blocklist.domains.some((d) => domain === d.domain || domain.endsWith('.' + d.domain))) {
+                this.emit('url:blocked', { domain, url })
+              }
+            } catch { /* ignore invalid URLs */ }
 
             // Write URL visit event
             bufferEvent({ ts: Date.now(), type: 'url_visit', url, title })

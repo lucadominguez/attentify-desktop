@@ -24,6 +24,8 @@ const OPENROUTER_MODEL = 'anthropic/claude-haiku-4-5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
 const SAFE_CATEGORIES = new Set(['development', 'productivity', 'system'])
+// These categories always auto-block regardless of whether goals are active
+const HARDBLOCK_CATEGORIES = new Set(['adult', 'gambling', 'dating'])
 const BROWSER_PROCESSES_SET = new Set(['chrome', 'firefox', 'msedge', 'brave', 'vivaldi', 'opera', 'arc', 'thorium', 'librewolf', 'waterfox', 'floorp'])
 
 // ── Comprehensive distraction domain taxonomy ─────────────────────────────────
@@ -346,7 +348,11 @@ export class InferenceEngine {
       const category = DOMAIN_TO_CATEGORY.get(domain) ?? 'distraction'
       const baseScore = CATEGORY_AUTO_BLOCK_SCORE[category] ?? 0.75
       const goals = getActiveGoals()
-      const confidence = goals.length > 0 ? Math.min(0.99, baseScore + 0.05) : Math.max(0.55, baseScore - 0.1)
+      // Hard-block categories (adult/gambling/dating) always auto-block — don't reduce for no goals
+      const hardBlock = HARDBLOCK_CATEGORIES.has(category)
+      const confidence = hardBlock
+        ? Math.min(0.99, baseScore + 0.05)
+        : goals.length > 0 ? Math.min(0.99, baseScore + 0.05) : Math.max(0.55, baseScore - 0.1)
       const reasoning = goals.length > 0
         ? `visited ${domain} (${category}) while goal "${goals[0]!.text}" is active`
         : `${domain} is a known ${category} site`
@@ -474,8 +480,9 @@ export class InferenceEngine {
 
         const baseScore = CATEGORY_AUTO_BLOCK_SCORE[cat] ?? 0.70
         const goals = getActiveGoals()
-        // Title-based is slightly less certain than URL-based; reduce by 0.05
-        const confidence = goals.length > 0
+        const hardBlock = HARDBLOCK_CATEGORIES.has(cat)
+        // Title-based is slightly less certain than URL-based; reduce by 0.05 (except hard-block categories)
+        const confidence = hardBlock || goals.length > 0
           ? Math.min(0.94, baseScore)
           : Math.max(0.50, baseScore - 0.08)
 
