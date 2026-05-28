@@ -1,32 +1,51 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog, BrowserWindow as ElectronBrowserWindow } from 'electron'
 import type { BrowserWindow } from 'electron'
+import { writeFile } from 'fs/promises'
 import { getStore, patchStore } from './store'
 import { BlockingEngine } from './blocking/BlockingEngine'
 import { processMessage } from './chat/ChatEngine'
 import { runFocusScan } from './scanner/FocusScan'
-import { ActivityTracker } from './tracking/ActivityTracker'
-import { HeuristicEngine } from './heuristics/HeuristicEngine'
 import { checkElevation, verifyHostsWritable } from './blocking/hostsFileEditor'
 import { registerStartupDaemon, unregisterStartupDaemon, isStartupDaemonRegistered, getPlatformLabel } from './daemonManager'
+import { saveApiKey, loadApiKey, deleteApiKey, hasApiKey } from './keystore'
+import { MonitorService } from './monitoring/MonitorService'
+import { AgentService } from './agent/AgentService'
+import { InferenceEngine } from './inference/InferenceEngine'
+import {
+  getActiveGoals, insertGoal, clearGoal,
+  getPreferences, upsertPreference, deletePreference,
+  getInferences, resolveInference,
+  getAgentMessages, insertAgentMessage, getDomains,
+} from './data/repository'
 import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory } from '../shared/types'
 import { randomUUID } from 'crypto'
 
 let engine: BlockingEngine | null = null
-let tracker: ActivityTracker | null = null
-let heuristics: HeuristicEngine | null = null
+let monitor: MonitorService | null = null
+let agentService: AgentService | null = null
+let inferenceEngine: InferenceEngine | null = null
 let interstitialWin: BrowserWindow | null = null
 let mainWin: BrowserWindow | null = null
 
-export function setInterstitialWindow(win: BrowserWindow): void {
+export function setInterstitialWindow(win: BrowserWindow | null): void {
   interstitialWin = win
 }
 
-export function setMainWindow(win: BrowserWindow): void {
+export function setMainWindow(win: BrowserWindow | null): void {
   mainWin = win
 }
 
-export function getTracker(): ActivityTracker | null {
-  return tracker
+export function getMonitor(): MonitorService | null {
+  return monitor
+}
+
+export function getAgentSvc(): AgentService | null {
+  return agentService
+}
+
+export function stopTracking(): void {
+  monitor?.stop()
+  inferenceEngine?.stop()
 }
 
 // ── Local intent check for unblock requests ──────────────────────────────────
@@ -127,6 +146,19 @@ function buildDailyStats(sessions: ActivitySession[], blockEvents: number): Dail
   }
 }
 
+// Safe IPC send — guards against the window being destroyed between events.
+// Uses try/catch because accessing .webContents on a destroyed BrowserWindow
+// can itself throw in some Electron versions, not just .send().
+function sendMain(channel: string, ...args: unknown[]): void {
+  try {
+    if (mainWin && !mainWin.isDestroyed()) {
+      mainWin.webContents.send(channel, ...args)
+    }
+  } catch {
+    // window was destroyed between the isDestroyed() check and the send
+  }
+}
+
 // ── IPC initialization ────────────────────────────────────────────────────────
 
 export function initIpc(): void {
@@ -152,11 +184,67 @@ export function initIpc(): void {
     registerStartupDaemon(process.execPath)
   }
 
-  tracker = new ActivityTracker()
-  heuristics = new HeuristicEngine()
+  monitor = new MonitorService()
+  agentService = new AgentService({
+    engine,
+    tracker: monitor.getTracker(),
+    heuristics: monitor.getHeuristics(),
+    monitor,
+  })
+
+  inferenceEngine = new InferenceEngine(engine)
+  inferenceEngine.setCallbacks({
+    onAutoBlock: (domain, confidence) => {
+      sendMain('inference:auto-blocked', { domain, confidence })
+    },
+    onSuggest: (inf) => {
+      sendMain('inference:suggest', inf)
+      // Show a visible guard-style toast for anything >= 70% confidence
+      if (inf.confidence >= 0.70) {
+        const pct = Math.round(inf.confidence * 100)
+        sendMain('guard:alert', {
+          url: '',
+          domain: inf.type === 'domain' ? inf.value : '',
+          title: `AI flagged ${inf.value}`,
+          category: 'possible distraction',
+          message: inf.reasoning
+            ? `${inf.reasoning} (${pct}% confidence) — review in Actions.`
+            : `${inf.value} looks like a distraction (${pct}% confidence).`,
+          timestamp: Date.now(),
+        })
+      }
+    },
+    onSearchAlert: (query, predictedDomain, category) => {
+      sendMain('guard:alert', {
+        url: '',
+        domain: predictedDomain,
+        title: `Search: "${query}"`,
+        category,
+        message: predictedDomain
+          ? `Search predicts navigation to **${predictedDomain}** (${category}).`
+          : `Recreational search detected: "${query}"`,
+        searchQuery: query,
+        timestamp: Date.now(),
+      })
+    },
+  })
+  monitor.attachInference(inferenceEngine)
+
+  // Initialize agent + URL guard if API key exists
+  const apiKey = loadApiKey()
+  if (apiKey) {
+    agentService.init(apiKey)
+    monitor.getUrlGuard().init(apiKey)
+    inferenceEngine.init(apiKey)
+  }
+
+  // Proactive agent callback
+  agentService.setProactiveCallback((text) => {
+    sendMain('agent:proactive', { text, timestamp: Date.now() })
+  })
 
   engine.on('blocked', (event: { type: string; item: string }) => {
-    if (interstitialWin && !interstitialWin.isVisible()) {
+    if (interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
       const session = getStore().sessions.find((s) => s.active)
       interstitialWin.webContents.send('interstitial:data', {
         blocked: event.item,
@@ -168,15 +256,27 @@ export function initIpc(): void {
     patchStore({ blockEventCount: (getStore().blockEventCount ?? 0) + 1 })
   })
 
-  tracker.on('session', (session: ActivitySession) => {
-    // Run heuristics on every new session
-    const alerts = heuristics!.analyze(tracker!.getSessions(Date.now() - 60 * 60 * 1000))
-    if (alerts.length > 0) {
-      const s = getStore()
-      patchStore({ heuristicAlerts: [...s.heuristicAlerts, ...alerts].slice(-200) })
-      // Notify main window
-      mainWin?.webContents.send('heuristic:alert', alerts)
+  monitor.on('session', (session: ActivitySession) => {
+    sendMain('heuristic:alert', [])
+    inferenceEngine?.analyzeSession(session)
+  })
+
+  // Only trigger proactive agent for substantial distraction sessions (≥90s)
+  // This prevents 3-second title-change sessions from spamming the chat
+  monitor.on('distraction', (session: ActivitySession) => {
+    if (session.duration >= 90000) {
+      agentService?.notifyDistraction(session)
     }
+  })
+
+  monitor.on('guard:alert', (alert: unknown) => {
+    sendMain('guard:alert', alert)
+  })
+
+  monitor.on('patterns', (alerts: unknown[]) => {
+    const s = getStore()
+    patchStore({ heuristicAlerts: [...s.heuristicAlerts, ...alerts as typeof s.heuristicAlerts].slice(-200) })
+    sendMain('heuristic:alert', alerts)
   })
 
   // ── Store ──────────────────────────────────────────────────────────────────
@@ -262,71 +362,124 @@ export function initIpc(): void {
     engine?.stop()
   })
 
-  // ── Chat ─────────────────────────────────────────────────────────────────
+  // ── Chat (streaming agent) ────────────────────────────────────────────────
 
+  ipcMain.on('chat:start', async (event, text: string) => {
+    const sender = event.sender
+    if (!agentService) {
+      sender.send('chat:error', 'Agent not initialized')
+      return
+    }
+
+    // Fallback to regex engine if no API key
+    if (!agentService.isReady()) {
+      const store = getStore()
+      const trackingData = {
+        sessions: monitor?.getTracker().getSessions(Date.now() - 7 * 24 * 60 * 60 * 1000) ?? [],
+        timePerApp: monitor?.getTracker().getTimePerApp(Date.now() - 7 * 24 * 60 * 60 * 1000) ?? {},
+      }
+      const response = processMessage(text, store, trackingData)
+      const now = Date.now()
+      insertAgentMessage({ role: 'user', content: text, ts: now })
+      const saved = insertAgentMessage({ role: 'assistant', content: response.reply, ts: now + 1 })
+      sender.send('chat:chunk', response.reply)
+      sender.send('chat:done', { id: saved.id, content: saved.content, timestamp: saved.ts })
+      return
+    }
+
+    await agentService.chat(text, {
+      onChunk: (chunk) => { if (!sender.isDestroyed()) sender.send('chat:chunk', chunk) },
+      onToolUse: (toolName) => { if (!sender.isDestroyed()) sender.send('chat:tool', toolName) },
+      onDone: (msg) => {
+        if (!sender.isDestroyed()) {
+          sender.send('chat:done', { id: msg.id, content: msg.content, timestamp: msg.ts })
+          sendMain('store:refresh')
+        }
+      },
+      onError: (err) => { if (!sender.isDestroyed()) sender.send('chat:error', err) },
+    })
+  })
+
+  // Legacy handle kept for backwards compat
   ipcMain.handle('chat:message', (_e, text: string) => {
     const store = getStore()
     const trackingData = {
-      sessions: tracker?.getSessions(Date.now() - 7 * 24 * 60 * 60 * 1000) ?? [],
-      timePerApp: tracker?.getTimePerApp(Date.now() - 7 * 24 * 60 * 60 * 1000) ?? {},
+      sessions: monitor?.getTracker().getSessions(Date.now() - 7 * 24 * 60 * 60 * 1000) ?? [],
+      timePerApp: monitor?.getTracker().getTimePerApp(Date.now() - 7 * 24 * 60 * 60 * 1000) ?? {},
     }
-    const response = processMessage(text, store, trackingData)
-    const userMsg: ChatMessage = { id: randomUUID(), role: 'user', content: text, timestamp: Date.now() }
-    const assistantMsg: ChatMessage = { id: randomUUID(), role: 'assistant', content: response.reply, timestamp: Date.now() + 1 }
-    patchStore({ chatHistory: [...store.chatHistory.slice(-100), userMsg, assistantMsg] })
+    return processMessage(text, store, trackingData)
+  })
 
-    for (const action of response.actions) {
-      if (action.type === 'block' && action.payload.domain) {
-        const domain = action.payload.domain as string
-        const durationMs = action.payload.durationMs as number | undefined
-        engine?.addDomain(domain, durationMs)
-        // Persist to store so the block survives restarts and shows in UI
-        const s2 = getStore()
-        if (!s2.blocklist.domains.find((d) => d.domain === domain)) {
+  // ── API Key management ────────────────────────────────────────────────────
+
+  ipcMain.handle('apikey:get-status', () => ({ hasKey: hasApiKey() }))
+
+  ipcMain.handle('apikey:set', (_e, key: string) => {
+    saveApiKey(key)
+    agentService?.init(key)
+    monitor?.getUrlGuard().init(key)
+    inferenceEngine?.init(key)
+    return { ok: true }
+  })
+
+  ipcMain.handle('apikey:delete', () => {
+    deleteApiKey()
+    return { ok: true }
+  })
+
+  // ── Goals ──────────────────────────────────────────────────────────────────
+
+  ipcMain.handle('goals:get', () => getActiveGoals())
+  ipcMain.handle('goals:add', (_e, text: string, priority?: number) => insertGoal(text, priority))
+  ipcMain.handle('goals:clear', (_e, id: string) => { clearGoal(id); return { ok: true } })
+
+  // ── Preferences ────────────────────────────────────────────────────────────
+
+  ipcMain.handle('preferences:get', (_e, query?: string) => getPreferences(query))
+  ipcMain.handle('preferences:set', (_e, key: string, value: string, scope = 'always', confidence = 0.9, source = 'user') => {
+    upsertPreference(key, value, scope as Parameters<typeof upsertPreference>[2], confidence, source as 'user' | 'agent')
+    return { ok: true }
+  })
+  ipcMain.handle('preferences:delete', (_e, key: string) => { deletePreference(key); return { ok: true } })
+
+  // ── Inferences ─────────────────────────────────────────────────────────────
+
+  ipcMain.handle('inferences:get', (_e, status?: string) => getInferences(status as Parameters<typeof getInferences>[0]))
+  ipcMain.handle('inferences:resolve', (_e, id: string, status: 'confirmed' | 'rejected') => {
+    // Look up the inference before resolving so we can act on it
+    const all = getInferences()
+    const inf = all.find((i) => i.id === id)
+    resolveInference(id, status)
+
+    // When user confirms a domain suggestion, actually add it to the blocklist
+    if (status === 'confirmed' && inf && inf.type === 'domain') {
+      const result = engine?.addDomain(inf.value) ?? { ok: false }
+      if (result.ok) {
+        const s = getStore()
+        if (!s.blocklist.domains.find((d) => d.domain === inf.value)) {
           patchStore({
             blocklist: {
-              ...s2.blocklist,
-              domains: [...s2.blocklist.domains, {
-                domain,
-                addedAt: Date.now(),
-                expiresAt: durationMs ? Date.now() + durationMs : undefined,
-              }],
+              ...s.blocklist,
+              domains: [...s.blocklist.domains, { domain: inf.value, addedAt: Date.now(), reason: 'user:confirmed_inference' }],
             },
           })
         }
-      } else if (action.type === 'unblock' && action.payload.domain) {
-        const domain = action.payload.domain as string
-        engine?.removeDomain(domain)
-        const s2 = getStore()
-        patchStore({
-          blocklist: {
-            ...s2.blocklist,
-            domains: s2.blocklist.domains.filter((d) => d.domain !== domain),
-          },
-        })
-      } else if (action.type === 'start-session') {
-        const payload = action.payload as { mode?: 'normal' | 'deep'; durationMs?: number }
-        const session: FocusSession = {
-          id: randomUUID(),
-          startedAt: Date.now(),
-          endsAt: payload.durationMs ? Date.now() + payload.durationMs : undefined,
-          mode: payload.mode ?? 'normal',
-          active: true,
-        }
-        const s2 = getStore()
-        patchStore({ sessions: [session, ...s2.sessions.map((sess) => ({ ...sess, active: false }))] })
-        engine?.start()
-      } else if (action.type === 'stop-session') {
-        const s2 = getStore()
-        const active = s2.sessions.find((sess) => sess.active)
-        if (active) {
-          patchStore({ sessions: s2.sessions.map((sess) => (sess.id === active.id ? { ...sess, active: false } : sess)) })
-        }
-        engine?.stop()
+        sendMain('inference:auto-blocked', { domain: inf.value, confidence: inf.confidence })
       }
     }
 
-    return response
+    return { ok: true }
+  })
+
+  // ── Agent messages history ─────────────────────────────────────────────────
+
+  ipcMain.handle('agent:get-history', (_e, limit = 40) => getAgentMessages(limit))
+
+  // ── Proactive intervention dismiss ────────────────────────────────────────
+
+  ipcMain.handle('agent:dismiss-proactive', () => {
+    agentService?.onInterventionDismissed()
+    return { ok: true }
   })
 
   // ── Intent check ──────────────────────────────────────────────────────────
@@ -357,6 +510,8 @@ export function initIpc(): void {
 
   ipcMain.handle('analytics:get', () => {
     const now = Date.now()
+    const tracker = monitor?.getTracker()
+    const heuristics = monitor?.getHeuristics()
     const todaySessions = tracker?.getSessions(new Date().setHours(0, 0, 0, 0)) ?? []
     const weeklySessions = tracker?.getSessions(now - 7 * 24 * 60 * 60 * 1000) ?? []
     const store = getStore()
@@ -372,15 +527,165 @@ export function initIpc(): void {
       },
       heuristicAlerts: heuristics?.getAlerts(now - 7 * 24 * 60 * 60 * 1000) ?? [],
       recentSessions: weeklySessions.slice(-200),
+      domains: getDomains(now - 7 * 24 * 60 * 60 * 1000, 100),
     }
   })
 
   ipcMain.handle('heuristics:dismiss', (_e, id: string) => {
-    heuristics?.dismissAlert(id)
+    monitor?.getHeuristics().dismissAlert(id)
     const s = getStore()
     patchStore({
       heuristicAlerts: s.heuristicAlerts.map((a) => (a.id === id ? { ...a, dismissed: true } : a)),
     })
+  })
+
+  // ── PDF export ────────────────────────────────────────────────────────────
+
+  ipcMain.handle('analytics:export-pdf', async () => {
+    if (!mainWin) return { ok: false, error: 'No window' }
+
+    const now = Date.now()
+    const tracker = monitor?.getTracker()
+    const todaySessions = tracker?.getSessions(new Date().setHours(0, 0, 0, 0)) ?? []
+    const weeklySessions = tracker?.getSessions(now - 7 * 24 * 60 * 60 * 1000) ?? []
+    const store = getStore()
+    const today = buildDailyStats(todaySessions, store.blockEventCount ?? 0)
+    const weekly = {
+      focusedTime: tracker?.getFocusedTime(now - 7 * 24 * 60 * 60 * 1000) ?? 0,
+      distractedTime: tracker?.getDistractedTime(now - 7 * 24 * 60 * 60 * 1000) ?? 0,
+      timePerApp: tracker?.getTimePerApp(now - 7 * 24 * 60 * 60 * 1000) ?? {},
+      sessionCount: weeklySessions.length,
+      blockEvents: store.blockEventCount ?? 0,
+    }
+
+    const fmt = (ms: number): string => {
+      const h = Math.floor(ms / 3_600_000), m = Math.floor((ms % 3_600_000) / 60_000)
+      if (h > 0 && m > 0) return `${h}h ${m}m`
+      if (h > 0) return `${h}h`
+      if (m > 0) return `${m}m`
+      return '< 1m'
+    }
+
+    const topApps = today.appBreakdown.slice(0, 8)
+    const totalTracked = today.focusedTime + today.distractedTime + today.neutralTime || 1
+
+    const appRows = topApps.map((a) => {
+      const pct = Math.round((a.duration / totalTracked) * 100)
+      const bar = `<div style="height:6px;border-radius:3px;background:#e8f0fe;margin-top:3px"><div style="height:6px;border-radius:3px;background:${a.isDistraction ? '#ef5350' : '#4caf50'};width:${Math.min(pct, 100)}%"></div></div>`
+      return `<tr><td>${a.app}</td><td style="text-transform:capitalize">${a.category}</td><td>${fmt(a.duration)}</td><td>${pct}%${bar}</td><td style="color:${a.isDistraction ? '#ef5350' : '#4caf50'}">${a.isDistraction ? 'Distraction' : 'Productive'}</td></tr>`
+    }).join('')
+
+    const weeklyApps = Object.entries(weekly.timePerApp).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    const weeklyAppRows = weeklyApps.map(([app, ms]) =>
+      `<tr><td>${app}</td><td>${fmt(ms)}</td></tr>`
+    ).join('')
+
+    const dateStr = new Date().toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+    const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })
+    const todayShort = new Date().toLocaleDateString([], { month: 'short', day: 'numeric' })
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a2332; background: #fff; padding: 32px 40px; font-size: 13px; line-height: 1.5; }
+  h1 { font-size: 22px; font-weight: 700; color: #0d1b2a; }
+  h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #3d6080; margin: 24px 0 10px; border-bottom: 2px solid #e2eaf2; padding-bottom: 6px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 18px; border-bottom: 3px solid #1565c0; }
+  .header-sub { font-size: 11px; color: #6b8aaa; margin-top: 4px; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 8px; }
+  .kpi { background: #f4f8ff; border: 1px solid #d0dff0; border-radius: 6px; padding: 12px 14px; }
+  .kpi-val { font-size: 22px; font-weight: 800; color: #1565c0; line-height: 1.1; }
+  .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: #6b8aaa; margin-top: 3px; }
+  .kpi-val.green { color: #2e7d32; } .kpi-val.red { color: #c62828; } .kpi-val.amber { color: #e65100; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+  th { background: #f4f8ff; color: #3d6080; text-transform: uppercase; font-size: 10px; letter-spacing: 0.08em; padding: 7px 10px; text-align: left; border-bottom: 2px solid #d0dff0; }
+  td { padding: 6px 10px; border-bottom: 1px solid #edf2f8; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .footer { margin-top: 32px; padding-top: 14px; border-top: 1px solid #e2eaf2; font-size: 10px; color: #9ab0c4; display: flex; justify-content: space-between; }
+  .score-circle { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 800; color: #fff; background: ${today.focusScore >= 70 ? '#2e7d32' : today.focusScore >= 40 ? '#e65100' : '#c62828'}; flex-shrink: 0; }
+  .today-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .today-header-text h2 { margin: 0; border: none; padding: 0; }
+  .today-header-text p { font-size: 11px; color: #6b8aaa; margin-top: 2px; }
+  @media print { body { padding: 20px 28px; } }
+</style>
+</head><body>
+<div class="header">
+  <div>
+    <h1>Productivity Daemon — Focus Report</h1>
+    <div class="header-sub">${dateStr}</div>
+    <div class="header-sub" style="margin-top:1px">Weekly range: ${weekAgo} – ${todayShort}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:10px;color:#9ab0c4;text-transform:uppercase;letter-spacing:0.1em">Generated</div>
+    <div style="font-size:12px;color:#3d6080;font-weight:600">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+  </div>
+</div>
+
+<div class="today-header">
+  <div class="score-circle">${today.focusScore}</div>
+  <div class="today-header-text">
+    <h2>Today at a Glance</h2>
+    <p>Focus score: ${today.focusScore >= 70 ? 'Strong — you\'re in the zone' : today.focusScore >= 40 ? 'Moderate — room to improve' : 'Low — high distraction day'}</p>
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-val green">${fmt(today.focusedTime)}</div><div class="kpi-label">Focused Time</div></div>
+  <div class="kpi"><div class="kpi-val red">${fmt(today.distractedTime)}</div><div class="kpi-label">Distracted Time</div></div>
+  <div class="kpi"><div class="kpi-val ${today.blockEvents > 0 ? 'amber' : ''}">${today.blockEvents}</div><div class="kpi-label">Blocks Triggered</div></div>
+  <div class="kpi"><div class="kpi-val">${today.focusSessions}</div><div class="kpi-label">Focus Sessions</div></div>
+</div>
+
+<h2>App Usage — Today</h2>
+<table>
+  <thead><tr><th>Application</th><th>Category</th><th>Time Spent</th><th>Share of Day</th><th>Classification</th></tr></thead>
+  <tbody>${appRows || '<tr><td colspan="5" style="color:#9ab0c4;text-align:center;padding:16px">No activity recorded today</td></tr>'}</tbody>
+</table>
+
+<h2>This Week (${weekAgo} – ${todayShort})</h2>
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-val green">${fmt(weekly.focusedTime)}</div><div class="kpi-label">Total Focused</div></div>
+  <div class="kpi"><div class="kpi-val red">${fmt(weekly.distractedTime)}</div><div class="kpi-label">Total Distracted</div></div>
+  <div class="kpi"><div class="kpi-val">${weekly.sessionCount}</div><div class="kpi-label">Sessions Tracked</div></div>
+  <div class="kpi"><div class="kpi-val ${weekly.blockEvents > 0 ? 'amber' : ''}">${weekly.blockEvents}</div><div class="kpi-label">Blocks Triggered</div></div>
+</div>
+
+${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application</th><th>Time Spent</th></tr></thead><tbody>${weeklyAppRows}</tbody></table>` : ''}
+
+<div class="footer">
+  <span>Productivity Daemon · productivity-daemon.app</span>
+  <span>Exported ${new Date().toISOString()}</span>
+</div>
+</body></html>`
+
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWin, {
+      title: 'Export Analytics Report',
+      defaultPath: `focus-report-${new Date().toISOString().split('T')[0]}.pdf`,
+      filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+    })
+
+    if (canceled || !filePath) return { ok: false, canceled: true }
+
+    const hidden = new ElectronBrowserWindow({
+      show: false,
+      webPreferences: { javascript: false },
+    })
+
+    try {
+      await hidden.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+      await new Promise((r) => setTimeout(r, 600))
+      const pdfBuffer = await hidden.webContents.printToPDF({
+        printBackground: true,
+        pageSize: 'A4',
+        margins: { marginType: 'default' },
+      })
+      await writeFile(filePath, pdfBuffer)
+      return { ok: true, filePath }
+    } catch (err) {
+      return { ok: false, error: String(err) }
+    } finally {
+      hidden.destroy()
+    }
   })
 
   // ── Daemon management ─────────────────────────────────────────────────────
@@ -399,6 +704,7 @@ export function initIpc(): void {
 export function startTracking(): void {
   const store = getStore()
   if (store.settings?.trackingEnabled !== false) {
-    tracker?.start()
+    monitor?.start()
+    inferenceEngine?.start()
   }
 }

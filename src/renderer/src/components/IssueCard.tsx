@@ -1,6 +1,7 @@
 import React from 'react'
 import { AlertCircle, Shield, Rss, Bell, CheckCircle2, Loader, MessageSquare } from 'lucide-react'
 import type { ScanIssue } from '@shared/types'
+import { useTheme } from '../context/ThemeContext'
 
 interface IssueCardProps {
   issue: ScanIssue
@@ -31,6 +32,7 @@ const SEV_COLORS: Record<string, string> = {
 }
 
 export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: IssueCardProps): React.ReactElement {
+  const { colors } = useTheme()
   const icon = CATEGORY_ICONS[issue.category] ?? <AlertCircle size={18} />
   const sevColor = SEV_COLORS[issue.severity] ?? '#546e7a'
   const fixLabel = FIX_LABELS[issue.fixAction ?? ''] ?? 'Fix Issue'
@@ -39,8 +41,8 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
     <div
       className="flex items-start gap-3 p-4 rounded-xl transition-all duration-200"
       style={{
-        background: fixed ? 'rgba(76,175,80,0.05)' : 'rgba(17,34,64,0.6)',
-        border: fixed ? '1px solid rgba(76,175,80,0.2)' : '1px solid rgba(30,58,95,0.4)',
+        background: fixed ? 'rgba(76,175,80,0.05)' : colors.cardBg,
+        border: fixed ? '1px solid rgba(76,175,80,0.2)' : `1px solid ${colors.border}`,
         opacity: fixed ? 0.6 : 1,
       }}
     >
@@ -63,9 +65,9 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
           >
             {issue.severity}
           </span>
-          <p className="text-white font-semibold text-xs truncate">{issue.title}</p>
+          <p className="font-semibold text-xs truncate" style={{ color: colors.textPrimary }}>{issue.title}</p>
         </div>
-        <p className="text-navy-400 text-[11px] leading-relaxed mb-2.5">{issue.description}</p>
+        <p className="text-[11px] leading-relaxed mb-2.5" style={{ color: colors.textSecondary }}>{issue.description}</p>
 
         {!fixed && (
           <div className="flex items-center gap-2">
@@ -86,7 +88,8 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
             {onAskAI && (
               <button
                 onClick={() => onAskAI(issue)}
-                className="flex items-center gap-1 text-[11px] text-navy-500 hover:text-accent-blue transition-colors"
+                className="flex items-center gap-1 text-[11px] transition-colors"
+                style={{ color: colors.textMuted }}
               >
                 <MessageSquare size={10} /> Ask Daemon
               </button>

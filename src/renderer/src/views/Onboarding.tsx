@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Shield, ChevronRight, Lock, ScanLine, CheckCircle2, AlertTriangle, RefreshCw, Zap } from 'lucide-react'
 import PulsingSphere from '../components/PulsingSphere'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -21,6 +22,7 @@ const SCAN_STEPS = [
 ]
 
 export default function Onboarding({ onComplete }: OnboardingProps): React.ReactElement {
+  const { colors } = useTheme()
   const [step, setStep] = useState<Step>('welcome')
   const [scanProgress, setScanProgress] = useState(0)
   const [scanStepIdx, setScanStepIdx] = useState(0)
@@ -93,7 +95,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
   const Wrapper = ({ children }: { children: React.ReactNode }): React.ReactElement => (
     <div
       className="flex flex-col items-center justify-center w-screen h-screen overflow-hidden"
-      style={{ background: 'radial-gradient(ellipse at 50% 0%, #0d2a4a 0%, #0a1628 50%, #050d18 100%)' }}
+      style={{ background: colors.mainBg }}
     >
       <div className="relative z-10 flex flex-col items-center text-center max-w-lg px-8 w-full">
         {children}
@@ -108,11 +110,11 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         <div className="mb-6">
           <PulsingSphere mode="idle" size={160} />
         </div>
-        <h1 className="text-4xl font-extrabold text-white mb-2" style={{ letterSpacing: '-0.02em' }}>
+        <h1 className="text-4xl font-extrabold mb-2" style={{ letterSpacing: '-0.02em', color: colors.textPrimary }}>
           Productivity Daemon
         </h1>
         <p className="text-accent-blue font-semibold text-lg mb-3">Anti mind virus.</p>
-        <p className="text-base leading-relaxed mb-10" style={{ color: '#8faac4' }}>
+        <p className="text-base leading-relaxed mb-10" style={{ color: colors.textSecondary }}>
           The internet is engineered to steal your attention.<br />
           We're engineered to get it back.
         </p>
@@ -123,7 +125,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         >
           Get started <ChevronRight size={20} />
         </button>
-        <p className="text-xs mt-6" style={{ color: '#7a9ab5' }}>No accounts. No telemetry. Everything stays on your device.</p>
+        <p className="text-xs mt-6" style={{ color: colors.textMuted }}>No accounts. No telemetry. Everything stays on your device.</p>
       </Wrapper>
     )
   }
@@ -151,21 +153,21 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         </div>
 
         {/* Title */}
-        <h2 className="text-3xl font-bold text-white mb-3">
+        <h2 className="text-3xl font-bold mb-3" style={{ color: colors.textPrimary }}>
           {isElevated ? 'Full protection enabled' : 'Administrator access needed'}
         </h2>
 
         {/* Body text / status */}
         {isChecking && (
-          <div className="flex items-center gap-2 text-sm mb-8" style={{ color: '#8faac4' }}>
-            <div className="w-4 h-4 border border-t-transparent rounded-full animate-spin" style={{ borderColor: '#8faac4', borderTopColor: 'transparent' }} />
+          <div className="flex items-center gap-2 text-sm mb-8" style={{ color: colors.textSecondary }}>
+            <div className="w-4 h-4 border border-t-transparent rounded-full animate-spin" style={{ borderColor: colors.textSecondary, borderTopColor: 'transparent' }} />
             Checking system permissions…
           </div>
         )}
 
         {isElevated && (
           <div className="w-full mb-8 space-y-3">
-            <p className="text-sm leading-relaxed" style={{ color: '#8faac4' }}>
+            <p className="text-sm leading-relaxed" style={{ color: colors.textSecondary }}>
               The app is running with administrator rights. All protection features are active.
             </p>
             <div className="grid grid-cols-2 gap-2 text-left">
@@ -181,17 +183,17 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
                 </div>
               ))}
             </div>
-            <p className="text-xs" style={{ color: '#7a9ab5' }}>Proceeding to initial scan in a moment…</p>
+            <p className="text-xs" style={{ color: colors.textMuted }}>Proceeding to initial scan in a moment…</p>
           </div>
         )}
 
         {elevation === 'soft' && (
           <>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: '#8faac4' }}>
+            <p className="text-sm leading-relaxed mb-4" style={{ color: colors.textSecondary }}>
               Productivity Daemon needs administrator rights to edit your system's hosts file — this is how site blocking works at the network layer, before browsers even load the page.
             </p>
-            <div className="w-full p-4 rounded-xl mb-6 text-left" style={{ background: 'rgba(17,34,64,0.6)', border: '1px solid rgba(30,58,95,0.6)' }}>
-              <p className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: '#8faac4' }}>What admin access enables</p>
+            <div className="w-full p-4 rounded-xl mb-6 text-left" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
+              <p className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: colors.textSecondary }}>What admin access enables</p>
               <div className="space-y-1.5">
                 {[
                   ['Hosts file blocking', 'Sinkhole blocked domains at the OS level — no browser workaround'],
@@ -201,8 +203,8 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
                   <div key={title} className="flex items-start gap-2">
                     <Zap size={11} className="text-accent-blue mt-0.5 flex-shrink-0" />
                     <div>
-                      <span className="text-white text-xs font-medium">{title} </span>
-                      <span className="text-xs" style={{ color: '#8faac4' }}>{desc}</span>
+                      <span className="text-xs font-medium" style={{ color: colors.textPrimary }}>{title} </span>
+                      <span className="text-xs" style={{ color: colors.textSecondary }}>{desc}</span>
                     </div>
                   </div>
                 ))}
@@ -226,12 +228,12 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
                 <><Shield size={16} /> Relaunch as Administrator</>
               )}
             </button>
-            <p className="text-[11px]" style={{ color: '#7a9ab5' }}>
+            <p className="text-[11px]" style={{ color: colors.textMuted }}>
               A UAC dialog will appear — click Yes to grant access
             </p>
             <button
               onClick={() => setStep('scanning')}
-              className="hover:text-white text-sm underline underline-offset-2 transition-colors mt-1" style={{ color: '#8faac4' }}
+              className="text-sm underline underline-offset-2 transition-colors mt-1" style={{ color: colors.textSecondary }}
             >
               Continue without admin (limited protection)
             </button>
@@ -262,17 +264,17 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
             <ScanLine size={32} className="text-accent-blue" />
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2">Running Focus Scan</h2>
-        <p className="text-sm mb-8 h-5 transition-all duration-300" style={{ color: '#8faac4' }}>
+        <h2 className="text-2xl font-bold mb-2" style={{ color: colors.textPrimary }}>Running Focus Scan</h2>
+        <p className="text-sm mb-8 h-5 transition-all duration-300" style={{ color: colors.textSecondary }}>
           {SCAN_STEPS[scanStepIdx]?.label ?? 'Finalizing…'}
         </p>
-        <div className="w-full max-w-xs rounded-full overflow-hidden mb-2" style={{ height: 3, background: 'rgba(30,58,95,0.6)' }}>
+        <div className="w-full max-w-xs rounded-full overflow-hidden mb-2" style={{ height: 3, background: colors.border }}>
           <div
             className="h-full rounded-full transition-all duration-700"
             style={{ width: `${scanProgress}%`, background: 'linear-gradient(90deg, #1565c0, #2196f3, #42a5f5)' }}
           />
         </div>
-        <p className="text-xs tabular-nums" style={{ color: '#8faac4' }}>{scanProgress}%</p>
+        <p className="text-xs tabular-nums" style={{ color: colors.textSecondary }}>{scanProgress}%</p>
       </Wrapper>
     )
   }
@@ -280,30 +282,30 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
   // ── Results ────────────────────────────────────────────────────────────────
   if (step === 'results') {
     const severity = issueCount >= 8 ? 'critical' : issueCount >= 4 ? 'high' : 'moderate'
-    const colors = { critical: '#ef5350', high: '#ff6b35', moderate: '#ffb800' }
-    const color = colors[severity]
+    const sevColors = { critical: '#ef5350', high: '#ff6b35', moderate: '#ffb800' }
+    const sevColor = sevColors[severity]
 
     return (
       <Wrapper>
         <div
           className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6"
-          style={{ background: `${color}18`, border: `1px solid ${color}44`, boxShadow: `0 0 30px ${color}22` }}
+          style={{ background: `${sevColor}18`, border: `1px solid ${sevColor}44`, boxShadow: `0 0 30px ${sevColor}22` }}
         >
-          <AlertTriangle size={36} style={{ color }} />
+          <AlertTriangle size={36} style={{ color: sevColor }} />
         </div>
-        <h2 className="text-3xl font-bold text-white mb-2">
+        <h2 className="text-3xl font-bold mb-2" style={{ color: colors.textPrimary }}>
           We found{' '}
-          <span style={{ color }}>{issueCount}</span>{' '}
+          <span style={{ color: sevColor }}>{issueCount}</span>{' '}
           attention leak{issueCount !== 1 ? 's' : ''}
         </h2>
-        <p className="text-base mb-3" style={{ color: '#8faac4' }}>
+        <p className="text-base mb-3" style={{ color: colors.textSecondary }}>
           {severity === 'critical'
             ? 'Your device is heavily exposed to algorithmic attention drain.'
             : severity === 'high'
             ? 'Several high-risk distractions are installed and configured to grab you.'
             : 'A few attention risks were found. Let\'s lock them down.'}
         </p>
-        <p className="text-sm mb-8" style={{ color: '#8faac4' }}>
+        <p className="text-sm mb-8" style={{ color: colors.textSecondary }}>
           Review each issue individually and decide what to block.
         </p>
         <button
@@ -313,7 +315,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         >
           See full report <ChevronRight size={20} />
         </button>
-        <p className="text-xs mt-4" style={{ color: '#7a9ab5' }}>You can dismiss any issue or block with one click</p>
+        <p className="text-xs mt-4" style={{ color: colors.textMuted }}>You can dismiss any issue or block with one click</p>
       </Wrapper>
     )
   }

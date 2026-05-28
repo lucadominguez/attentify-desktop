@@ -1,13 +1,43 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
   BarChart2, Activity, X, AlertTriangle, RefreshCw,
-  ChevronUp, ChevronDown, Clock, Zap, TrendingUp, MessageSquare, Lightbulb,
+  ChevronUp, ChevronDown, Clock, Zap, TrendingUp, MessageSquare, Lightbulb, Download, Check, Globe,
 } from 'lucide-react'
 import type { HeuristicAlert, ActivitySession, AppCategory } from '@shared/types'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
+// ── Animated stat number (counts up on mount) ─────────────────────────────────
+function AnimatedStat({ value }: { value: string }): React.ReactElement {
+  const match = value.match(/^(\d+)(.*)$/)
+  const rafRef = useRef(0)
+  const [displayed, setDisplayed] = useState(0)
+
+  useEffect(() => {
+    if (!match) return
+    const target = parseInt(match[1])
+    const dur = 750
+    const start = performance.now()
+    const tick = (now: number): void => {
+      const t = Math.min((now - start) / dur, 1)
+      const eased = 1 - Math.pow(1 - t, 3)
+      setDisplayed(Math.round(target * eased))
+      if (t < 1) rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [value]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!match) return <>{value}</>
+  return <>{displayed}{match[2]}</>
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface DomainRow { domain: string; category: string; classification: string; confidence: number; total_ms: number; last_seen: number }
+interface IdlePeriod { start: number; end: number; duration: number; prevApp: string; nextApp: string }
+interface Relapse { ts: number; app: string; prevApp: string; gapMs: number; duration: number }
 
 interface AnalyticsData {
   today: {
@@ -21,6 +51,7 @@ interface AnalyticsData {
   }
   heuristicAlerts: HeuristicAlert[]
   recentSessions: ActivitySession[]
+  domains: DomainRow[]
 }
 
 interface DayRow { day: string; date: string; focused: number; distracted: number; tracked: number; score: number; sessions: number; topApp: string; distractRate: number }
@@ -163,6 +194,37 @@ function buildCategoryBreakdown(sessions: ActivitySession[]): { cat: AppCategory
     .filter((r) => r.ms > 10000)
 }
 
+function extractDomain(url: string): string | null {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return null }
+}
+
+function buildIdlePeriods(sessions: ActivitySession[]): IdlePeriod[] {
+  const IDLE_MIN_MS = 3 * 60 * 1000
+  const sorted = [...sessions].sort((a, b) => a.startTime - b.startTime)
+  const out: IdlePeriod[] = []
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const gap = sorted[i + 1]!.startTime - sorted[i]!.endTime
+    if (gap >= IDLE_MIN_MS) {
+      out.push({ start: sorted[i]!.endTime, end: sorted[i + 1]!.startTime, duration: gap, prevApp: sorted[i]!.app, nextApp: sorted[i + 1]!.app })
+    }
+  }
+  return out
+}
+
+function buildRelapses(sessions: ActivitySession[]): Relapse[] {
+  const WINDOW_MS = 30 * 60 * 1000
+  const distractions = [...sessions].filter((s) => s.isDistraction).sort((a, b) => a.startTime - b.startTime)
+  const out: Relapse[] = []
+  for (let i = 1; i < distractions.length; i++) {
+    const prev = distractions[i - 1]!, curr = distractions[i]!
+    const gap = curr.startTime - prev.endTime
+    if (gap > 60000 && gap < WINDOW_MS) {
+      out.push({ ts: curr.startTime, app: curr.app, prevApp: prev.app, gapMs: gap, duration: curr.duration })
+    }
+  }
+  return out
+}
+
 function computeStreaks(sessions: ActivitySession[]): { longest: number; current: number; count: number; avgLen: number } {
   const sorted = [...sessions].filter((s) => !s.isDistraction).sort((a, b) => a.startTime - b.startTime)
   const GAP = 5 * 60 * 1000
@@ -261,23 +323,23 @@ function FocusLineChart({ hourRows }: { hourRows: HourRow[] }): React.ReactEleme
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
       <defs>
         <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#2196f3" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="#2196f3" stopOpacity="0.01" />
+          <stop offset="0%" stopColor="#00c8ff" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#00c8ff" stopOpacity="0.01" />
         </linearGradient>
       </defs>
-      <line x1={PL} y1={y70} x2={W - PR} y2={y70} stroke="rgba(76,175,80,0.25)" strokeWidth="0.6" strokeDasharray="3,3" />
-      <line x1={PL} y1={y40} x2={W - PR} y2={y40} stroke="rgba(244,67,54,0.25)" strokeWidth="0.6" strokeDasharray="3,3" />
-      <text x={W - PR + 2} y={y70 + 3} fontSize="5" fill="rgba(76,175,80,0.65)">70%</text>
-      <text x={W - PR + 2} y={y40 + 3} fontSize="5" fill="rgba(244,67,54,0.65)">40%</text>
+      <line x1={PL} y1={y70} x2={W - PR} y2={y70} stroke="rgba(0,230,118,0.2)" strokeWidth="0.6" strokeDasharray="3,3" />
+      <line x1={PL} y1={y40} x2={W - PR} y2={y40} stroke="rgba(255,68,68,0.2)" strokeWidth="0.6" strokeDasharray="3,3" />
+      <text x={W - PR + 2} y={y70 + 3} fontSize="5" fill="rgba(0,230,118,0.55)">70%</text>
+      <text x={W - PR + 2} y={y40 + 3} fontSize="5" fill="rgba(255,68,68,0.55)">40%</text>
       {[0, 6, 12, 18, 23].map((h) => (
-        <text key={h} x={toX(h)} y={H - 1} fontSize="4.5" fill="rgba(107,132,160,0.85)" textAnchor="middle">{fmtHour(h)}</text>
+        <text key={h} x={toX(h)} y={H - 1} fontSize="4.5" fill="rgba(0,200,255,0.35)" textAnchor="middle" fontFamily="Share Tech Mono, monospace">{fmtHour(h)}</text>
       ))}
       <path d={areaPath} fill="url(#areaGrad)" />
-      <polyline points={lineStr} fill="none" stroke="#2196f3" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+      <polyline points={lineStr} fill="none" stroke="#00c8ff" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" filter="url(#lineGlow)" />
       {pts.map((p) => (
-        <circle key={p.h} cx={toX(p.h)} cy={toY(p.v)} r="1.8"
-          fill={p.v >= 70 ? '#4caf50' : p.v >= 40 ? '#ffb800' : '#ef5350'}
-          stroke="rgba(8,15,30,0.8)" strokeWidth="0.8"
+        <circle key={p.h} cx={toX(p.h)} cy={toY(p.v)} r="2"
+          fill={p.v >= 70 ? '#00e676' : p.v >= 40 ? '#ffaa00' : '#ff4444'}
+          stroke="rgba(2,9,18,0.9)" strokeWidth="0.8"
         />
       ))}
     </svg>
@@ -334,15 +396,15 @@ function SessionTimeline({ sessions }: { sessions: ActivitySession[] }): React.R
   const focusedMs = todaySessions.filter((s) => !s.isDistraction).reduce((t, s) => t + s.duration, 0)
   const distMs = todaySessions.filter((s) => s.isDistraction).reduce((t, s) => t + s.duration, 0)
   return (
-    <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
+    <div className="section-panel p-3">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-white text-[11px] font-semibold">Today's Session Timeline</p>
+        <p className="hud-label">Today's Session Timeline</p>
         <div className="flex items-center gap-3">
-          <span className="text-[9px] flex items-center gap-1" style={{ color: '#7a9ab5' }}>
+          <span className="text-[9px] flex items-center gap-1" style={{ color: 'rgba(0,200,255,0.45)' }}>
             <span className="inline-block w-2 h-2 rounded-sm" style={{ background: 'rgba(76,175,80,0.7)' }} />
             {fmt(focusedMs)} focused
           </span>
-          <span className="text-[9px] flex items-center gap-1" style={{ color: '#7a9ab5' }}>
+          <span className="text-[9px] flex items-center gap-1" style={{ color: 'rgba(0,200,255,0.45)' }}>
             <span className="inline-block w-2 h-2 rounded-sm" style={{ background: 'rgba(244,67,54,0.7)' }} />
             {fmt(distMs)} distracted
           </span>
@@ -372,12 +434,12 @@ function SessionTimeline({ sessions }: { sessions: ActivitySession[] }): React.R
           const pct = (h * 3600000 / dayMs) * 100
           if (pct > 100) return null
           return (
-            <span key={h} className="absolute -translate-x-1/2 text-[7.5px]" style={{ left: `${pct}%`, color: '#546a80' }}>
+            <span key={h} className="absolute -translate-x-1/2 text-[7.5px]" style={{ left: `${pct}%`, color: 'rgba(0,200,255,0.2)' }}>
               {fmtHour(h)}
             </span>
           )
         })}
-        <span className="absolute text-[7.5px] right-0" style={{ color: '#7a9ab5' }}>now</span>
+        <span className="absolute text-[7.5px] right-0" style={{ color: 'rgba(0,200,255,0.45)' }}>now</span>
       </div>
     </div>
   )
@@ -390,10 +452,10 @@ const DOW_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 function HourOfWeekHeatmap({ matrix }: { matrix: HeatCell[][] }): React.ReactElement {
   const hasData = matrix.some((row) => row.some((c) => c.focused + c.distracted > 0))
   return (
-    <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
+    <div className="section-panel p-3">
       <div className="flex items-center justify-between mb-2">
-        <p className="text-white text-[11px] font-semibold">Focus Heatmap — Hour of Week</p>
-        <div className="flex items-center gap-3 text-[8.5px]" style={{ color: '#7a9ab5' }}>
+        <p className="hud-label">Focus Heatmap — Hour of Week</p>
+        <div className="flex items-center gap-3 text-[8.5px]" style={{ color: 'rgba(0,200,255,0.45)' }}>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(76,175,80,0.75)' }} /> focused</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(255,184,0,0.65)' }} /> mixed</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(244,67,54,0.7)' }} /> distracted</span>
@@ -401,12 +463,12 @@ function HourOfWeekHeatmap({ matrix }: { matrix: HeatCell[][] }): React.ReactEle
         </div>
       </div>
       {!hasData ? (
-        <p className="text-[10px] text-center py-6" style={{ color: '#6b84a0' }}>No session data yet — heatmap populates after several sessions</p>
+        <p className="text-[10px] text-center py-6" style={{ color: 'rgba(0,200,255,0.3)' }}>No session data yet — heatmap populates after several sessions</p>
       ) : (
         <div className="flex gap-2">
           <div className="flex flex-col gap-0.5 flex-shrink-0" style={{ paddingTop: 14 }}>
             {DOW_LABELS.map((d) => (
-              <div key={d} className="text-[8.5px] text-right leading-none" style={{ height: 11, lineHeight: '11px', color: '#7a9ab5' }}>{d}</div>
+              <div key={d} className="text-[8.5px] text-right leading-none" style={{ height: 11, lineHeight: '11px', color: 'rgba(0,200,255,0.45)' }}>{d}</div>
             ))}
           </div>
           <div className="flex-1 min-w-0">
@@ -414,7 +476,7 @@ function HourOfWeekHeatmap({ matrix }: { matrix: HeatCell[][] }): React.ReactEle
               {Array.from({ length: 24 }, (_, h) => (
                 <div key={h} className="flex-1 text-center" style={{ minWidth: 0 }}>
                   {[0, 6, 12, 18].includes(h) && (
-                    <span className="text-[7.5px]" style={{ color: '#546a80' }}>{fmtHour(h)}</span>
+                    <span className="text-[7.5px]" style={{ color: 'rgba(0,200,255,0.2)' }}>{fmtHour(h)}</span>
                   )}
                 </div>
               ))}
@@ -445,14 +507,15 @@ function HourOfWeekHeatmap({ matrix }: { matrix: HeatCell[][] }): React.ReactEle
 // ── Infographic: 24h heatmap row ──────────────────────────────────────────────
 
 function HourlyHeatmapRow({ hourRows }: { hourRows: HourRow[] }): React.ReactElement {
+  const { colors } = useTheme()
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-white text-[11px] font-semibold">Hourly Focus Map — Today</p>
-        <div className="flex items-center gap-3 text-[8.5px]" style={{ color: '#7a9ab5' }}>
+        <p className="hud-label">Hourly Focus Map — Today</p>
+        <div className="flex items-center gap-3 text-[8.5px]" style={{ color: colors.textMuted }}>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded inline-block" style={{ background: '#4caf50' }} />focused</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded inline-block" style={{ background: '#ef5350' }} />distracted</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded inline-block bg-navy-800" />no data</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded inline-block" style={{ background: colors.border }} />no data</span>
         </div>
       </div>
       <div className="flex gap-0.5 items-end" style={{ height: 36 }}>
@@ -460,7 +523,7 @@ function HourlyHeatmapRow({ hourRows }: { hourRows: HourRow[] }): React.ReactEle
           const row = hourRows.find((r) => r.hour === h)
           const total = row ? row.focused + row.distracted : 0
           const ratio = row ? row.ratio : -1
-          const bg = ratio === -1 ? 'rgba(30,58,95,0.18)'
+          const bg = ratio === -1 ? colors.border
             : ratio >= 70 ? `rgba(76,175,80,${0.35 + (ratio / 100) * 0.6})`
             : ratio >= 40 ? `rgba(255,184,0,${0.35 + ((100 - ratio) / 100) * 0.4})`
             : `rgba(244,67,54,${0.45 + ((100 - ratio) / 100) * 0.45})`
@@ -478,7 +541,7 @@ function HourlyHeatmapRow({ hourRows }: { hourRows: HourRow[] }): React.ReactEle
       </div>
       <div className="flex justify-between mt-1">
         {[0, 3, 6, 9, 12, 15, 18, 21].map((h) => (
-          <span key={h} className="text-[7.5px]" style={{ color: '#546a80' }}>{fmtHour(h)}</span>
+          <span key={h} className="text-[7.5px]" style={{ color: 'rgba(0,200,255,0.2)' }}>{fmtHour(h)}</span>
         ))}
       </div>
     </div>
@@ -489,7 +552,7 @@ function HourlyHeatmapRow({ hourRows }: { hourRows: HourRow[] }): React.ReactEle
 
 function CategoryBreakdown({ sessions }: { sessions: ActivitySession[] }): React.ReactElement {
   const cats = buildCategoryBreakdown(sessions)
-  if (cats.length === 0) return <p className="text-[10px] text-center py-4" style={{ color: '#6b84a0' }}>No category data yet</p>
+  if (cats.length === 0) return <p className="text-[10px] text-center py-4" style={{ color: 'rgba(0,200,255,0.3)' }}>No category data yet</p>
   const donutData = cats.slice(0, 7).map((c) => ({ label: c.cat, value: c.ms, color: c.color }))
   return (
     <div className="flex items-center gap-3">
@@ -498,9 +561,9 @@ function CategoryBreakdown({ sessions }: { sessions: ActivitySession[] }): React
         {cats.slice(0, 7).map((c) => (
           <div key={c.cat} className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
-            <span className="text-[9.5px] capitalize flex-1 truncate" style={{ color: '#90a4ae' }}>{c.cat}</span>
+            <span className="text-[9.5px] capitalize flex-1 truncate" style={{ color: 'rgba(180,210,235,0.6)' }}>{c.cat}</span>
             <span className="text-[9.5px] text-white font-mono tabular-nums">{fmt(c.ms)}</span>
-            <span className="text-[8.5px] w-7 text-right tabular-nums" style={{ color: '#6b84a0' }}>{Math.round(c.pct)}%</span>
+            <span className="text-[8.5px] w-7 text-right tabular-nums" style={{ color: 'rgba(0,200,255,0.3)' }}>{Math.round(c.pct)}%</span>
           </div>
         ))}
       </div>
@@ -514,7 +577,7 @@ function DayScoreStrip({ dayRows }: { dayRows: DayRow[] }): React.ReactElement |
   if (dayRows.length === 0) return null
   return (
     <div>
-      <p className="text-white text-[11px] font-semibold mb-2">7-Day Focus Score</p>
+      <p className="hud-label mb-2">7-Day Focus Score</p>
       <div className="flex gap-1.5">
         {dayRows.map((d) => {
           const color = d.score >= 70 ? '#4caf50' : d.score >= 40 ? '#ffb800' : '#ef5350'
@@ -554,7 +617,7 @@ function AppBarChart({ rows }: { rows: AppRow[] }): React.ReactElement | null {
   if (top.length === 0) return null
   return (
     <div className="mb-3">
-      <p className="text-[9px] font-semibold uppercase tracking-widest mb-2" style={{ color: '#7a9ab5' }}>Top Apps — Time Distribution</p>
+      <p className="text-[9px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'rgba(0,200,255,0.45)' }}>Top Apps — Time Distribution</p>
       <div className="space-y-1.5">
         {top.map((row) => (
           <div
@@ -562,15 +625,15 @@ function AppBarChart({ rows }: { rows: AppRow[] }): React.ReactElement | null {
             className="flex items-center gap-2"
             title={`${row.app} — ${fmt(row.totalTime)} total (${row.pctOfTime}% of tracked time) · ${row.sessions} session${row.sessions !== 1 ? 's' : ''} · avg ${fmt(row.avgDuration)}/session · ${row.isDistraction ? 'classified as distraction' : 'classified as productive'}`}
           >
-            <div className="w-24 text-[10px] truncate flex-shrink-0 text-right" style={{ color: '#90a4ae' }}>{row.app}</div>
-            <div className="flex-1 h-4 rounded-sm overflow-hidden" style={{ background: 'rgba(20,38,60,0.6)' }}>
+            <div className="w-24 text-[10px] truncate flex-shrink-0 text-right" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.app}</div>
+            <div className="flex-1 h-4 overflow-hidden" style={{ background: 'rgba(0,200,255,0.04)', border: '1px solid rgba(0,200,255,0.06)' }}>
               <div
                 className="h-full rounded-sm flex items-center px-1.5"
                 style={{
                   width: `${(row.totalTime / max) * 100}%`,
                   background: row.isDistraction
-                    ? 'linear-gradient(90deg, rgba(244,67,54,0.7), rgba(244,67,54,0.45))'
-                    : 'linear-gradient(90deg, rgba(33,150,243,0.65), rgba(33,150,243,0.4))',
+                    ? 'linear-gradient(90deg, rgba(255,68,68,0.65), rgba(255,68,68,0.35))'
+                    : 'linear-gradient(90deg, rgba(0,200,255,0.5), rgba(0,200,255,0.25))',
                   minWidth: 2,
                 }}
               >
@@ -579,7 +642,7 @@ function AppBarChart({ rows }: { rows: AppRow[] }): React.ReactElement | null {
                 )}
               </div>
             </div>
-            <div className="w-10 text-right text-[9px] font-mono tabular-nums flex-shrink-0" style={{ color: '#7a9ab5' }}>{fmt(row.totalTime)}</div>
+            <div className="w-10 text-right text-[9px] font-mono tabular-nums flex-shrink-0" style={{ color: 'rgba(0,200,255,0.45)' }}>{fmt(row.totalTime)}</div>
           </div>
         ))}
       </div>
@@ -597,7 +660,8 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [appSort, setAppSort] = useState<{ col: keyof AppRow; dir: SortDir }>({ col: 'totalTime', dir: 'desc' })
-  const [activeTab, setActiveTab] = useState<'apps' | 'daily' | 'patterns' | 'alerts' | 'log'>('apps')
+  const [activeTab, setActiveTab] = useState<'apps' | 'websites' | 'daily' | 'patterns' | 'alerts' | 'log'>('apps')
+  const [exporting, setExporting] = useState<'idle' | 'busy' | 'done' | 'error'>('idle')
 
   const load = useCallback((): void => {
     setLoading(true)
@@ -611,18 +675,35 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     load()
   }
 
+  const handleExportPdf = async (): Promise<void> => {
+    if (exporting === 'busy') return
+    setExporting('busy')
+    try {
+      const result = await api.exportPdf()
+      const next = result.ok ? 'done' : result.canceled ? 'idle' : 'error'
+      setExporting(next)
+      if (next !== 'idle') setTimeout(() => setExporting('idle'), 2500)
+    } catch {
+      setExporting('error')
+      setTimeout(() => setExporting('idle'), 2500)
+    }
+  }
+
+  const { colors } = useTheme()
+
   if (loading || !data) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-accent-blue border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm" style={{ color: '#7a9ab5' }}>Loading analytics…</p>
+          <div className="w-5 h-5 rounded-full animate-spin" style={{ border: `2px solid ${colors.border}`, borderTopColor: colors.accent }} />
+          <p className="text-[10px] uppercase tracking-widest" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>Loading…</p>
         </div>
       </div>
     )
   }
 
   const { today, weekly, heuristicAlerts, recentSessions } = data
+  const domains = data.domains ?? []
   const totalWeekly = weekly.focusedTime + weekly.distractedTime
   const focusPct = totalWeekly > 0 ? (weekly.focusedTime / totalWeekly) * 100 : 0
   const activeAlerts = heuristicAlerts.filter((a) => !a.dismissed)
@@ -643,6 +724,13 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
 
   const insights = generateInsights(focusPct, weekly.distractedTime, streaks, switchFreq, appRows, hourRows, totalWeekly)
 
+  const todayStart = new Date().setHours(0, 0, 0, 0)
+  const idlePeriods = buildIdlePeriods(recentSessions)
+  const relapses = buildRelapses(recentSessions)
+  const todayIdlePeriods = idlePeriods.filter((ip) => ip.start >= todayStart)
+  const todayIdleMs = todayIdlePeriods.reduce((s, ip) => s + ip.duration, 0)
+  const todayRelapses = relapses.filter((r) => r.ts >= todayStart)
+
   const sortedApps = [...appRows].sort((a, b) => {
     const av = a[appSort.col] as number | string | boolean
     const bv = b[appSort.col] as number | string | boolean
@@ -655,8 +743,8 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
 
   const SortIcon = ({ col }: { col: keyof AppRow }): React.ReactElement =>
     appSort.col !== col
-      ? <ChevronUp size={9} style={{ color: '#6b84a0' }} />
-      : appSort.dir === 'asc' ? <ChevronUp size={9} className="text-accent-blue" /> : <ChevronDown size={9} className="text-accent-blue" />
+      ? <ChevronUp size={9} style={{ color: 'rgba(0,200,255,0.25)' }} />
+      : appSort.dir === 'asc' ? <ChevronUp size={9} style={{ color: '#00c8ff' }} /> : <ChevronDown size={9} style={{ color: '#00c8ff' }} />
 
   const handleAskDaemon = (): void => {
     if (!onChatWith) return
@@ -671,229 +759,255 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     )
   }
 
+  const kpiChip = (chip: { label: string; value: string; color: string; sub: string; tooltip: string }, i: number, baseDelay = 0): React.ReactElement => (
+    <div
+      key={chip.label}
+      className="section-panel flex flex-col gap-1 p-3 animate-entry"
+      style={{ animationDelay: `${baseDelay + i * 55}ms`, animationFillMode: 'both', opacity: 0, cursor: 'default' }}
+      title={chip.tooltip}
+    >
+      <p className="text-base font-bold leading-none data-value" style={{ color: chip.color }}>
+        <AnimatedStat value={chip.value} />
+      </p>
+      <p className="text-[9px] leading-tight" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
+        {chip.label}
+      </p>
+      <p className="text-[8px]" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>
+        {chip.sub}
+      </p>
+    </div>
+  )
+
   return (
-    <div className="p-4 space-y-3 animate-fade-in">
+    <div className="p-4 space-y-4 animate-fade-in">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-white font-bold text-xl flex items-center gap-2">
-            <BarChart2 size={19} className="text-accent-blue" /> Analytics
-          </h1>
-          <p className="text-[10px] mt-0.5" style={{ color: '#7a9ab5' }}>
-            Real-time attention intelligence · {recentSessions.length} sessions tracked this week
-          </p>
+        <div className="flex items-center gap-2.5">
+          <BarChart2 size={16} style={{ color: colors.accent, flexShrink: 0 }} />
+          <div>
+            <h1 className="font-semibold text-[14px]" style={{ color: colors.textPrimary }}>
+              Analytics
+            </h1>
+            <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
+              {recentSessions.length} sessions tracked
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {onChatWith && (
-            <button
-              onClick={handleAskDaemon}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-colors"
-              style={{ background: 'rgba(33,150,243,0.1)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.2)' }}
-            >
-              <MessageSquare size={11} /> Ask AI
+            <button onClick={handleAskDaemon} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium transition-all hover:opacity-80"
+              style={{ background: colors.accentBg, color: colors.accent, border: `1px solid ${colors.border}` }}>
+              <MessageSquare size={10} /> Ask AI
             </button>
           )}
-          <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium" style={{ background: 'rgba(33,150,243,0.1)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.18)' }}>
-            <RefreshCw size={10} /> Refresh
+          <button
+            onClick={handleExportPdf}
+            disabled={exporting === 'busy'}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium transition-all hover:opacity-80 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: exporting === 'done' ? 'rgba(0,230,118,0.08)' : exporting === 'error' ? 'rgba(255,68,68,0.08)' : colors.accentBg,
+              color: exporting === 'done' ? '#00e676' : exporting === 'error' ? '#ff4444' : colors.textMuted,
+              border: `1px solid ${exporting === 'done' ? 'rgba(0,230,118,0.3)' : exporting === 'error' ? 'rgba(255,68,68,0.3)' : colors.border}`,
+            }}
+            title="Export report as PDF"
+          >
+            {exporting === 'busy' ? <><RefreshCw size={9} className="animate-spin" /> Exporting…</> :
+             exporting === 'done' ? <><Check size={9} /> Saved</> :
+             exporting === 'error' ? <><X size={9} /> Failed</> :
+             <><Download size={9} /> Export PDF</>}
+          </button>
+          <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-medium transition-all hover:opacity-80"
+            style={{ background: colors.accentBg, color: colors.textMuted, border: `1px solid ${colors.border}` }}>
+            <RefreshCw size={9} /> Refresh
           </button>
         </div>
       </div>
 
-      {/* ── Auto-generated insights strip ────────────────────────────────── */}
+      {/* ── AI Insights ──────────────────────────────────────────────────── */}
       {insights.length > 0 && (
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${insights.length}, 1fr)` }}>
           {insights.map((ins, i) => (
-            <div
-              key={i}
-              className="rounded-xl px-3 py-2.5 flex flex-col gap-1"
-              style={{
-                background: '#0d1b2a',
-                border: `1px solid ${ins.color}22`,
-                borderLeft: `3px solid ${ins.color}`,
-              }}
-            >
+            <div key={i} className="section-panel px-3 py-2.5 flex flex-col gap-1.5 animate-entry"
+              style={{ borderLeft: `2px solid ${ins.color}`, animationDelay: `${i * 70}ms`, animationFillMode: 'both', opacity: 0 }}>
               <div className="flex items-center gap-1.5">
-                <Lightbulb size={10} style={{ color: ins.color, flexShrink: 0 }} />
-                <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: ins.color }}>
-                  {ins.label}
-                </span>
+                <Lightbulb size={9} style={{ color: ins.color, flexShrink: 0 }} />
+                <span className="text-[8px] font-semibold uppercase tracking-wide" style={{ color: ins.color, fontFamily: '"Share Tech Mono", monospace' }}>{ins.label}</span>
               </div>
-              <p className="text-[10px] leading-snug" style={{ color: '#b0c4d8' }}>{ins.text}</p>
+              <p className="text-[10px] leading-relaxed" style={{ color: colors.textSecondary }}>{ins.text}</p>
             </div>
           ))}
         </div>
       )}
 
-      {/* ── KPI Row: Today ───────────────────────────────────────────────── */}
-      <div>
-        <p className="text-[9px] font-semibold uppercase tracking-widest mb-1 px-0.5" style={{ color: '#7a9ab5' }}>Today</p>
-        <div className="grid grid-cols-6 gap-px rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-          {[
-            { label: 'Focus Score', value: `${Math.round(today.focusScore)}%`, color: today.focusScore >= 70 ? '#4caf50' : today.focusScore >= 40 ? '#ffb800' : '#ef5350', sub: 'today', tooltip: `${Math.round(today.focusScore)}% focus score — focused vs distracted ratio. 70%+ excellent, 40–70% average, below 40% needs work.` },
-            { label: 'Focused', value: today.focusedTime > 0 ? fmt(today.focusedTime) : '—', color: '#2196f3', sub: fmt(todayTracked) + ' tracked', tooltip: `${fmt(today.focusedTime)} on productive apps today out of ${fmt(todayTracked)} total tracked` },
-            { label: 'Distracted', value: today.distractedTime > 0 ? fmt(today.distractedTime) : '—', color: today.distractedTime > 3600000 ? '#ef5350' : '#ffb800', sub: todayTracked > 0 ? `${Math.round((today.distractedTime / todayTracked) * 100)}% of day` : 'no data', tooltip: `${fmt(today.distractedTime)} on distracting apps — ${todayTracked > 0 ? Math.round((today.distractedTime / todayTracked) * 100) : 0}% of tracked time` },
-            { label: 'Blocked', value: String(today.blockEvents || 0), color: '#2196f3', sub: 'access attempts', tooltip: `${today.blockEvents} blocked attempts today — hosts-file redirects, firewall drops, process kills` },
-            { label: 'Switch Rate', value: switchFreq > 0 ? `${switchFreq}/h` : '—', color: switchFreq > 20 ? '#ef5350' : switchFreq > 10 ? '#ffb800' : '#66bb6a', sub: 'context switches', tooltip: `${switchFreq} app switches/h this week. Under 10/h = focused, 10–20/h = moderate, above 20/h = fragmented.` },
-            { label: 'Sessions', value: String(today.focusSessions), color: '#2196f3', sub: 'started today', tooltip: `${today.focusSessions} manual focus session${today.focusSessions !== 1 ? 's' : ''} started today` },
-          ].map((chip) => (
-            <div key={chip.label} className="flex flex-col items-center justify-center py-2.5 px-2" style={{ background: '#0d1b2a' }} title={chip.tooltip}>
-              <p className="text-base font-bold leading-none tabular-nums" style={{ color: chip.color }}>{chip.value}</p>
-              <p className="text-[10px] text-white font-medium mt-0.5">{chip.label}</p>
-              <p className="text-[9px] mt-0.5" style={{ color: '#6b84a0' }}>{chip.sub}</p>
-            </div>
-          ))}
+      {/* ════════════════ TODAY ════════════════════════════════════════════ */}
+      <AnalyticsSectionHeader
+        label="Today"
+        sub={new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
+      />
+
+      {/* Today KPIs */}
+      <div className="grid grid-cols-4 gap-1.5">
+        {[
+          { label: 'Focus Score', value: `${Math.round(today.focusScore)}%`, color: today.focusScore >= 70 ? '#00e676' : today.focusScore >= 40 ? '#ffaa00' : '#ff4444', sub: todayTracked > 0 ? `${fmt(todayTracked)} tracked` : 'no data', tooltip: `${Math.round(today.focusScore)}% focus score` },
+          { label: 'Focused', value: today.focusedTime > 0 ? fmt(today.focusedTime) : '—', color: '#00c8ff', sub: todayTracked > 0 ? `${Math.round((today.focusedTime / todayTracked) * 100)}% of tracked` : '—', tooltip: `${fmt(today.focusedTime)} on productive apps today` },
+          { label: 'Distracted', value: today.distractedTime > 0 ? fmt(today.distractedTime) : '—', color: today.distractedTime > 3600000 ? '#ff4444' : '#ffaa00', sub: todayTracked > 0 ? `${Math.round((today.distractedTime / todayTracked) * 100)}% of tracked` : '—', tooltip: `${fmt(today.distractedTime)} on distracting apps` },
+          { label: 'Switch Rate', value: switchFreq > 0 ? `${switchFreq}/h` : '—', color: switchFreq > 20 ? '#ff4444' : switchFreq > 10 ? '#ffaa00' : '#00e676', sub: switchFreq > 20 ? 'fragmented' : switchFreq > 0 ? 'solid' : 'no data', tooltip: `${switchFreq} app switches/h` },
+          { label: 'Idle Time', value: todayIdleMs > 0 ? fmt(todayIdleMs) : '—', color: todayIdleMs > 3600000 ? '#ffaa00' : 'rgba(0,200,255,0.5)', sub: todayIdlePeriods.length > 0 ? `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m` : 'no idle gaps', tooltip: `${fmt(todayIdleMs)} idle today (gaps ≥3m between sessions)` },
+          { label: 'Relapses', value: String(todayRelapses.length), color: todayRelapses.length > 3 ? '#ff4444' : todayRelapses.length > 0 ? '#ffaa00' : '#00e676', sub: todayRelapses.length > 0 ? 'returned to dist.' : 'none today', tooltip: `${todayRelapses.length} times returned to distraction within 30m` },
+          { label: 'Blocked', value: String(today.blockEvents || 0), color: '#00c8ff', sub: 'blocked today', tooltip: `${today.blockEvents} blocked attempts today` },
+          { label: 'Sessions', value: String(today.focusSessions), color: '#00c8ff', sub: 'started today', tooltip: `${today.focusSessions} focus sessions today` },
+        ].map((chip, i) => kpiChip(chip, i, 0))}
+      </div>
+
+      {/* Today: Timeline + Hourly viz + Category breakdown */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2 space-y-2">
+          <SessionTimeline sessions={recentSessions} />
+          <div className="section-panel p-3 space-y-3">
+            <HourlyHeatmapRow hourRows={hourRows} />
+            {hourRows.length >= 2 && (
+              <div>
+                <p className="hud-label mb-2">Focus Score Curve</p>
+                <FocusLineChart hourRows={hourRows} />
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="section-panel p-3">
+          <p className="hud-label mb-2.5">Time by Category</p>
+          <CategoryBreakdown sessions={recentSessions} />
         </div>
       </div>
 
-      {/* ── KPI Row: Weekly ──────────────────────────────────────────────── */}
-      <div>
-        <p className="text-[9px] font-semibold uppercase tracking-widest mb-1 px-0.5" style={{ color: '#7a9ab5' }}>This Week</p>
-        <div className="grid grid-cols-6 gap-px rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-          {[
-            { label: 'Focus Time', value: fmt(weekly.focusedTime), color: '#4caf50', sub: `${Math.round(focusPct)}% ratio`, tooltip: `${fmt(weekly.focusedTime)} focused this week — ${Math.round(focusPct)}% of all tracked time` },
-            { label: 'Time Lost', value: fmt(weekly.distractedTime), color: weekly.distractedTime > 7 * 3600000 ? '#ef5350' : '#ffb800', sub: `${Math.round(100 - focusPct)}% ratio`, tooltip: `${fmt(weekly.distractedTime)} on distractions this week` },
-            { label: 'Avg Daily Score', value: `${weeklyAvgScore}%`, color: weeklyAvgScore >= 70 ? '#4caf50' : weeklyAvgScore >= 40 ? '#ffb800' : '#ef5350', sub: `${dayRows.length} days`, tooltip: `Average focus score across ${dayRows.length} recorded days. Calculated as (focused / total) × 120, capped at 100%.` },
-            { label: 'Longest Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '—', color: '#4caf50', sub: 'unbroken focus', tooltip: `Longest unbroken focus streak: ${fmt(streaks.longest)}. A streak breaks after a 5-minute gap.` },
-            { label: 'Avg Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '—', color: '#66bb6a', sub: `${streaks.count} streaks`, tooltip: `Average streak: ${fmt(streaks.avgLen)} across ${streaks.count} individual focus runs` },
-            { label: 'Blocked', value: String(weekly.blockEvents), color: '#2196f3', sub: 'this week', tooltip: `${weekly.blockEvents} total block events this week` },
-          ].map((chip) => (
-            <div key={chip.label} className="flex flex-col items-center justify-center py-2.5 px-2" style={{ background: '#0a1222' }} title={chip.tooltip}>
-              <p className="text-base font-bold leading-none tabular-nums" style={{ color: chip.color }}>{chip.value}</p>
-              <p className="text-[10px] text-white font-medium mt-0.5">{chip.label}</p>
-              <p className="text-[9px] mt-0.5" style={{ color: '#6b84a0' }}>{chip.sub}</p>
-            </div>
-          ))}
-        </div>
+      {/* Relapse + Idle tracker */}
+      {(todayRelapses.length > 0 || todayIdlePeriods.length > 0) && (
+        <RelapseTracker relapses={todayRelapses} idlePeriods={todayIdlePeriods} />
+      )}
+
+      {/* ════════════════ THIS WEEK ════════════════════════════════════════ */}
+      <AnalyticsSectionHeader
+        label="This Week"
+        sub={`${dayRows.length} day${dayRows.length !== 1 ? 's' : ''} tracked · ${Math.round(focusPct)}% focus ratio`}
+      />
+
+      {/* Weekly KPIs */}
+      <div className="grid grid-cols-6 gap-1.5">
+        {[
+          { label: 'Focus Time', value: fmt(weekly.focusedTime), color: '#00e676', sub: `${Math.round(focusPct)}% ratio`, tooltip: `${fmt(weekly.focusedTime)} focused this week` },
+          { label: 'Time Lost', value: fmt(weekly.distractedTime), color: weekly.distractedTime > 7 * 3600000 ? '#ff4444' : '#ffaa00', sub: `${Math.round(100 - focusPct)}% ratio`, tooltip: `${fmt(weekly.distractedTime)} on distractions` },
+          { label: 'Avg Score', value: `${weeklyAvgScore}%`, color: weeklyAvgScore >= 70 ? '#00e676' : weeklyAvgScore >= 40 ? '#ffaa00' : '#ff4444', sub: `${dayRows.length} days`, tooltip: `Average daily focus score` },
+          { label: 'Longest Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '—', color: '#00e676', sub: 'unbroken focus', tooltip: `Longest unbroken focus streak` },
+          { label: 'Avg Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '—', color: '#00c8ff', sub: `${streaks.count} streaks`, tooltip: `Average streak length` },
+          { label: 'Blocked', value: String(weekly.blockEvents), color: '#00c8ff', sub: 'this week', tooltip: `${weekly.blockEvents} total block events` },
+        ].map((chip, i) => kpiChip(chip, i, 330))}
       </div>
 
-      {/* ── Distraction cost panel ────────────────────────────────────────── */}
+      {/* Weekly: Bar split + daily stacks | Distraction cost cards */}
       {totalWeekly > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(244,67,54,0.2)' }}>
-            <p className="text-[9px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#ef5350' }}>Distraction Debt</p>
-            <p className="text-2xl font-black leading-none tabular-nums" style={{ color: '#ef5350' }}>{fmt(distractDebtMs)}</p>
-            <p className="text-[10px] mt-1" style={{ color: '#7a9ab5' }}>lost to distractions this week</p>
-            {avgDailyWastedMs > 0 && (
-              <p className="text-[9px] mt-0.5" style={{ color: '#6b84a0' }}>~{fmt(avgDailyWastedMs)} avg per day</p>
-            )}
+        <div className="grid grid-cols-3 gap-2">
+          {/* Left 2/3: weekly bar + per-day stacks + day scores */}
+          <div className="col-span-2 space-y-2">
+            <div className="section-panel px-3 py-2.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="hud-label">Focus vs Distraction</p>
+                <div className="flex gap-3 text-[9px]" style={{ color: 'rgba(0,200,255,0.4)', fontFamily: '"Share Tech Mono", monospace' }}>
+                  <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5" style={{ background: '#00e676' }} />{fmt(weekly.focusedTime)} focused</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5" style={{ background: '#ff6b35' }} />{fmt(weekly.distractedTime)} distracted</span>
+                </div>
+              </div>
+              <div className="flex overflow-hidden h-2" style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.1)' }}>
+                {focusPct > 0 && <div className="bar-fill" style={{ width: `${focusPct}%`, background: 'linear-gradient(90deg, rgba(0,100,50,0.9), rgba(0,230,118,0.85))' }} />}
+                {weekly.distractedTime > 0 && <div className="bar-fill delay-2" style={{ width: `${(weekly.distractedTime / totalWeekly) * 100}%`, background: 'linear-gradient(90deg, rgba(140,30,10,0.9), rgba(255,107,53,0.8))' }} />}
+              </div>
+              <div className="flex mt-1.5 gap-1">
+                {dayRows.map((d) => {
+                  const focused = d.tracked > 0 ? (d.focused / d.tracked) * 100 : 0
+                  const distracted = d.tracked > 0 ? (d.distracted / d.tracked) * 100 : 0
+                  const isToday = d.date === new Date().toISOString().split('T')[0]
+                  return (
+                    <div key={d.date} className="flex-1 flex flex-col gap-0.5" title={`${d.day}: ${d.score}% focus score`}>
+                      <div className="w-full overflow-hidden flex flex-col-reverse" style={{ height: 20, background: 'rgba(0,200,255,0.03)', border: isToday ? '1px solid rgba(0,200,255,0.2)' : '1px solid rgba(0,200,255,0.06)' }}>
+                        <div style={{ flex: focused, background: 'rgba(0,230,118,0.5)', minHeight: focused > 0 ? 1 : 0 }} />
+                        <div style={{ flex: distracted, background: 'rgba(255,107,53,0.45)', minHeight: distracted > 0 ? 1 : 0 }} />
+                        {d.tracked === 0 && <div className="flex-1" style={{ background: 'rgba(0,200,255,0.03)' }} />}
+                      </div>
+                      <p className="text-[7px] text-center data-value" style={{ color: isToday ? 'rgba(0,200,255,0.7)' : 'rgba(0,200,255,0.25)' }}>{d.day.slice(0, 2)}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="section-panel p-3">
+              <DayScoreStrip dayRows={dayRows} />
+            </div>
           </div>
-          <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(255,184,0,0.2)' }}>
-            <p className="text-[9px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#ffb800' }}>Context Switch Cost</p>
-            <p className="text-2xl font-black leading-none tabular-nums" style={{ color: '#ffb800' }}>
-              {recentSessions.length > 0 ? fmt(recentSessions.length * 23 * 60000) : '—'}
-            </p>
-            <p className="text-[10px] mt-1" style={{ color: '#7a9ab5' }}>recovery overhead this week</p>
-            <p className="text-[9px] mt-0.5" style={{ color: '#6b84a0' }}>{recentSessions.length} switches × 23 min/switch</p>
-          </div>
-          <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(76,175,80,0.2)' }}>
-            <p className="text-[9px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#4caf50' }}>Reclaim Opportunity</p>
-            {topDistractor ? (
-              <>
-                <p className="text-2xl font-black leading-none tabular-nums" style={{ color: '#4caf50' }}>{fmt(topDistractor.totalTime)}</p>
-                <p className="text-[10px] mt-1" style={{ color: '#7a9ab5' }}>if you blocked <span className="text-white font-medium">{topDistractor.app}</span></p>
-                <p className="text-[9px] mt-0.5" style={{ color: '#6b84a0' }}>{topDistractor.pctOfTime}% of tracked time this week</p>
-              </>
-            ) : (
-              <p className="text-[10px] mt-1" style={{ color: '#6b84a0' }}>No distracting apps detected yet</p>
-            )}
+
+          {/* Right 1/3: distraction cost cards stacked */}
+          <div className="space-y-2">
+            {[
+              { label: 'Distraction Debt', value: fmt(distractDebtMs), sub: 'lost this week', detail: avgDailyWastedMs > 0 ? `~${fmt(avgDailyWastedMs)}/day avg` : null, color: '#ff4444' },
+              { label: 'Switch Cost', value: recentSessions.length > 0 ? fmt(recentSessions.length * 23 * 60000) : '—', sub: 'recovery overhead', detail: `${recentSessions.length} switches × 23m`, color: '#ffaa00' },
+              { label: 'Reclaim Potential', value: topDistractor ? fmt(topDistractor.totalTime) : '—', sub: topDistractor ? `block ${topDistractor.app}` : 'no distractors', detail: topDistractor ? `${topDistractor.pctOfTime}% of time` : null, color: '#00e676' },
+            ].map((card) => (
+              <div key={card.label} className="section-panel p-3 animate-entry"
+                style={{ borderLeft: `2px solid ${card.color}`, animationFillMode: 'both', opacity: 0 }}>
+                <p className="text-[8px] uppercase tracking-wide mb-1.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>{card.label}</p>
+                <p className="text-xl font-bold leading-none data-value" style={{ color: card.color }}>{card.value}</p>
+                <p className="text-[9px] mt-1 leading-snug" style={{ color: colors.textSecondary }}>{card.sub}</p>
+                {card.detail && <p className="text-[8px] mt-0.5 data-value" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>{card.detail}</p>}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* ── Today's session timeline ─────────────────────────────────────── */}
-      <SessionTimeline sessions={recentSessions} />
-
-      {/* ── Three-panel row: hourly + category + 7-day scores ────────────── */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="col-span-2 rounded-xl p-3 space-y-3" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
-          <HourlyHeatmapRow hourRows={hourRows} />
-          {hourRows.length >= 2 && (
-            <div>
-              <p className="text-[9px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#7a9ab5' }}>Focus Score Curve — Today</p>
-              <FocusLineChart hourRows={hourRows} />
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col gap-3">
-          <div className="rounded-xl p-3 flex-1" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
-            <p className="text-white text-[11px] font-semibold mb-2.5">Time by Category</p>
-            <CategoryBreakdown sessions={recentSessions} />
-          </div>
-          <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
-            <DayScoreStrip dayRows={dayRows} />
-          </div>
-        </div>
-      </div>
-
-      {/* ── 7-day time split bar ─────────────────────────────────────────── */}
-      <div className="rounded-xl px-3 py-2.5" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
-        <div className="flex items-center justify-between mb-1.5">
-          <p className="text-white text-[11px] font-semibold">Weekly Focus vs Distraction</p>
-          <div className="flex gap-3 text-[9px]" style={{ color: '#7a9ab5' }}>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-sm inline-block" style={{ background: '#4caf50' }} />{fmt(weekly.focusedTime)} focused</span>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-sm inline-block" style={{ background: '#ff6b35' }} />{fmt(weekly.distractedTime)} distracted</span>
-          </div>
-        </div>
-        <div className="flex rounded-md overflow-hidden h-3" style={{ background: 'rgba(30,58,95,0.4)' }}>
-          {focusPct > 0 && <div style={{ width: `${focusPct}%`, background: 'linear-gradient(90deg,#1b5e20,#4caf50)' }} />}
-          {totalWeekly > 0 && weekly.distractedTime > 0 && <div style={{ width: `${(weekly.distractedTime / totalWeekly) * 100}%`, background: 'linear-gradient(90deg,#bf360c,#ff6b35)' }} />}
-          {totalWeekly === 0 && <div className="flex-1 flex items-center justify-center"><p className="text-[9px]" style={{ color: '#6b84a0' }}>No sessions recorded yet</p></div>}
-        </div>
-        {totalWeekly > 0 && (
-          <div className="flex mt-1.5 gap-1">
-            {dayRows.map((d) => {
-              const focused = d.tracked > 0 ? (d.focused / d.tracked) * 100 : 0
-              const distracted = d.tracked > 0 ? (d.distracted / d.tracked) * 100 : 0
-              const isToday = d.date === new Date().toISOString().split('T')[0]
-              return (
-                <div key={d.date} className="flex-1 flex flex-col gap-0.5" title={`${d.day}: ${d.score}% focus score`}>
-                  <div className="w-full rounded-sm overflow-hidden flex flex-col-reverse" style={{ height: 18 }}>
-                    <div style={{ flex: focused, background: 'rgba(76,175,80,0.55)', minHeight: focused > 0 ? 1 : 0 }} />
-                    <div style={{ flex: distracted, background: 'rgba(255,107,53,0.5)', minHeight: distracted > 0 ? 1 : 0 }} />
-                    {d.tracked === 0 && <div className="flex-1" style={{ background: 'rgba(30,58,95,0.2)' }} />}
-                  </div>
-                  <p className={`text-[8px] text-center`} style={{ color: isToday ? '#64b5f6' : '#6b84a0' }}>{d.day.slice(0, 2)}</p>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ── Hour-of-week heatmap ─────────────────────────────────────────── */}
+      {/* ════════════════ PATTERNS ═════════════════════════════════════════ */}
+      <AnalyticsSectionHeader label="Patterns" sub="Hour-of-week focus distribution" />
       <HourOfWeekHeatmap matrix={matrix} />
 
-      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
-      <div className="flex gap-0.5" style={{ borderBottom: '1px solid rgba(30,58,95,0.4)' }}>
+      {/* ════════════════ DEEP DIVE ════════════════════════════════════════ */}
+      <AnalyticsSectionHeader label="Deep Dive" sub={`${recentSessions.length} sessions · ${sortedApps.length} apps tracked`} />
+
+      {/* Tabs */}
+      <div className="flex gap-0" style={{ borderBottom: `1px solid ${colors.border}` }}>
         {([
-          { id: 'apps', label: `App Intel (${sortedApps.length})` },
+          { id: 'apps', label: `Apps (${sortedApps.length})` },
+          { id: 'websites', label: `Websites (${domains.length})` },
           { id: 'daily', label: `Daily (${dayRows.length}d)` },
-          { id: 'patterns', label: 'Focus Patterns' },
+          { id: 'patterns', label: 'Patterns' },
           { id: 'alerts', label: `Alerts${activeAlerts.length > 0 ? ` (${activeAlerts.length})` : ''}` },
-          { id: 'log', label: `Activity Log (${Math.min(recentSessions.length, 100)})` },
+          { id: 'log', label: `Log (${Math.min(recentSessions.length, 100)})` },
         ] as const).map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className="px-3.5 py-2 text-[11px] font-medium transition-colors border-b-2 -mb-px"
-            style={{ color: activeTab === tab.id ? '#2196f3' : '#7a9ab5', borderBottomColor: activeTab === tab.id ? '#2196f3' : 'transparent' }}
-          >
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className="px-4 py-2 text-[10px] font-medium transition-all border-b-2 -mb-px"
+            style={{ color: activeTab === tab.id ? colors.accent : colors.textMuted, borderBottomColor: activeTab === tab.id ? colors.accent : 'transparent', background: 'transparent' }}>
             {tab.label}
           </button>
         ))}
       </div>
 
-      {activeTab === 'apps' && (
-        <>
-          <AppBarChart rows={sortedApps} />
-          <AppTable rows={sortedApps} toggleSort={toggleSort} SortIcon={SortIcon} />
-        </>
-      )}
+      {activeTab === 'apps' && (<><AppBarChart rows={sortedApps} /><AppTable rows={sortedApps} toggleSort={toggleSort} SortIcon={SortIcon} /></>)}
+      {activeTab === 'websites' && <WebsitesTab domains={domains} sessions={recentSessions} />}
       {activeTab === 'daily' && <DailyTable rows={dayRows} />}
       {activeTab === 'patterns' && <PatternsTab hourRows={hourRows} streaks={streaks} sessions={recentSessions} />}
       {activeTab === 'alerts' && <AlertsTable alerts={heuristicAlerts} onDismiss={dismissAlert} />}
       {activeTab === 'log' && <ActivityLog sessions={[...recentSessions].reverse().slice(0, 100)} />}
+    </div>
+  )
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+function AnalyticsSectionHeader({ label, sub }: { label: string; sub: string }): React.ReactElement {
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider flex-shrink-0" style={{ color: 'var(--label)', fontFamily: '"Share Tech Mono", monospace' }}>
+        {label}
+      </p>
+      <div className="flex-1 h-px" style={{ background: 'var(--border)' }} />
+      <p className="text-[9px] flex-shrink-0" style={{ color: 'var(--text-dim)', fontFamily: '"Share Tech Mono", monospace' }}>
+        {sub}
+      </p>
     </div>
   )
 }
@@ -903,24 +1017,32 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
 function Th({ children, onClick }: { children: React.ReactNode; onClick?: () => void }): React.ReactElement {
   return (
     <th
-      className="px-2.5 py-2 text-left text-[9px] font-semibold uppercase tracking-wider whitespace-nowrap"
+      className="px-2.5 py-2 text-left text-[8px] font-bold uppercase whitespace-nowrap"
       onClick={onClick}
-      style={{ cursor: onClick ? 'pointer' : 'default', color: '#7a9ab5', background: 'rgba(8,15,30,0.8)', borderBottom: '1px solid rgba(30,58,95,0.5)' }}
+      style={{
+        cursor: onClick ? 'pointer' : 'default',
+        color: 'rgba(0,200,255,0.45)',
+        background: 'rgba(2,8,18,0.9)',
+        borderBottom: '1px solid rgba(0,200,255,0.1)',
+        fontFamily: '"Share Tech Mono", monospace',
+        letterSpacing: '0.16em',
+      }}
     >
       {children}
     </th>
   )
 }
 
-function AppTable({ rows, toggleSort, SortIcon }: {
+function AppTable({ rows, toggleSort, SortIcon }: { // eslint-disable-line
   rows: AppRow[]
   toggleSort: (col: keyof AppRow) => void
   SortIcon: ({ col }: { col: keyof AppRow }) => React.ReactElement
 }): React.ReactElement {
+  const { colors } = useTheme()
   if (rows.length === 0) return <EmptyState text="No app activity recorded yet. The tracker populates as you use your device." />
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+    <div className="section-panel overflow-hidden">
+      <table className="hud-table">
         <thead>
           <tr>
             <Th onClick={() => toggleSort('app')}><span className="flex items-center gap-1">App <SortIcon col="app" /></span></Th>
@@ -934,26 +1056,26 @@ function AppTable({ rows, toggleSort, SortIcon }: {
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={row.app} style={{ background: i % 2 === 0 ? 'rgba(13,27,42,0.7)' : 'rgba(17,34,64,0.45)', borderBottom: '1px solid rgba(30,58,95,0.2)' }}>
+            <tr key={row.app} style={{ background: i % 2 === 0 ? colors.rowEven : colors.rowOdd }}>
               <td className="px-2.5 py-1.5">
-                <p className="text-white text-[11px] font-medium truncate max-w-[140px]">{row.app}</p>
+                <p className="text-[11px] font-medium truncate max-w-[140px]" style={{ color: colors.textPrimary }}>{row.app}</p>
               </td>
               <td className="px-2.5 py-1.5">
                 <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold uppercase tracking-wide" style={{ background: CAT_COLOR[row.category] + '22', color: CAT_COLOR[row.category] }}>
                   {row.category.slice(0, 4)}
                 </span>
               </td>
-              <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#90a4ae' }}>{fmt(row.totalTime)}</td>
+              <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{fmt(row.totalTime)}</td>
               <td className="px-2.5 py-1.5">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-10 h-1 rounded-full overflow-hidden" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, row.pctOfTime)}%`, background: row.isDistraction ? '#ef5350' : '#2196f3' }} />
+                  <div className="w-10 h-1 overflow-hidden" style={{ background: 'rgba(0,200,255,0.06)' }}>
+                    <div className="h-full" style={{ width: `${Math.min(100, row.pctOfTime)}%`, background: row.isDistraction ? '#ff4444' : '#00c8ff' }} />
                   </div>
-                  <span className="text-[10px] tabular-nums" style={{ color: '#90a4ae' }}>{row.pctOfTime}%</span>
+                  <span className="text-[10px] tabular-nums" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.pctOfTime}%</span>
                 </div>
               </td>
-              <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: '#90a4ae' }}>{row.sessions}</td>
-              <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#90a4ae' }}>{fmt(row.avgDuration)}</td>
+              <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.sessions}</td>
+              <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{fmt(row.avgDuration)}</td>
               <td className="px-2.5 py-1.5">
                 {row.isDistraction
                   ? <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase" style={{ background: 'rgba(244,67,54,0.15)', color: '#ef5350' }}>DIST</span>
@@ -968,14 +1090,15 @@ function AppTable({ rows, toggleSort, SortIcon }: {
 }
 
 function DailyTable({ rows }: { rows: DayRow[] }): React.ReactElement {
+  const { colors } = useTheme()
   if (rows.length === 0) return <EmptyState text="No daily data yet — sessions accumulate here over time." />
   const totals = rows.reduce((acc, r) => ({
     focused: acc.focused + r.focused, distracted: acc.distracted + r.distracted,
     tracked: acc.tracked + r.tracked, sessions: acc.sessions + r.sessions,
   }), { focused: 0, distracted: 0, tracked: 0, sessions: 0 })
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+    <div className="section-panel overflow-hidden">
+      <table className="hud-table">
         <thead>
           <tr>
             <Th>Day</Th><Th>Date</Th><Th>Tracked</Th><Th>Focused</Th><Th>Distracted</Th>
@@ -987,16 +1110,15 @@ function DailyTable({ rows }: { rows: DayRow[] }): React.ReactElement {
             const isToday = row.date === new Date().toISOString().split('T')[0]
             return (
               <tr key={row.date} style={{
-                background: isToday ? 'rgba(33,150,243,0.06)' : i % 2 === 0 ? 'rgba(13,27,42,0.7)' : 'rgba(17,34,64,0.45)',
-                borderBottom: '1px solid rgba(30,58,95,0.2)',
-                outline: isToday ? '1px solid rgba(33,150,243,0.15)' : 'none',
+                background: isToday ? colors.accentBg : i % 2 === 0 ? colors.rowEven : colors.rowOdd,
+                outline: isToday ? '1px solid rgba(0,200,255,0.12)' : 'none',
               }}>
                 <td className="px-2.5 py-1.5">
                   <span className="text-white text-[11px] font-semibold">{row.day}</span>
-                  {isToday && <span className="ml-1 text-[8px] px-1 py-0.5 rounded" style={{ background: 'rgba(33,150,243,0.2)', color: '#64b5f6' }}>today</span>}
+                  {isToday && <span className="ml-1 text-[8px] px-1 py-0.5" style={{ background: 'rgba(0,200,255,0.12)', color: '#00c8ff', fontFamily: '"Share Tech Mono", monospace' }}>today</span>}
                 </td>
-                <td className="px-2.5 py-1.5 text-[10px] font-mono tabular-nums" style={{ color: '#6b84a0' }}>{row.date}</td>
-                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#90a4ae' }}>{row.tracked > 0 ? fmt(row.tracked) : '—'}</td>
+                <td className="px-2.5 py-1.5 text-[10px] font-mono tabular-nums" style={{ color: 'rgba(0,200,255,0.3)' }}>{row.date}</td>
+                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.tracked > 0 ? fmt(row.tracked) : '—'}</td>
                 <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.focused > 0 ? '#66bb6a' : '#4a6280' }}>{row.focused > 0 ? fmt(row.focused) : '—'}</td>
                 <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.distracted > 3600000 ? '#ef5350' : row.distracted > 0 ? '#ffb800' : '#4a6280' }}>{row.distracted > 0 ? fmt(row.distracted) : '—'}</td>
                 <td className="px-2.5 py-1.5">
@@ -1006,21 +1128,21 @@ function DailyTable({ rows }: { rows: DayRow[] }): React.ReactElement {
                 </td>
                 <td className="px-2.5 py-1.5">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-12 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(30,58,95,0.6)' }}>
-                      <div className="h-full rounded-full" style={{ width: `${row.score}%`, background: row.score >= 70 ? '#4caf50' : row.score >= 40 ? '#ffb800' : '#ef5350' }} />
+                    <div className="w-12 h-1 overflow-hidden" style={{ background: 'rgba(0,200,255,0.06)' }}>
+                      <div className="h-full" style={{ width: `${row.score}%`, background: row.score >= 70 ? '#00e676' : row.score >= 40 ? '#ffaa00' : '#ff4444' }} />
                     </div>
-                    <span className="text-[10px] tabular-nums font-mono" style={{ color: row.score >= 70 ? '#66bb6a' : row.score >= 40 ? '#ffb800' : '#ef5350' }}>{row.score}%</span>
+                    <span className="text-[10px] tabular-nums font-mono" style={{ color: row.score >= 70 ? '#00e676' : row.score >= 40 ? '#ffaa00' : '#ff4444' }}>{row.score}%</span>
                   </div>
                 </td>
-                <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: '#90a4ae' }}>{row.sessions}</td>
-                <td className="px-2.5 py-1.5 text-[10px] truncate max-w-[90px]" style={{ color: '#7a9ab5' }}>{row.topApp}</td>
+                <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.sessions}</td>
+                <td className="px-2.5 py-1.5 text-[10px] truncate max-w-[90px]" style={{ color: 'rgba(0,200,255,0.45)' }}>{row.topApp}</td>
               </tr>
             )
           })}
           {/* Totals row */}
-          <tr style={{ background: 'rgba(30,58,95,0.25)', borderTop: '1px solid rgba(30,58,95,0.5)' }}>
+          <tr style={{ background: 'rgba(0,200,255,0.04)', borderTop: '1px solid rgba(0,200,255,0.1)' }}>
             <td className="px-2.5 py-1.5 text-[10px] font-bold text-white" colSpan={2}>Total ({rows.length} days)</td>
-            <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#90a4ae' }}>{fmt(totals.tracked)}</td>
+            <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{fmt(totals.tracked)}</td>
             <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#66bb6a' }}>{fmt(totals.focused)}</td>
             <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#ef5350' }}>{fmt(totals.distracted)}</td>
             <td className="px-2.5 py-1.5 text-[10px]" style={{ color: totals.tracked > 0 && (totals.distracted / totals.tracked) > 0.5 ? '#ef5350' : '#ffb800' }}>
@@ -1039,6 +1161,7 @@ function PatternsTab({ hourRows, streaks, sessions }: {
   streaks: { longest: number; current: number; count: number; avgLen: number }
   sessions: ActivitySession[]
 }): React.ReactElement {
+  const { colors } = useTheme()
   const peakFocusHour = hourRows.length > 0 ? hourRows.filter(r => r.ratio >= 0).reduce((best, r) => r.focused > best.focused ? r : best, hourRows[0]!) : null
   const peakDistractHour = hourRows.length > 0 ? hourRows.filter(r => r.ratio >= 0).reduce((best, r) => r.distracted > best.distracted ? r : best, hourRows[0]!) : null
   const distractApps = sessions.filter((s) => s.isDistraction)
@@ -1051,24 +1174,24 @@ function PatternsTab({ hourRows, streaks, sessions }: {
     <div className="space-y-3">
       <div className="grid grid-cols-4 gap-2">
         {[
-          { label: 'Longest Focus Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '—', icon: <TrendingUp size={12} className="text-accent-green" />, color: '#4caf50' },
-          { label: 'Current Streak', value: streaks.current > 0 ? fmt(streaks.current) : 'None', icon: <Zap size={12} className="text-accent-green" />, color: streaks.current > 0 ? '#4caf50' : '#546e7a' },
-          { label: 'Avg Focus Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '—', icon: <Clock size={12} style={{ color: '#90a4ae' }} />, color: '#66bb6a' },
-          { label: 'Peak Focus Hour', value: peakFocusHour ? fmtHour(peakFocusHour.hour) : '—', icon: <TrendingUp size={12} className="text-accent-blue" />, color: '#2196f3' },
+          { label: 'Longest Focus Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '—', icon: <TrendingUp size={12} style={{ color: '#00e676' }} />, color: '#00e676' },
+          { label: 'Current Streak', value: streaks.current > 0 ? fmt(streaks.current) : 'None', icon: <Zap size={12} style={{ color: '#00e676' }} />, color: streaks.current > 0 ? '#00e676' : 'rgba(0,200,255,0.25)' },
+          { label: 'Avg Focus Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '—', icon: <Clock size={12} style={{ color: 'rgba(0,200,255,0.5)' }} />, color: '#00c8ff' },
+          { label: 'Peak Focus Hour', value: peakFocusHour ? fmtHour(peakFocusHour.hour) : '—', icon: <TrendingUp size={12} style={{ color: '#00c8ff' }} />, color: '#00c8ff' },
         ].map((s) => (
-          <div key={s.label} className="rounded-lg p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
-            <div className="flex items-center gap-1.5 mb-1">{s.icon}<p className="text-[10px]" style={{ color: '#90a4ae' }}>{s.label}</p></div>
-            <p className="text-lg font-bold" style={{ color: s.color }}>{s.value}</p>
+          <div key={s.label} className="hud-panel p-3">
+            <div className="flex items-center gap-1.5 mb-1">{s.icon}<p className="hud-label">{s.label}</p></div>
+            <p className="text-lg font-black data-value" style={{ color: s.color, textShadow: `0 0 12px ${s.color}55` }}>{s.value}</p>
           </div>
         ))}
       </div>
 
       {hourRows.length >= 2 && (
-        <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
+        <div className="section-panel p-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-white text-[11px] font-semibold">Hourly Focus Score — Today</p>
+            <p className="hud-label">Hourly Focus Score — Today</p>
             {peakDistractHour && (
-              <span className="text-[9px]" style={{ color: '#7a9ab5' }}>
+              <span className="text-[9px]" style={{ color: 'rgba(0,200,255,0.45)' }}>
                 Peak distraction: <span style={{ color: '#ef5350' }}>{fmtHour(peakDistractHour.hour)}</span>
               </span>
             )}
@@ -1078,8 +1201,8 @@ function PatternsTab({ hourRows, streaks, sessions }: {
       )}
 
       {streaks.count > 0 && (
-        <div className="rounded-xl p-3" style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}>
-          <p className="text-white text-[11px] font-semibold mb-2">Focus Streak History</p>
+        <div className="section-panel p-3">
+          <p className="hud-label mb-2">Focus Streak History</p>
           <div className="flex items-center gap-1 flex-wrap">
             {(() => {
               const focusSessions = [...sessions].filter((s) => !s.isDistraction).sort((a, b) => a.startTime - b.startTime)
@@ -1102,29 +1225,29 @@ function PatternsTab({ hourRows, streaks, sessions }: {
               })
             })()}
           </div>
-          <p className="text-[9px] mt-1.5" style={{ color: '#6b84a0' }}>Each bar = one unbroken focus streak · height = duration</p>
+          <p className="text-[9px] mt-1.5 hud-label" style={{ color: 'rgba(0,200,255,0.25)' }}>Each bar = one unbroken focus streak · height = duration</p>
         </div>
       )}
 
       {topDistractors.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#7a9ab5' }}>Top Distraction Vectors — This Week</p>
-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-            <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+          <p className="hud-label mb-1.5">Top Distraction Vectors — This Week</p>
+          <div className="section-panel overflow-hidden">
+            <table className="hud-table">
               <thead><tr><Th>App</Th><Th>Time Lost</Th><Th>Share of Distractions</Th><Th>Impact</Th></tr></thead>
               <tbody>
                 {topDistractors.map(([app, ms], i) => {
                   const share = totalDistracted > 0 ? Math.round((ms / totalDistracted) * 100) : 0
                   return (
-                    <tr key={app} style={{ background: i % 2 === 0 ? 'rgba(13,27,42,0.7)' : 'rgba(17,34,64,0.45)', borderBottom: '1px solid rgba(30,58,95,0.2)' }}>
-                      <td className="px-2.5 py-1.5 text-white text-[11px] font-medium truncate max-w-[160px]">{app}</td>
+                    <tr key={app} style={{ background: i % 2 === 0 ? colors.rowEven : colors.rowOdd }}>
+                      <td className="px-2.5 py-1.5 text-[11px] font-medium truncate max-w-[160px]" style={{ color: colors.textPrimary }}>{app}</td>
                       <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#ef5350' }}>{fmt(ms)}</td>
                       <td className="px-2.5 py-1.5">
                         <div className="flex items-center gap-1.5">
-                          <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                            <div className="h-full rounded-full" style={{ width: `${share}%`, background: '#ef5350' }} />
+                          <div className="w-20 h-1 overflow-hidden" style={{ background: 'rgba(0,200,255,0.06)' }}>
+                            <div className="h-full" style={{ width: `${share}%`, background: '#ff4444' }} />
                           </div>
-                          <span className="text-[10px] tabular-nums" style={{ color: '#90a4ae' }}>{share}%</span>
+                          <span className="text-[10px] tabular-nums" style={{ color: 'rgba(180,210,235,0.6)' }}>{share}%</span>
                         </div>
                       </td>
                       <td className="px-2.5 py-1.5">
@@ -1146,31 +1269,31 @@ function PatternsTab({ hourRows, streaks, sessions }: {
 
       {hourRows.length > 0 && (
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: '#7a9ab5' }}>Hourly Breakdown — Today</p>
-          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-            <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+          <p className="hud-label mb-1.5">Hourly Breakdown — Today</p>
+          <div className="section-panel overflow-hidden">
+            <table className="hud-table">
               <thead>
                 <tr><Th>Hour</Th><Th>Focused</Th><Th>Distracted</Th><Th>Focus Ratio</Th><Th>Sessions</Th><Th>Switches/h</Th><Th>Top App</Th></tr>
               </thead>
               <tbody>
                 {hourRows.map((row, i) => (
-                  <tr key={row.hour} style={{ background: i % 2 === 0 ? 'rgba(13,27,42,0.7)' : 'rgba(17,34,64,0.45)', borderBottom: '1px solid rgba(30,58,95,0.2)' }}>
-                    <td className="px-2.5 py-1.5 font-mono text-[11px] text-white whitespace-nowrap">{fmtHour(row.hour)}</td>
+                  <tr key={row.hour} style={{ background: i % 2 === 0 ? colors.rowEven : colors.rowOdd }}>
+                    <td className="px-2.5 py-1.5 font-mono text-[11px] whitespace-nowrap" style={{ color: colors.textPrimary }}>{fmtHour(row.hour)}</td>
                     <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.focused > 0 ? '#66bb6a' : '#4a6280' }}>{row.focused > 0 ? fmt(row.focused) : '—'}</td>
                     <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.distracted > 0 ? '#ef5350' : '#4a6280' }}>{row.distracted > 0 ? fmt(row.distracted) : '—'}</td>
                     <td className="px-2.5 py-1.5">
                       {row.ratio >= 0 ? (
                         <div className="flex items-center gap-1.5">
-                          <div className="w-14 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(30,58,95,0.5)' }}>
-                            <div className="h-full rounded-full" style={{ width: `${row.ratio}%`, background: row.ratio >= 70 ? '#4caf50' : row.ratio >= 40 ? '#ffb800' : '#ef5350' }} />
+                          <div className="w-14 h-1 overflow-hidden" style={{ background: 'rgba(0,200,255,0.06)' }}>
+                            <div className="h-full" style={{ width: `${row.ratio}%`, background: row.ratio >= 70 ? '#00e676' : row.ratio >= 40 ? '#ffaa00' : '#ff4444' }} />
                           </div>
                           <span className="text-[10px] tabular-nums" style={{ color: row.ratio >= 70 ? '#66bb6a' : row.ratio >= 40 ? '#ffb800' : '#ef5350' }}>{row.ratio}%</span>
                         </div>
-                      ) : <span style={{ color: '#4a6280' }}>—</span>}
+                      ) : <span style={{ color: 'rgba(0,200,255,0.2)' }}>—</span>}
                     </td>
-                    <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: '#90a4ae' }}>{row.sessions}</td>
+                    <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.sessions}</td>
                     <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: row.switchRate > 20 ? '#ef5350' : row.switchRate > 10 ? '#ffb800' : '#66bb6a' }}>{row.switchRate}</td>
-                    <td className="px-2.5 py-1.5 text-[10px] truncate max-w-[110px]" style={{ color: '#90a4ae' }}>{row.topApp}</td>
+                    <td className="px-2.5 py-1.5 text-[10px] truncate max-w-[110px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.topApp}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1183,29 +1306,30 @@ function PatternsTab({ hourRows, streaks, sessions }: {
 }
 
 function AlertsTable({ alerts, onDismiss }: { alerts: HeuristicAlert[]; onDismiss: (id: string) => void }): React.ReactElement {
+  const { colors } = useTheme()
   if (alerts.length === 0) return <EmptyState text="No behavioral anomalies detected this week. Your focus patterns look clean." />
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
+    <div className="section-panel overflow-hidden">
+      <table className="hud-table">
         <thead><tr><Th>Time</Th><Th>Pattern</Th><Th>Sev</Th><Th>Description</Th><Th>App</Th><Th>Action</Th></tr></thead>
         <tbody>
           {[...alerts].reverse().map((alert, i) => {
             const sev = SEV[alert.severity]
             return (
-              <tr key={alert.id} style={{ background: alert.dismissed ? 'rgba(13,27,42,0.3)' : i % 2 === 0 ? 'rgba(13,27,42,0.7)' : 'rgba(17,34,64,0.45)', borderBottom: '1px solid rgba(30,58,95,0.2)', opacity: alert.dismissed ? 0.5 : 1 }}>
-                <td className="px-2.5 py-1.5 text-[9px] font-mono whitespace-nowrap" style={{ color: '#7a9ab5' }}>
-                  {fmtTime(alert.detectedAt)}<br /><span style={{ color: '#546a80' }}>{fmtDate(alert.detectedAt)}</span>
+              <tr key={alert.id} style={{ background: alert.dismissed ? colors.panelBg : i % 2 === 0 ? colors.rowEven : colors.rowOdd, opacity: alert.dismissed ? 0.5 : 1 }}>
+                <td className="px-2.5 py-1.5 text-[9px] font-mono whitespace-nowrap" style={{ color: 'rgba(0,200,255,0.45)' }}>
+                  {fmtTime(alert.detectedAt)}<br /><span style={{ color: 'rgba(0,200,255,0.2)' }}>{fmtDate(alert.detectedAt)}</span>
                 </td>
                 <td className="px-2.5 py-1.5 text-[11px] font-medium text-white whitespace-nowrap">{TYPE_LABELS[alert.type]}</td>
                 <td className="px-2.5 py-1.5">
                   <span className="text-[8px] px-1.5 py-0.5 rounded font-bold" style={{ background: sev.bg, color: sev.text }}>{sev.label}</span>
                 </td>
-                <td className="px-2.5 py-1.5 text-[10px] max-w-[200px] leading-tight" style={{ color: '#90a4ae' }}>{alert.description}</td>
-                <td className="px-2.5 py-1.5 text-[9px] truncate max-w-[80px]" style={{ color: '#7a9ab5' }}>{alert.app ?? '—'}</td>
+                <td className="px-2.5 py-1.5 text-[10px] max-w-[200px] leading-tight" style={{ color: 'rgba(180,210,235,0.6)' }}>{alert.description}</td>
+                <td className="px-2.5 py-1.5 text-[9px] truncate max-w-[80px]" style={{ color: 'rgba(0,200,255,0.45)' }}>{alert.app ?? '—'}</td>
                 <td className="px-2.5 py-1.5">
                   {alert.dismissed
-                    ? <span className="text-[9px]" style={{ color: '#4a6280' }}>dismissed</span>
-                    : <button onClick={() => onDismiss(alert.id)} className="flex items-center gap-1 text-[9px] px-2 py-1 rounded hover:text-white transition-colors" style={{ background: 'rgba(30,58,95,0.4)', color: '#7a9ab5' }}>
+                    ? <span className="text-[9px]" style={{ color: 'rgba(0,200,255,0.2)' }}>dismissed</span>
+                    : <button onClick={() => onDismiss(alert.id)} className="flex items-center gap-1 text-[9px] px-2 py-1 hover:text-white transition-colors" style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.15)', color: 'rgba(0,200,255,0.5)', fontFamily: '"Share Tech Mono", monospace' }}>
                         <X size={8} /> Dismiss
                       </button>}
                 </td>
@@ -1219,40 +1343,198 @@ function AlertsTable({ alerts, onDismiss }: { alerts: HeuristicAlert[]; onDismis
 }
 
 function ActivityLog({ sessions }: { sessions: ActivitySession[] }): React.ReactElement {
+  const { colors } = useTheme()
   if (sessions.length === 0) return <EmptyState text="No activity sessions recorded yet." />
   return (
-    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
-      <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
-        <thead><tr><Th>Start</Th><Th>End</Th><Th>App</Th><Th>Window Title</Th><Th>Duration</Th><Th>Cat</Th><Th>Type</Th></tr></thead>
+    <div className="section-panel overflow-hidden">
+      <table className="hud-table">
+        <thead><tr><Th>Start</Th><Th>End</Th><Th>App</Th><Th>Domain / Title</Th><Th>Duration</Th><Th>Cat</Th><Th>Type</Th></tr></thead>
         <tbody>
-          {sessions.map((s, i) => (
-            <tr key={s.id} style={{ background: s.isDistraction ? 'rgba(244,67,54,0.04)' : i % 2 === 0 ? 'rgba(13,27,42,0.7)' : 'rgba(17,34,64,0.45)', borderBottom: '1px solid rgba(30,58,95,0.15)' }}>
-              <td className="px-2.5 py-1 text-[9px] font-mono whitespace-nowrap tabular-nums" style={{ color: '#7a9ab5' }}>{fmtTime(s.startTime)}</td>
-              <td className="px-2.5 py-1 text-[9px] font-mono whitespace-nowrap tabular-nums" style={{ color: '#546a80' }}>{fmtTime(s.endTime)}</td>
-              <td className="px-2.5 py-1"><p className="text-white text-[10px] font-medium truncate max-w-[90px]">{s.app}</p></td>
-              <td className="px-2.5 py-1"><p className="text-[9px] truncate max-w-[170px]" style={{ color: '#90a4ae' }}>{s.title}</p></td>
-              <td className="px-2.5 py-1 text-[10px] font-mono tabular-nums whitespace-nowrap" style={{ color: s.isDistraction ? '#ef5350' : '#7a9ab5' }}>{fmt(s.duration)}</td>
-              <td className="px-2.5 py-1">
-                <span className="text-[8px] px-1 py-0.5 rounded font-semibold" style={{ background: CAT_COLOR[s.category] + '18', color: CAT_COLOR[s.category] }}>{s.category.slice(0, 4)}</span>
-              </td>
-              <td className="px-2.5 py-1">
-                {s.isDistraction
-                  ? <span className="flex items-center gap-0.5"><AlertTriangle size={8} style={{ color: '#ef5350' }} /><span className="text-[9px]" style={{ color: '#ef5350' }}>dist</span></span>
-                  : <span className="text-[9px]" style={{ color: '#66bb6a' }}>focus</span>}
-              </td>
-            </tr>
-          ))}
+          {sessions.map((s, i) => {
+            const domain = s.url ? extractDomain(s.url) : null
+            return (
+              <tr key={s.id} style={{ background: s.isDistraction ? 'rgba(255,68,68,0.04)' : i % 2 === 0 ? colors.rowEven : colors.rowOdd }}>
+                <td className="px-2.5 py-1 text-[9px] font-mono whitespace-nowrap tabular-nums" style={{ color: colors.textSecondary }}>{fmtTime(s.startTime)}</td>
+                <td className="px-2.5 py-1 text-[9px] font-mono whitespace-nowrap tabular-nums" style={{ color: colors.textMuted }}>{fmtTime(s.endTime)}</td>
+                <td className="px-2.5 py-1"><p className="text-[10px] font-medium truncate max-w-[90px]" style={{ color: colors.textPrimary }}>{s.app}</p></td>
+                <td className="px-2.5 py-1">
+                  {domain
+                    ? <div><p className="text-[9px] font-mono truncate max-w-[150px]" style={{ color: '#00c8ff' }}>{domain}</p><p className="text-[8px] truncate max-w-[150px]" style={{ color: colors.textMuted }}>{s.title}</p></div>
+                    : <p className="text-[9px] truncate max-w-[150px]" style={{ color: colors.textSecondary }}>{s.title}</p>}
+                </td>
+                <td className="px-2.5 py-1 text-[10px] font-mono tabular-nums whitespace-nowrap" style={{ color: s.isDistraction ? '#ef5350' : colors.textSecondary }}>{fmt(s.duration)}</td>
+                <td className="px-2.5 py-1">
+                  <span className="text-[8px] px-1 py-0.5 rounded font-semibold" style={{ background: CAT_COLOR[s.category] + '18', color: CAT_COLOR[s.category] }}>{s.category.slice(0, 4)}</span>
+                </td>
+                <td className="px-2.5 py-1">
+                  {s.isDistraction
+                    ? <span className="flex items-center gap-0.5"><AlertTriangle size={8} style={{ color: '#ef5350' }} /><span className="text-[9px]" style={{ color: '#ef5350' }}>dist</span></span>
+                    : <span className="text-[9px]" style={{ color: '#66bb6a' }}>focus</span>}
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
   )
 }
 
+function WebsitesTab({ domains, sessions }: { domains: DomainRow[]; sessions: ActivitySession[] }): React.ReactElement {
+  const { colors } = useTheme()
+
+  // Aggregate from sessions' URLs for visit counts and supplement DB domains
+  const urlDomainMap = new Map<string, { total_ms: number; visits: number; isDistraction: boolean }>()
+  for (const s of sessions) {
+    if (!s.url) continue
+    const domain = extractDomain(s.url)
+    if (!domain) continue
+    const cur = urlDomainMap.get(domain) ?? { total_ms: 0, visits: 0, isDistraction: s.isDistraction }
+    cur.total_ms += s.duration
+    cur.visits++
+    if (s.isDistraction) cur.isDistraction = true
+    urlDomainMap.set(domain, cur)
+  }
+
+  // Merge DB domains with session URL data
+  const merged = new Map<string, { total_ms: number; category: string; classification: string; visits: number; isDistraction: boolean }>()
+  for (const d of domains) {
+    merged.set(d.domain, { total_ms: d.total_ms, category: d.category, classification: d.classification, visits: 0, isDistraction: d.classification === 'distract' })
+  }
+  for (const [domain, v] of urlDomainMap) {
+    const existing = merged.get(domain)
+    if (existing) {
+      existing.visits = v.visits
+      if (v.total_ms > existing.total_ms) existing.total_ms = v.total_ms
+    } else {
+      merged.set(domain, { total_ms: v.total_ms, category: 'browser', classification: v.isDistraction ? 'distract' : 'neutral', visits: v.visits, isDistraction: v.isDistraction })
+    }
+  }
+
+  const rows = [...merged.entries()]
+    .map(([domain, v]) => ({ domain, ...v }))
+    .filter((r) => r.total_ms > 5000)
+    .sort((a, b) => b.total_ms - a.total_ms)
+    .slice(0, 50)
+
+  const maxMs = rows[0]?.total_ms ?? 1
+
+  if (rows.length === 0) return <EmptyState text="No website visits recorded yet. Website tracking activates when browser URLs are captured via system accessibility APIs." />
+
+  return (
+    <div className="section-panel overflow-hidden">
+      <table className="hud-table">
+        <thead>
+          <tr>
+            <Th>Domain</Th>
+            <Th>Category</Th>
+            <Th>Classification</Th>
+            <Th>Time</Th>
+            <Th>Share</Th>
+            <Th>Visits</Th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const pct = Math.round((row.total_ms / maxMs) * 100)
+            const clsColor = row.classification === 'distract' ? '#ef5350' : row.classification === 'focus' ? '#66bb6a' : '#607d8b'
+            return (
+              <tr key={row.domain} style={{ background: row.classification === 'distract' ? 'rgba(255,68,68,0.03)' : i % 2 === 0 ? colors.rowEven : colors.rowOdd }}>
+                <td className="px-2.5 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Globe size={9} style={{ color: 'rgba(0,200,255,0.35)', flexShrink: 0 }} />
+                    <p className="text-[10px] font-mono truncate max-w-[150px]" style={{ color: colors.textPrimary }}>{row.domain}</p>
+                  </div>
+                </td>
+                <td className="px-2.5 py-1.5">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded font-semibold capitalize" style={{ background: 'rgba(0,200,255,0.08)', color: 'rgba(0,200,255,0.6)' }}>
+                    {row.category}
+                  </span>
+                </td>
+                <td className="px-2.5 py-1.5">
+                  <span className="text-[9px] px-1.5 py-0.5 rounded font-bold uppercase" style={{ background: clsColor + '22', color: clsColor }}>
+                    {row.classification}
+                  </span>
+                </td>
+                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.classification === 'distract' ? '#ef5350' : colors.textSecondary }}>{fmt(row.total_ms)}</td>
+                <td className="px-2.5 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-16 h-1 overflow-hidden" style={{ background: 'rgba(0,200,255,0.06)' }}>
+                      <div className="h-full" style={{ width: `${pct}%`, background: row.classification === 'distract' ? '#ff4444' : '#00c8ff' }} />
+                    </div>
+                    <span className="text-[9px] tabular-nums" style={{ color: 'rgba(180,210,235,0.6)' }}>{pct}%</span>
+                  </div>
+                </td>
+                <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.5)' }}>
+                  {row.visits > 0 ? row.visits : '—'}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function RelapseTracker({ relapses, idlePeriods }: { relapses: Relapse[]; idlePeriods: IdlePeriod[] }): React.ReactElement {
+  const { colors } = useTheme()
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      <div className="section-panel p-3">
+        <div className="flex items-center gap-1.5 mb-2.5">
+          <AlertTriangle size={10} style={{ color: relapses.length > 0 ? '#ffaa00' : '#66bb6a', flexShrink: 0 }} />
+          <p className="hud-label">Relapse Events — Today</p>
+          <span className="ml-auto text-[10px] font-bold data-value" style={{ color: relapses.length > 3 ? '#ff4444' : relapses.length > 0 ? '#ffaa00' : '#66bb6a' }}>
+            {relapses.length}
+          </span>
+        </div>
+        {relapses.length === 0 ? (
+          <p className="text-[9px]" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>No relapses today — discipline holding.</p>
+        ) : (
+          <div className="space-y-1 max-h-28 overflow-y-auto">
+            {[...relapses].reverse().slice(0, 6).map((r, i) => (
+              <div key={i} className="flex items-center gap-2 py-1 px-1.5" style={{ background: 'rgba(255,170,0,0.04)', border: '1px solid rgba(255,170,0,0.1)' }}>
+                <span className="text-[8px] font-mono flex-shrink-0" style={{ color: 'rgba(0,200,255,0.35)' }}>{new Date(r.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-[9px] truncate max-w-[80px]" style={{ color: colors.textPrimary }}>{r.app}</span>
+                <span className="text-[8px] flex-shrink-0 ml-auto" style={{ color: colors.textDim }}>+{fmt(r.gapMs)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="section-panel p-3">
+        <div className="flex items-center gap-1.5 mb-2.5">
+          <Clock size={10} style={{ color: 'rgba(0,200,255,0.5)', flexShrink: 0 }} />
+          <p className="hud-label">Idle Gaps — Today</p>
+          <span className="ml-auto text-[9px] font-mono" style={{ color: 'rgba(0,200,255,0.45)' }}>
+            {idlePeriods.length} gap{idlePeriods.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        {idlePeriods.length === 0 ? (
+          <p className="text-[9px]" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>No idle gaps ≥3m detected today.</p>
+        ) : (
+          <div className="space-y-1 max-h-28 overflow-y-auto">
+            {[...idlePeriods].reverse().slice(0, 6).map((ip, i) => (
+              <div key={i} className="flex items-center gap-2 py-1 px-1.5" style={{ background: 'rgba(0,200,255,0.03)', border: '1px solid rgba(0,200,255,0.08)' }}>
+                <span className="text-[8px] font-mono flex-shrink-0" style={{ color: 'rgba(0,200,255,0.35)' }}>{new Date(ip.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                <span className="text-[10px] font-bold data-value flex-shrink-0" style={{ color: ip.duration > 1800000 ? '#ffaa00' : 'rgba(0,200,255,0.7)' }}>{fmt(ip.duration)}</span>
+                <span className="text-[8px] truncate" style={{ color: colors.textDim }}>after {ip.prevApp}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function EmptyState({ text }: { text: string }): React.ReactElement {
   return (
-    <div className="rounded-xl py-8 text-center" style={{ background: 'rgba(13,27,42,0.5)', border: '1px solid rgba(30,58,95,0.4)' }}>
-      <Activity size={22} style={{ color: '#546a80' }} className="mx-auto mb-2" />
-      <p className="text-[11px] max-w-sm mx-auto leading-relaxed" style={{ color: '#6b84a0' }}>{text}</p>
+    <div className="section-panel py-8 text-center">
+      <Activity size={18} style={{ color: 'rgba(0,200,255,0.25)' }} className="mx-auto mb-2" />
+      <p className="text-[10px] max-w-sm mx-auto leading-relaxed" style={{ color: 'rgba(0,200,255,0.3)', fontFamily: '"Share Tech Mono", monospace' }}>{text}</p>
     </div>
   )
 }

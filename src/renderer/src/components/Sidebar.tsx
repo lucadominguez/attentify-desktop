@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import {
   Home, Shield, Zap, Lock, Calendar, TrendingUp,
-  MessageSquare, Activity, RefreshCw, Brain,
+  MessageSquare, Activity, RefreshCw, Brain, Sun, Moon, ListChecks,
 } from 'lucide-react'
 import type { ViewName, FocusSession, ElevationStatus } from '@shared/types'
 import PulsingSphere from './PulsingSphere'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -15,6 +16,7 @@ interface SidebarProps {
   activeSession?: FocusSession
   elevation: ElevationStatus
   alertCount?: number
+  pendingActionCount?: number
 }
 
 interface NavItem {
@@ -29,6 +31,7 @@ const mainNav: NavItem[] = [
   { id: 'deep-clean',    label: 'Deep Clean', icon: <Zap size={14} /> },
   { id: 'analytics',     label: 'Analytics',  icon: <Activity size={14} /> },
   { id: 'patterns',      label: 'Patterns',   icon: <Brain size={14} /> },
+  { id: 'actions',       label: 'Actions',    icon: <ListChecks size={14} /> },
 ]
 
 const toolsNav: NavItem[] = [
@@ -38,9 +41,10 @@ const toolsNav: NavItem[] = [
 ]
 
 export default function Sidebar({
-  currentView, onNavigate, onChatOpen, activeSession, elevation, alertCount = 0,
+  currentView, onNavigate, onChatOpen, activeSession, elevation, alertCount = 0, pendingActionCount = 0,
 }: SidebarProps): React.ReactElement {
   const [relaunching, setRelaunching] = useState(false)
+  const { theme, toggle } = useTheme()
 
   const handleRelaunch = async (): Promise<void> => {
     setRelaunching(true)
@@ -189,6 +193,20 @@ export default function Sidebar({
                     {alertCount > 9 ? '9+' : alertCount}
                   </span>
                 )}
+                {item.id === 'actions' && pendingActionCount > 0 && (
+                  <span
+                    className="flex-shrink-0 flex items-center justify-center text-[8px] font-bold"
+                    style={{
+                      width: 16, height: 16,
+                      background: 'rgba(255,170,0,0.2)',
+                      border: '1px solid rgba(255,170,0,0.5)',
+                      color: '#ffaa00',
+                      fontFamily: '"Share Tech Mono", monospace',
+                    }}
+                  >
+                    {pendingActionCount > 9 ? '9+' : pendingActionCount}
+                  </span>
+                )}
                 {isActive && (
                   <span
                     className="flex-shrink-0 text-[8px] animate-bracket-in"
@@ -243,9 +261,27 @@ export default function Sidebar({
         className="flex-shrink-0 flex flex-col items-center pb-5 pt-3"
         style={{ borderTop: '1px solid rgba(0,200,255,0.08)' }}
       >
+        {/* Theme toggle */}
+        <button
+          onClick={toggle}
+          className="flex items-center gap-1.5 mb-4 px-3 py-1.5 transition-all duration-200 hover:scale-105"
+          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          style={{
+            background: theme === 'light' ? 'rgba(255,200,0,0.1)' : 'rgba(0,200,255,0.06)',
+            border: theme === 'light' ? '1px solid rgba(255,190,0,0.3)' : '1px solid rgba(0,200,255,0.18)',
+            color: theme === 'light' ? '#e6a800' : 'rgba(0,200,255,0.65)',
+            fontSize: 9,
+            fontFamily: '"Share Tech Mono", monospace',
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {theme === 'dark' ? <Sun size={10} /> : <Moon size={10} />}
+          {theme === 'dark' ? 'Light' : 'Dark'}
+        </button>
         {/* Outer ring decoration */}
         <div
-          className="relative cursor-pointer mb-2"
+          className="relative cursor-pointer mb-5"
           onClick={onChatOpen}
           title="Open Daemon Assistant"
         >

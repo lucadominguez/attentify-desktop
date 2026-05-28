@@ -4,6 +4,29 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables (dark defaults, overridden by ThemeContext) ────────────── */
+:root {
+  --root-bg:       #020912;
+  --main-bg:       #030c1a;
+  --panel-bg:      rgba(4,11,22,0.97);
+  --card-bg:       rgba(6,14,28,0.92);
+  --input-bg:      rgba(3,9,18,0.98);
+  --row-even:      rgba(4,11,22,0.8);
+  --row-odd:       rgba(6,15,28,0.5);
+  --text-primary:  #e8e8e8;
+  --text-secondary:#9a9a9a;
+  --text-muted:    #6a6a6a;
+  --text-dim:      #4a4a4a;
+  --accent:        #00c8ff;
+  --accent-bg:     rgba(0,200,255,0.06);
+  --accent-glow:   rgba(0,200,255,0.4);
+  --border:        rgba(0,200,255,0.16);
+  --border-mid:    rgba(0,200,255,0.35);
+  --border-hi:     rgba(0,200,255,0.65);
+  --label:         #8a8a8a;
+  --label-dim:     #5a5a5a;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -16,28 +39,35 @@ body,
   height: 100%;
   width: 100%;
   overflow: hidden;
-  background-color: #020912;
-  color: #cce4f6;
+  background-color: var(--root-bg);
+  color: var(--text-primary);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: #020912; }
+::-webkit-scrollbar-track { background: var(--root-bg); }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0,200,255,0.18);
+  background: var(--border-mid);
   border-radius: 2px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,200,255,0.38); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+
+/* ── Light mode overrides for bg-grid pattern ──────────────────────────────── */
+html.light .bg-grid {
+  background-image: radial-gradient(rgba(0,100,180,0.08) 1px, transparent 1px);
+}
 
 /* ── HUD Panel — the cornerstone design element ────────────────────────────── */
 /*   Adds glowing corner brackets (TL + BR) to any element via pseudo-elements */
 .hud-panel {
   position: relative;
-  background: rgba(4, 11, 22, 0.97);
-  border: 1px solid rgba(0, 200, 255, 0.16);
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .hud-panel::before,
@@ -51,13 +81,13 @@ body,
 }
 .hud-panel::before {
   top: -1px; left: -1px;
-  border-top:  2px solid rgba(0, 200, 255, 0.75);
-  border-left: 2px solid rgba(0, 200, 255, 0.75);
+  border-top:  2px solid var(--border-hi);
+  border-left: 2px solid var(--border-hi);
 }
 .hud-panel::after {
   bottom: -1px; right: -1px;
-  border-bottom: 2px solid rgba(0, 200, 255, 0.55);
-  border-right:  2px solid rgba(0, 200, 255, 0.55);
+  border-bottom: 2px solid var(--border-mid);
+  border-right:  2px solid var(--border-mid);
 }
 
 /* Glow variant — more prominent for key panels */
@@ -68,7 +98,7 @@ body,
 /* ── HUD Rule — glowing horizontal divider ─────────────────────────────────── */
 .hud-rule {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(0,200,255,0.35) 20%, rgba(0,200,255,0.35) 80%, transparent);
+  background: linear-gradient(90deg, transparent, var(--border-mid) 20%, var(--border-mid) 80%, transparent);
   margin: 2px 0;
 }
 
@@ -78,7 +108,7 @@ body,
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(0, 200, 255, 0.6);
+  color: var(--label);
   font-family: 'Share Tech Mono', monospace;
 }
 
@@ -91,16 +121,16 @@ body,
 
 /* ── Glass card ────────────────────────────────────────────────────────────── */
 .glass-card {
-  background: rgba(6, 14, 28, 0.92);
-  border: 1px solid rgba(0, 200, 255, 0.14);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
   backdrop-filter: blur(12px);
 }
 
 /* ── Card ──────────────────────────────────────────────────────────────────── */
 .card {
   @apply rounded-xl p-5;
-  background: #060f1e;
-  border: 1px solid rgba(0, 200, 255, 0.13);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
 }
 
 /* ── Buttons ───────────────────────────────────────────────────────────────── */
@@ -114,7 +144,7 @@ body,
   @apply text-navy-400 hover:text-white text-sm transition-colors duration-200 underline underline-offset-2;
 }
 
-/* ── Sidebar items ─────────────────────────────────────────────────────────── */
+/* ── Sidebar items — always dark (sidebar stays dark in both themes) ─────────── */
 .sidebar-item {
   @apply flex items-center gap-3 px-4 py-2 rounded-none cursor-pointer transition-all duration-150 text-xs font-medium;
   color: #507090;
@@ -195,3 +225,109 @@ body,
 .text-glow-cyan  { text-shadow: 0 0 10px rgba(0,200,255,0.6), 0 0 20px rgba(0,200,255,0.3); }
 .text-glow-green { text-shadow: 0 0 10px rgba(0,230,118,0.5); }
 .text-glow-amber { text-shadow: 0 0 10px rgba(255,170,0,0.5); }
+
+/* ── Entry slide ────────────────────────────────────────────────────────────── */
+@keyframes entrySlide {
+  0%   { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-entry {
+  opacity: 0;
+  animation: entrySlide 0.32s ease-out forwards;
+}
+
+/* ── Slide in from left ──────────────────────────────────────────────────────── */
+@keyframes slideInLeft {
+  0%   { opacity: 0; transform: translateX(-16px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.18s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+/* ── Bar fill (scaleX from 0 → 1) ──────────────────────────────────────────── */
+@keyframes barFill {
+  0%   { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+.bar-fill {
+  transform-origin: left;
+  animation: barFill 0.75s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* ── Stagger delays ─────────────────────────────────────────────────────────── */
+.delay-1 { animation-delay: 60ms; }
+.delay-2 { animation-delay: 120ms; }
+.delay-3 { animation-delay: 180ms; }
+.delay-4 { animation-delay: 240ms; }
+.delay-5 { animation-delay: 300ms; }
+.delay-6 { animation-delay: 360ms; }
+
+/* ── Interactive HUD panel hover ────────────────────────────────────────────── */
+.hud-panel-hover {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease, background 0.2s ease;
+  cursor: default;
+}
+.hud-panel-hover:hover {
+  border-color: var(--border-mid) !important;
+  box-shadow: 0 0 18px var(--accent-bg);
+  transform: translateY(-1px);
+}
+
+/* ── HUD table ──────────────────────────────────────────────────────────────── */
+.hud-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.hud-table thead th {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+.hud-table thead th:hover { cursor: pointer; color: var(--accent); }
+.hud-table tbody tr {
+  transition: background 0.12s ease;
+  border-bottom: 1px solid var(--border);
+}
+.hud-table tbody tr:hover {
+  background: var(--accent-bg) !important;
+}
+.hud-table tbody td {
+  padding: 6px 10px;
+  vertical-align: middle;
+  color: var(--text-primary);
+}
+
+/* ── Number glow ────────────────────────────────────────────────────────────── */
+.num-glow-green { text-shadow: 0 0 14px rgba(0,230,118,0.55); }
+.num-glow-cyan  { text-shadow: 0 0 14px rgba(0,200,255,0.55); }
+.num-glow-amber { text-shadow: 0 0 14px rgba(255,170,0,0.55); }
+.num-glow-red   { text-shadow: 0 0 14px rgba(255,68,68,0.55); }
+
+/* ── Section panel (generic content panel in views) ─────────────────────────── */
+.section-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+/* ── Shimmer sweep on active elements ───────────────────────────────────────── */
+@keyframes shimmerSweep {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ── Pulsing dot indicator ──────────────────────────────────────────────────── */
+@keyframes dotPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.4); }
+}
+.dot-pulse { animation: dotPulse 2s ease-in-out infinite; }

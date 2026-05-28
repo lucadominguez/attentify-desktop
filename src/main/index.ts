@@ -2,8 +2,10 @@ import { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } from 'ele
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { execSync } from 'child_process'
-import { initIpc, setInterstitialWindow, setMainWindow, startTracking } from './ipc'
+import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking } from './ipc'
 import { getStore, patchStore } from './store'
+import { openDatabase, closeDatabase } from './data/db'
+import { migrateFromStateJson } from './data/repository'
 
 // GPU shader disk cache causes "Access is denied" errors when the process runs
 // at a different privilege level than the session that originally created the
@@ -68,7 +70,10 @@ function createMainWindow(): void {
     return { action: 'deny' }
   })
 
-  mainWin.on('closed', () => { mainWin = null })
+  mainWin.on('closed', () => {
+    mainWin = null
+    setMainWindow(null)  // also null out the ipc.ts reference so sendMain() stops firing
+  })
 }
 
 function createInterstitialWindow(): void {
@@ -97,7 +102,10 @@ function createInterstitialWindow(): void {
     interstitialWin.loadFile(join(__dirname, '../renderer/interstitial.html'))
   }
 
-  interstitialWin.on('closed', () => { interstitialWin = null })
+  interstitialWin.on('closed', () => {
+    interstitialWin = null
+    setInterstitialWindow(null)
+  })
   setInterstitialWindow(interstitialWin)
 }
 
@@ -142,7 +150,26 @@ ipcMain.handle('elevation:relaunch-admin', () => {
   return true
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Open DB before anything else — IPC handlers need it
+  try {
+    await openDatabase()
+    // One-time migration from state.json on first run
+    const store = getStore()
+    if (!store.onboardingComplete) {
+      // Skip migration if no historical data
+    } else {
+      migrateFromStateJson({
+        activitySessions: store.activitySessions ?? [],
+        heuristicAlerts: store.heuristicAlerts ?? [],
+        blocklist: store.blocklist,
+        sessions: store.sessions,
+      })
+    }
+  } catch (e) {
+    console.error('[main] DB open failed:', e)
+  }
+
   initIpc()
   createMainWindow()
   createInterstitialWindow()
@@ -160,5 +187,8 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  // Stop monitoring subprocesses FIRST so they don't fire events during teardown
+  stopTracking()
   patchStore({ sessions: getStore().sessions.map((s) => ({ ...s, active: false })) })
+  closeDatabase()
 })

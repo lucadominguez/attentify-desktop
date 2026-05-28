@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Shield, Plus, Trash2, Globe, Cpu, ToggleLeft, ToggleRight } from 'lucide-react'
 import type { AppStore } from '@shared/types'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -10,6 +11,7 @@ interface FocusShieldProps {
 }
 
 export default function FocusShield({ store, onRefresh }: FocusShieldProps): React.ReactElement {
+  const { colors } = useTheme()
   const [newDomain, setNewDomain] = useState('')
   const [newProcess, setNewProcess] = useState('')
   const [adding, setAdding] = useState<'domain' | 'process' | null>(null)
@@ -65,15 +67,15 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
     <div className="p-6 animate-fade-in space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white font-bold text-xl flex items-center gap-2">
+          <h1 className="font-bold text-xl flex items-center gap-2" style={{ color: colors.textPrimary }}>
             <Shield size={20} className="text-accent-blue" /> Focus Shield
           </h1>
-          <p className="text-navy-400 text-sm mt-0.5">Manage your active blocklists and protection shields</p>
+          <p className="text-sm mt-0.5" style={{ color: colors.textSecondary }}>Manage your active blocklists and protection shields</p>
         </div>
         <button
           onClick={toggleShield}
           className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors"
-          style={{ background: shieldActive ? 'rgba(76,175,80,0.15)' : 'rgba(30,58,95,0.5)', border: `1px solid ${shieldActive ? 'rgba(76,175,80,0.3)' : 'rgba(30,58,95,0.8)'}`, color: shieldActive ? '#4caf50' : '#94a3b8' }}
+          style={{ background: shieldActive ? 'rgba(76,175,80,0.15)' : colors.cardBg, border: `1px solid ${shieldActive ? 'rgba(76,175,80,0.3)' : colors.border}`, color: shieldActive ? '#4caf50' : colors.textSecondary }}
         >
           {shieldActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
           {shieldActive ? 'Shield ON' : 'Shield OFF'}
@@ -84,25 +86,26 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Globe size={16} className="text-accent-blue" />
-          <h2 className="text-white font-semibold text-sm">Blocked Websites</h2>
-          <span className="ml-auto text-navy-500 text-xs">{store.blocklist.domains.length} entries</span>
+          <h2 className="font-semibold text-sm" style={{ color: colors.textPrimary }}>Blocked Websites</h2>
+          <span className="ml-auto text-xs" style={{ color: colors.textMuted }}>{store.blocklist.domains.length} entries</span>
         </div>
         {store.blocklist.domains.length === 0 ? (
-          <p className="text-navy-500 text-xs text-center py-4">No domains blocked yet. Add one below.</p>
+          <p className="text-xs text-center py-4" style={{ color: colors.textMuted }}>No domains blocked yet. Add one below.</p>
         ) : (
           <div className="space-y-1 mb-4 max-h-48 overflow-y-auto">
             {store.blocklist.domains.map((d) => (
-              <div key={d.domain} className="flex items-center justify-between px-3 py-2 rounded-lg bg-navy-750/50 group">
-                <span className="text-white text-xs font-medium">{d.domain}</span>
+              <div key={d.domain} className="flex items-center justify-between px-3 py-2 rounded-lg group" style={{ background: colors.rowEven }}>
+                <span className="text-xs font-medium" style={{ color: colors.textPrimary }}>{d.domain}</span>
                 <div className="flex items-center gap-2">
                   {d.expiresAt && (
-                    <span className="text-navy-500 text-xs">
+                    <span className="text-xs" style={{ color: colors.textMuted }}>
                       until {new Date(d.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                   <button
                     onClick={() => handleRemoveDomain(d.domain)}
-                    className="opacity-0 group-hover:opacity-100 text-navy-500 hover:text-accent-orange transition-all"
+                    className="opacity-0 group-hover:opacity-100 transition-all"
+                    style={{ color: colors.textMuted }}
                   >
                     <Trash2 size={13} />
                   </button>
@@ -118,7 +121,8 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
             value={newDomain}
             onChange={(e) => setNewDomain(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddDomain()}
-            className="flex-1 bg-navy-750 border border-navy-600 text-white text-xs px-3 py-2 rounded-lg outline-none focus:border-accent-blue placeholder-navy-500 transition-colors"
+            className="flex-1 text-xs px-3 py-2 rounded-lg outline-none transition-colors"
+            style={{ background: colors.inputBg, border: `1px solid ${colors.border}`, color: colors.textPrimary }}
           />
           <button
             onClick={handleAddDomain}
@@ -134,19 +138,20 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
       <div className="card">
         <div className="flex items-center gap-2 mb-4">
           <Cpu size={16} className="text-accent-amber" />
-          <h2 className="text-white font-semibold text-sm">Blocked Applications</h2>
-          <span className="ml-auto text-navy-500 text-xs">{store.blocklist.processes.length} entries</span>
+          <h2 className="font-semibold text-sm" style={{ color: colors.textPrimary }}>Blocked Applications</h2>
+          <span className="ml-auto text-xs" style={{ color: colors.textMuted }}>{store.blocklist.processes.length} entries</span>
         </div>
         {store.blocklist.processes.length === 0 ? (
-          <p className="text-navy-500 text-xs text-center py-4">No applications blocked yet.</p>
+          <p className="text-xs text-center py-4" style={{ color: colors.textMuted }}>No applications blocked yet.</p>
         ) : (
           <div className="space-y-1 mb-4 max-h-48 overflow-y-auto">
             {store.blocklist.processes.map((p) => (
-              <div key={p.name} className="flex items-center justify-between px-3 py-2 rounded-lg bg-navy-750/50 group">
-                <span className="text-white text-xs font-medium">{p.name}</span>
+              <div key={p.name} className="flex items-center justify-between px-3 py-2 rounded-lg group" style={{ background: colors.rowEven }}>
+                <span className="text-xs font-medium" style={{ color: colors.textPrimary }}>{p.name}</span>
                 <button
                   onClick={() => handleRemoveProcess(p.name)}
-                  className="opacity-0 group-hover:opacity-100 text-navy-500 hover:text-accent-orange transition-all"
+                  className="opacity-0 group-hover:opacity-100 transition-all"
+                  style={{ color: colors.textMuted }}
                 >
                   <Trash2 size={13} />
                 </button>
@@ -161,7 +166,8 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
             value={newProcess}
             onChange={(e) => setNewProcess(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAddProcess()}
-            className="flex-1 bg-navy-750 border border-navy-600 text-white text-xs px-3 py-2 rounded-lg outline-none focus:border-accent-blue placeholder-navy-500 transition-colors"
+            className="flex-1 text-xs px-3 py-2 rounded-lg outline-none transition-colors"
+            style={{ background: colors.inputBg, border: `1px solid ${colors.border}`, color: colors.textPrimary }}
           />
           <button
             onClick={handleAddProcess}
@@ -174,11 +180,11 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
       </div>
 
       {store.elevation === 'soft' && (
-        <div className="p-4 rounded-xl bg-accent-amber/10 border border-accent-amber/20 flex items-start gap-3">
-          <span className="text-accent-amber text-xl">⚠</span>
+        <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)' }}>
+          <span className="text-xl" style={{ color: '#ffb800' }}>⚠</span>
           <div>
-            <p className="text-accent-amber font-semibold text-sm">Soft mode active</p>
-            <p className="text-navy-400 text-xs mt-0.5">
+            <p className="font-semibold text-sm" style={{ color: '#ffb800' }}>Soft mode active</p>
+            <p className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
               Hosts file editing is disabled. Blocks are tracked but not enforced. Grant admin access from the onboarding screen to enable full protection.
             </p>
           </div>

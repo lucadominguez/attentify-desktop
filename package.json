@@ -66,6 +66,8 @@
     "vite": "^5.0.11"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "sql.js": "^1.10.3",
     "lucide-react": "^0.312.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"

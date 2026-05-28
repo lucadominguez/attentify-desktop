@@ -175,6 +175,7 @@ export type ViewName =
   | 'deep-clean'
   | 'analytics'
   | 'patterns'
+  | 'actions'
   | 'focus-browser'
   | 'deep-focus'
   | 'schedule-manager'
@@ -188,4 +189,38 @@ export interface IntentCheckResult {
   reason: string
   allowedMinutes?: number
   ollamaUsed: boolean
+}
+
+// ── Agent / streaming ────────────────────────────────────────────────────────
+
+export interface AgentChunkEvent {
+  text: string
+}
+
+export interface AgentDoneEvent {
+  id: string
+  content: string
+  timestamp: number
+}
+
+export interface AgentErrorEvent {
+  message: string
+}
+
+export interface AgentProactiveEvent {
+  text: string
+  timestamp: number
+}
+
+export interface InferenceSuggestion {
+  id: string
+  type: 'domain' | 'app'
+  value: string
+  confidence: number
+  reasoning?: string
+  action?: string
+}
+
+export interface ApiKeyStatus {
+  hasKey: boolean
 }

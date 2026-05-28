@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppStore, ScanResult, FocusSession, ElevationStatus, IntentCheckResult } from '../shared/types'
+import type {
+  AppStore, ScanResult, FocusSession, ElevationStatus, IntentCheckResult,
+  AgentDoneEvent, AgentProactiveEvent, HeuristicAlert, DailyStats, ActivitySession,
+} from '../shared/types'
 
 const api = {
   getStore: (): Promise<AppStore> => ipcRenderer.invoke('store:get'),
@@ -22,8 +25,79 @@ const api = {
     ipcRenderer.invoke('session:start', mode, durationMs, allowlist),
   stopSession: (id: string): Promise<void> => ipcRenderer.invoke('session:stop', id),
 
+  // ── Streaming chat (new) ─────────────────────────────────────────────────
+  chatStart: (text: string): void => ipcRenderer.send('chat:start', text),
+  onChatChunk: (cb: (chunk: string) => void): (() => void) => {
+    const handler = (_e: unknown, chunk: string): void => cb(chunk)
+    ipcRenderer.on('chat:chunk', handler)
+    return () => ipcRenderer.off('chat:chunk', handler)
+  },
+  onChatTool: (cb: (toolName: string) => void): (() => void) => {
+    const handler = (_e: unknown, toolName: string): void => cb(toolName)
+    ipcRenderer.on('chat:tool', handler)
+    return () => ipcRenderer.off('chat:tool', handler)
+  },
+  onChatDone: (cb: (event: AgentDoneEvent) => void): (() => void) => {
+    const handler = (_e: unknown, evt: AgentDoneEvent): void => cb(evt)
+    ipcRenderer.on('chat:done', handler)
+    return () => ipcRenderer.off('chat:done', handler)
+  },
+  onChatError: (cb: (err: string) => void): (() => void) => {
+    const handler = (_e: unknown, err: string): void => cb(err)
+    ipcRenderer.on('chat:error', handler)
+    return () => ipcRenderer.off('chat:error', handler)
+  },
+
+  // Legacy (regex engine fallback)
   sendMessage: (text: string): Promise<{ reply: string; actions: unknown[] }> =>
     ipcRenderer.invoke('chat:message', text),
+
+  // ── API Key ──────────────────────────────────────────────────────────────
+  getApiKeyStatus: (): Promise<{ hasKey: boolean }> => ipcRenderer.invoke('apikey:get-status'),
+  setApiKey: (key: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('apikey:set', key),
+  deleteApiKey: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('apikey:delete'),
+
+  // ── Goals ────────────────────────────────────────────────────────────────
+  getGoals: () => ipcRenderer.invoke('goals:get'),
+  addGoal: (text: string, priority?: number) => ipcRenderer.invoke('goals:add', text, priority),
+  clearGoal: (id: string) => ipcRenderer.invoke('goals:clear', id),
+
+  // ── Preferences ──────────────────────────────────────────────────────────
+  getPreferences: (query?: string) => ipcRenderer.invoke('preferences:get', query),
+  setPreference: (key: string, value: string, scope?: string) => ipcRenderer.invoke('preferences:set', key, value, scope),
+  deletePreference: (key: string) => ipcRenderer.invoke('preferences:delete', key),
+
+  // ── Inferences ────────────────────────────────────────────────────────────
+  getInferences: (status?: string) => ipcRenderer.invoke('inferences:get', status),
+  resolveInference: (id: string, status: 'confirmed' | 'rejected') => ipcRenderer.invoke('inferences:resolve', id, status),
+
+  // ── Agent history & proactive ─────────────────────────────────────────────
+  getAgentHistory: (limit?: number) => ipcRenderer.invoke('agent:get-history', limit),
+  dismissProactive: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:dismiss-proactive'),
+
+  onAgentProactive: (cb: (evt: AgentProactiveEvent) => void): (() => void) => {
+    const handler = (_e: unknown, evt: AgentProactiveEvent): void => cb(evt)
+    ipcRenderer.on('agent:proactive', handler)
+    return () => ipcRenderer.off('agent:proactive', handler)
+  },
+
+  onStoreRefresh: (cb: () => void): (() => void) => {
+    const handler = (): void => cb()
+    ipcRenderer.on('store:refresh', handler)
+    return () => ipcRenderer.off('store:refresh', handler)
+  },
+
+  onInferenceSuggest: (cb: (inf: unknown) => void): (() => void) => {
+    const handler = (_e: unknown, inf: unknown): void => cb(inf)
+    ipcRenderer.on('inference:suggest', handler)
+    return () => ipcRenderer.off('inference:suggest', handler)
+  },
+
+  onInferenceAutoBlocked: (cb: (evt: { domain: string; confidence: number }) => void): (() => void) => {
+    const handler = (_e: unknown, evt: unknown): void => cb(evt as { domain: string; confidence: number })
+    ipcRenderer.on('inference:auto-blocked', handler)
+    return () => ipcRenderer.off('inference:auto-blocked', handler)
+  },
 
   checkIntent: (site: string, reason: string): Promise<IntentCheckResult> =>
     ipcRenderer.invoke('intent:check', site, reason),
@@ -33,13 +107,17 @@ const api = {
   relaunchAsAdmin: (): Promise<boolean> => ipcRenderer.invoke('elevation:relaunch-admin'),
 
   getAnalytics: (): Promise<{
-    today: import('../shared/types').DailyStats
+    today: DailyStats
     weekly: { focusedTime: number; distractedTime: number; timePerApp: Record<string, number>; sessionCount: number; blockEvents: number }
-    heuristicAlerts: import('../shared/types').HeuristicAlert[]
-    recentSessions: import('../shared/types').ActivitySession[]
+    heuristicAlerts: HeuristicAlert[]
+    recentSessions: ActivitySession[]
+    domains: { domain: string; category: string; classification: string; confidence: number; total_ms: number; last_seen: number }[]
   }> => ipcRenderer.invoke('analytics:get'),
 
   dismissHeuristicAlert: (id: string): Promise<void> => ipcRenderer.invoke('heuristics:dismiss', id),
+
+  exportPdf: (): Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }> =>
+    ipcRenderer.invoke('analytics:export-pdf'),
 
   registerStartupDaemon: (): Promise<boolean> => ipcRenderer.invoke('daemon:register-startup'),
   unregisterStartupDaemon: (): Promise<boolean> => ipcRenderer.invoke('daemon:unregister-startup'),
@@ -52,8 +130,14 @@ const api = {
   onInterstitialData: (cb: (data: { blocked: string; type: string; endsAt?: number }) => void) => {
     ipcRenderer.on('interstitial:data', (_e, data) => cb(data))
   },
-  onHeuristicAlert: (cb: (alerts: import('../shared/types').HeuristicAlert[]) => void) => {
+  onHeuristicAlert: (cb: (alerts: HeuristicAlert[]) => void) => {
     ipcRenderer.on('heuristic:alert', (_e, alerts) => cb(alerts))
+  },
+
+  onGuardAlert: (cb: (alert: { url: string; domain: string; title: string; category: string; message: string; searchQuery?: string; timestamp: number }) => void): (() => void) => {
+    const handler = (_e: unknown, alert: unknown): void => cb(alert as Parameters<typeof cb>[0])
+    ipcRenderer.on('guard:alert', handler)
+    return () => ipcRenderer.off('guard:alert', handler)
   },
 
   minimizeWindow: (): void => ipcRenderer.send('window:minimize'),

@@ -51,6 +51,9 @@ export default {
         'bracket-in':    'bracketIn 0.18s ease-out',
         'scan-h':        'scanH 3.5s linear infinite',
         'float':         'float 6s ease-in-out infinite',
+        'entry-slide':   'entrySlide 0.32s ease-out forwards',
+        'dot-pulse':     'dotPulse 2s ease-in-out infinite',
+        'bar-fill':      'barFill 0.75s cubic-bezier(0.4,0,0.2,1) forwards',
       },
       keyframes: {
         fadeIn: {

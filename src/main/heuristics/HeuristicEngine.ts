@@ -54,13 +54,16 @@ export class HeuristicEngine {
     const last10 = sessions.filter((s) => s.startTime >= w10)
 
     // ── 1. Rapid app-switching ──────────────────────────────────────────────
-    const switchCount = recent.length
-    const rate = Math.round(switchRate(recent))
-    if (switchCount > 20 && switchCount > this.lastSwitchCount + 5) {
+    // Only count process-level switches (not title changes within same app)
+    const sortedRecent = [...recent].sort((a, b) => a.startTime - b.startTime)
+    const appSwitches = sortedRecent.filter((s, i) => i === 0 || s.app !== sortedRecent[i - 1]!.app)
+    const switchCount = appSwitches.length
+    const rate = Math.round(switchRate(appSwitches))
+    if (switchCount > 15 && switchCount > this.lastSwitchCount + 5) {
       newAlerts.push({
         id: randomUUID(), type: 'rapid-switching', severity: 'medium',
         title: 'Rapid app-switching detected',
-        description: `${switchCount} window switches in 20 minutes (${rate}/h). Knowledge workers average 60–80/h; deep work lives below 20/h. Your attention is fragmented.`,
+        description: `${switchCount} app switches in 20 minutes (${rate}/h). Knowledge workers average 60–80/h; deep work lives below 20/h. Your attention is fragmented.`,
         detectedAt: now, dismissed: false, switchRate: rate,
       })
     }
@@ -153,14 +156,17 @@ export class HeuristicEngine {
     }
 
     // ── 8. Notification FOMO (comm apps high frequency) ───────────────────
+    // Only count process-level switches to comm apps (not title changes)
     const commSessions = sessions.filter((s) => COMMS_APPS.has(s.app.toLowerCase()) && s.startTime >= w15)
-    const commRate = commSessions.length / 0.25 // per hour over 15min window
-    if (commRate >= 8 && !this.alerts.some((a) => a.type === 'notification-fomo' && a.detectedAt > now - 15 * 60 * 1000)) {
+    const sortedComm = [...commSessions].sort((a, b) => a.startTime - b.startTime)
+    const commSwitches = sortedComm.filter((s, i) => i === 0 || s.app !== sortedComm[i - 1]!.app)
+    const commRate = Math.round(commSwitches.length / 0.25)
+    if (commSwitches.length >= 5 && !this.alerts.some((a) => a.type === 'notification-fomo' && a.detectedAt > now - 15 * 60 * 1000)) {
       const topComm = commSessions[0]?.app ?? 'messaging app'
       newAlerts.push({
         id: randomUUID(), type: 'notification-fomo', severity: 'medium',
         title: `Notification FOMO: ${topComm}`,
-        description: `${Math.round(commRate)} checks/hour on ${topComm}. Fear of missing conversations is a manufactured anxiety — each notification is designed to create exactly this reflex.`,
+        description: `${commRate} checks/hour on ${topComm}. Fear of missing conversations is a manufactured anxiety — each notification is designed to create exactly this reflex.`,
         detectedAt: now, app: topComm, dismissed: false,
       })
     }
@@ -177,13 +183,21 @@ export class HeuristicEngine {
       })
     }
 
-    // ── 10. Phantom checking (<30s opens) ────────────────────────────────
-    const phantom = last10.filter((s) => s.duration < 30_000)
-    if (phantom.length >= 4 && !this.alerts.some((a) => a.type === 'phantom-checking' && a.detectedAt > now - 10 * 60 * 1000)) {
+    // ── 10. Phantom checking — brief switches INTO distraction/comm apps ────
+    // Only count cross-app transitions (not title changes within same app browser)
+    const sorted10 = [...last10].sort((a, b) => a.startTime - b.startTime)
+    let phantomCount = 0
+    for (let i = 1; i < sorted10.length; i++) {
+      const s = sorted10[i]!, prev = sorted10[i - 1]!
+      if (s.app !== prev.app && s.duration < 30_000 && (s.isDistraction || COMMS_APPS.has(s.app.toLowerCase()))) {
+        phantomCount++
+      }
+    }
+    if (phantomCount >= 4 && !this.alerts.some((a) => a.type === 'phantom-checking' && a.detectedAt > now - 20 * 60 * 1000)) {
       newAlerts.push({
         id: randomUUID(), type: 'phantom-checking', severity: 'low',
-        title: `${phantom.length} phantom checks detected`,
-        description: `${phantom.length} app opens under 30 seconds in 10 minutes — no real purpose, pure habit. The app opens before the decision is made. This is automated compulsion.`,
+        title: `${phantomCount} phantom checks in 10 minutes`,
+        description: `${phantomCount} quick switches to a distracting app lasting under 30 seconds each — checking without intent. The app opens before the decision is made.`,
         detectedAt: now, dismissed: false,
       })
     }

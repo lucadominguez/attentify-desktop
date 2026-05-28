@@ -4,6 +4,7 @@ import {
   Sparkles, ChevronDown, ChevronUp, AlertTriangle, X,
 } from 'lucide-react'
 import type { AppStore, ScanResult, ScanIssue } from '@shared/types'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -142,6 +143,7 @@ function buildChatMessage(results: ScanResult): string {
 }
 
 export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.ReactElement {
+  const { colors } = useTheme()
   const [scanning, setScanning] = useState(false)
   const [scanStep, setScanStep] = useState('')
   const [progress, setProgress] = useState(0)
@@ -254,10 +256,10 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white font-bold text-xl flex items-center gap-2">
+          <h1 className="font-bold text-xl flex items-center gap-2" style={{ color: colors.textPrimary }}>
             <Zap size={19} className="text-accent-blue" /> Deep Clean
           </h1>
-          <p className="text-[10px] mt-0.5" style={{ color: '#8faac4' }}>Scan for attention leaks · generate a remediation plan · apply with one click</p>
+          <p className="text-[10px] mt-0.5" style={{ color: colors.textSecondary }}>Scan for attention leaks · generate a remediation plan · apply with one click</p>
         </div>
         <button
           onClick={runScan}
@@ -273,7 +275,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
       {scanning && (
         <div
           className="rounded-xl p-5 flex flex-col items-center text-center"
-          style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}
+          style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
         >
           <div className="relative w-14 h-14 mb-4">
             <div className="absolute inset-0 rounded-full border-2 border-accent-blue/20" />
@@ -282,11 +284,11 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
               <ScanLine size={20} className="text-accent-blue" />
             </div>
           </div>
-          <p className="text-white text-sm font-semibold mb-2">{scanStep}</p>
-          <div className="w-40 bg-navy-800 rounded-full h-1.5 overflow-hidden">
+          <p className="text-sm font-semibold mb-2" style={{ color: colors.textPrimary }}>{scanStep}</p>
+          <div className="w-40 rounded-full h-1.5 overflow-hidden" style={{ background: colors.border }}>
             <div className="h-full rounded-full bg-accent-blue transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
-          <p className="text-[10px] mt-1.5 tabular-nums" style={{ color: '#7a9ab5' }}>{progress}%</p>
+          <p className="text-[10px] mt-1.5 tabular-nums" style={{ color: colors.textSecondary }}>{progress}%</p>
         </div>
       )}
 
@@ -294,13 +296,13 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
       {!results && !scanning && (
         <div
           className="rounded-xl p-8 flex flex-col items-center text-center"
-          style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}
+          style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
         >
           <div className="w-14 h-14 rounded-xl bg-accent-blue/10 flex items-center justify-center mb-3">
             <Zap size={28} className="text-accent-blue" />
           </div>
-          <p className="text-white font-bold text-base mb-1">No scan run yet</p>
-          <p className="text-xs max-w-xs" style={{ color: '#8faac4' }}>Scan your system to detect attention leaks — running apps, browsing history, notification overload, and more.</p>
+          <p className="font-bold text-base mb-1" style={{ color: colors.textPrimary }}>No scan run yet</p>
+          <p className="text-xs max-w-xs" style={{ color: colors.textSecondary }}>Scan your system to detect attention leaks — running apps, browsing history, notification overload, and more.</p>
         </div>
       )}
 
@@ -310,7 +312,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
           {/* Result summary bar */}
           <div
             className="rounded-xl px-4 py-3 flex items-center gap-4"
-            style={{ background: '#0d1b2a', border: '1px solid rgba(30,58,95,0.5)' }}
+            style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
           >
             <div className="flex items-center gap-2">
               {results.issueCount === 0 ? (
@@ -319,10 +321,10 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                 <AlertTriangle size={20} className="text-accent-orange" />
               )}
               <div>
-                <p className="text-white text-sm font-bold">
+                <p className="text-sm font-bold" style={{ color: colors.textPrimary }}>
                   {results.issueCount === 0 ? 'Clean — no issues found' : `${results.issueCount} attention leak${results.issueCount !== 1 ? 's' : ''} found`}
                 </p>
-                <p className="text-[9px]" style={{ color: '#7a9ab5' }}>
+                <p className="text-[9px]" style={{ color: colors.textSecondary }}>
                   {new Date(results.runAt).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
                   {new Date(results.runAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
@@ -343,7 +345,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                   style={{ background: chip.color + '15', border: `1px solid ${chip.color}30` }}
                 >
                   <span className="text-[11px] font-bold tabular-nums" style={{ color: chip.color }}>{chip.value}</span>
-                  <span className="text-[9px]" style={{ color: '#8faac4' }}>{chip.label}</span>
+                  <span className="text-[9px]" style={{ color: colors.textSecondary }}>{chip.label}</span>
                 </div>
               ))}
             </div>
@@ -373,7 +375,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
               >
                 <div className="flex items-center gap-2">
                   <Sparkles size={14} className="text-indigo-400" />
-                  <p className="text-white text-sm font-semibold">Remediation Plan</p>
+                  <p className="text-sm font-semibold" style={{ color: colors.textPrimary }}>Remediation Plan</p>
                   <span className="text-[10px] text-indigo-400">
                     {appliedCount}/{planSteps.length} applied
                   </span>
@@ -408,13 +410,13 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
               </div>
 
               {/* Steps */}
-              <div style={{ background: '#0a1222' }}>
+              <div style={{ background: colors.cardBg }}>
                 {planSteps.map((step, i) => (
                   <div
                     key={step.id}
                     className="flex items-start gap-3 px-4 py-3 transition-colors"
                     style={{
-                      borderBottom: i < planSteps.length - 1 ? '1px solid rgba(30,58,95,0.3)' : 'none',
+                      borderBottom: i < planSteps.length - 1 ? `1px solid ${colors.border}` : 'none',
                       opacity: step.skipped ? 0.4 : 1,
                     }}
                   >
@@ -425,10 +427,10 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                         background: step.applied
                           ? 'rgba(76,175,80,0.2)'
                           : step.skipped
-                          ? 'rgba(30,58,95,0.4)'
+                          ? colors.accentBg
                           : 'rgba(129,140,248,0.2)',
-                        color: step.applied ? '#66bb6a' : step.skipped ? '#546e7a' : '#a5b4fc',
-                        border: `1px solid ${step.applied ? 'rgba(76,175,80,0.3)' : step.skipped ? 'rgba(30,58,95,0.5)' : 'rgba(129,140,248,0.3)'}`,
+                        color: step.applied ? '#66bb6a' : step.skipped ? colors.textMuted : '#a5b4fc',
+                        border: `1px solid ${step.applied ? 'rgba(76,175,80,0.3)' : step.skipped ? colors.border : 'rgba(129,140,248,0.3)'}`,
                       }}
                     >
                       {step.applied ? '✓' : i + 1}
@@ -443,9 +445,9 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                         >
                           {step.tag}
                         </span>
-                        <p className="text-white text-[12px] font-medium">{step.label}</p>
+                        <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>{step.label}</p>
                       </div>
-                      <p className="text-[10px] truncate" style={{ color: '#8faac4' }}>{step.description}</p>
+                      <p className="text-[10px] truncate" style={{ color: colors.textSecondary }}>{step.description}</p>
                     </div>
 
                     {/* Actions */}
@@ -453,7 +455,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                       <div className="flex items-center gap-1.5 flex-shrink-0">
                         <button
                           onClick={() => skipStep(step.id)}
-                          className="hover:text-white transition-colors" style={{ color: '#7a9ab5' }}
+                          className="hover:text-white transition-colors" style={{ color: colors.textSecondary }}
                           title="Skip this step"
                         >
                           <X size={12} />
@@ -485,19 +487,19 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
           {results.issues.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-2 px-0.5">
-                <p className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: '#7a9ab5' }}>
+                <p className="text-[9px] font-semibold uppercase tracking-widest" style={{ color: colors.textSecondary }}>
                   Detected Issues
                 </p>
                 {onChatWith && !planVisible && (
                   <button
                     onClick={() => onChatWith(buildChatMessage(results))}
-                    className="ml-auto text-[10px] hover:text-accent-blue transition-colors" style={{ color: '#8faac4' }}
+                    className="ml-auto text-[10px] hover:text-accent-blue transition-colors" style={{ color: colors.textSecondary }}
                   >
                     Ask Daemon to handle all →
                   </button>
                 )}
               </div>
-              <div className="rounded-xl overflow-hidden" style={{ border: '1px solid rgba(30,58,95,0.5)' }}>
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${colors.border}` }}>
                 {results.issues.map((issue, i) => {
                   const sevColor = SEV_COLOR[issue.severity] ?? '#546e7a'
                   const isFixed = fixedIds.has(issue.id)
@@ -507,8 +509,8 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                     <div
                       key={issue.id}
                       style={{
-                        background: isFixed ? 'rgba(76,175,80,0.04)' : i % 2 === 0 ? 'rgba(13,27,42,0.7)' : 'rgba(17,34,64,0.45)',
-                        borderBottom: i < results.issues.length - 1 ? '1px solid rgba(30,58,95,0.2)' : 'none',
+                        background: isFixed ? 'rgba(76,175,80,0.04)' : i % 2 === 0 ? colors.rowEven : colors.rowOdd,
+                        borderBottom: i < results.issues.length - 1 ? `1px solid ${colors.border}` : 'none',
                         opacity: isFixed ? 0.6 : 1,
                       }}
                     >
@@ -533,11 +535,11 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                             >
                               {issue.severity}
                             </span>
-                            <p className="text-white text-[11px] font-semibold truncate">{issue.title}</p>
+                            <p className="text-[11px] font-semibold truncate" style={{ color: colors.textPrimary }}>{issue.title}</p>
                           </div>
                         </div>
 
-                        {/* Fix button (when not fixed and not a manual step) */}
+                        {/* Fix button */}
                         {!isFixed && issue.fixAction !== 'review-extensions' && (
                           <button
                             onClick={async (e) => { e.stopPropagation(); await fixIssue(issue) }}
@@ -553,13 +555,13 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                               e.stopPropagation()
                               onChatWith(`Help me fix this scan issue: ${issue.title} — ${issue.description}`)
                             }}
-                            className="text-[10px] hover:text-accent-blue transition-colors flex-shrink-0 ml-1" style={{ color: '#7a9ab5' }}
+                            className="text-[10px] hover:text-accent-blue transition-colors flex-shrink-0 ml-1" style={{ color: colors.textSecondary }}
                             title="Ask Daemon"
                           >
                             Ask AI
                           </button>
                         )}
-                        <div className="flex-shrink-0 ml-1" style={{ color: '#7a9ab5' }}>
+                        <div className="flex-shrink-0 ml-1" style={{ color: colors.textSecondary }}>
                           {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                         </div>
                       </div>
@@ -568,7 +570,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                       {isExpanded && (
                         <div
                           className="px-3 pb-3 ml-10 text-[10px] leading-relaxed"
-                          style={{ color: '#78909c' }}
+                          style={{ color: colors.textSecondary }}
                         >
                           {issue.description}
                           {isFixed && <span className="ml-2 text-accent-green font-semibold">· Fixed</span>}

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { CheckCircle, XCircle, ChevronRight, Info, AlertCircle } from 'lucide-react'
 import IssueCard from '../components/IssueCard'
 import type { ScanResult, ScanIssue, AppStore, ViewName } from '@shared/types'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -24,6 +25,7 @@ const categoryLabels: Record<Category, string> = {
 }
 
 export default function FocusScanResults({ results, onNavigate, onRefresh, onChatWith }: FocusScanResultsProps): React.ReactElement {
+  const { colors } = useTheme()
   const [fixingId, setFixingId] = useState<string | null>(null)
   const [fixed, setFixed] = useState<Set<string>>(new Set())
   const [fixingAll, setFixingAll] = useState(false)
@@ -32,7 +34,7 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
   if (!results) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-8">
-        <p style={{ color: '#8faac4' }}>No scan results. Run a Focus Scan from the Home screen.</p>
+        <p style={{ color: colors.textSecondary }}>No scan results. Run a Focus Scan from the Home screen.</p>
         <button className="btn-primary mt-4" onClick={() => onNavigate('home')}>
           Go to Home
         </button>
@@ -136,16 +138,16 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
       <div className="px-6 pt-6 pb-4 flex-shrink-0">
         <div className="flex items-start justify-between mb-1">
           <div>
-            <h1 className="text-white font-bold text-2xl">
+            <h1 className="font-bold text-2xl" style={{ color: colors.textPrimary }}>
               We found{' '}
               <span className="text-accent-orange">{unfixedCount}</span>{' '}
               attention leak{unfixedCount !== 1 ? 's' : ''}
             </h1>
-            <p className="text-sm mt-1" style={{ color: '#8faac4' }}>
+            <p className="text-sm mt-1" style={{ color: colors.textSecondary }}>
               Each issue below has a one-click fix or you can ask Daemon to handle it.
             </p>
           </div>
-          <p className="text-xs mt-1" style={{ color: '#7a9ab5' }}>
+          <p className="text-xs mt-1" style={{ color: colors.textSecondary }}>
             Scanned {new Date(results.runAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
@@ -169,23 +171,29 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
                         <span className="text-white text-[9px] font-bold">!</span>
                       </div>
                     ) : (
-                      <XCircle size={16} className="flex-shrink-0" style={{ color: '#8faac4' }} />
+                      <XCircle size={16} className="flex-shrink-0" style={{ color: colors.textSecondary }} />
                     )}
-                    <span className={`text-xs font-semibold truncate ${allFixed ? 'text-accent-green' : hasIssues ? 'text-white' : ''}`} style={!allFixed && !hasIssues ? { color: '#8faac4' } : undefined}>
+                    <span
+                      className={`text-xs font-semibold truncate ${allFixed ? 'text-accent-green' : hasIssues ? '' : ''}`}
+                      style={!allFixed && hasIssues ? { color: colors.textPrimary } : !allFixed && !hasIssues ? { color: colors.textSecondary } : undefined}
+                    >
                       {categoryLabels[cat]}
                     </span>
                   </div>
                   <div
                     className="h-0.5 w-full rounded-full"
-                    style={{ background: allFixed ? '#4caf50' : hasIssues ? '#ff6b35' : '#1e3a5f' }}
+                    style={{ background: allFixed ? '#4caf50' : hasIssues ? '#ff6b35' : colors.border }}
                   />
-                  <span className={`text-[10px] ${allFixed ? 'text-accent-green' : hasIssues ? 'text-accent-orange' : ''}`} style={!allFixed && !hasIssues ? { color: '#8faac4' } : undefined}>
+                  <span
+                    className={`text-[10px] ${allFixed ? 'text-accent-green' : hasIssues ? 'text-accent-orange' : ''}`}
+                    style={!allFixed && !hasIssues ? { color: colors.textSecondary } : undefined}
+                  >
                     {allFixed ? 'Fixed' : hasIssues ? `${remaining} issue${remaining !== 1 ? 's' : ''}` : 'OK'}
                   </span>
                 </div>
                 {idx < categories.length - 1 && (
                   <div className="flex items-start pt-2 px-1 flex-shrink-0">
-                    <ChevronRight size={14} style={{ color: '#7a9ab5' }} />
+                    <ChevronRight size={14} style={{ color: colors.textSecondary }} />
                   </div>
                 )}
               </React.Fragment>
@@ -198,8 +206,8 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
       {infoMsg && (
         <div className="mx-6 mb-2 flex-shrink-0 p-3 rounded-xl flex items-start gap-2.5" style={{ background: 'rgba(33,150,243,0.08)', border: '1px solid rgba(33,150,243,0.2)' }}>
           <AlertCircle size={14} className="text-accent-blue flex-shrink-0 mt-0.5" />
-          <p className="text-xs leading-relaxed flex-1" style={{ color: '#c4d4e8' }}>{infoMsg}</p>
-          <button onClick={() => setInfoMsg(null)} className="hover:text-white text-xs flex-shrink-0" style={{ color: '#8faac4' }}>✕</button>
+          <p className="text-xs leading-relaxed flex-1" style={{ color: colors.textSecondary }}>{infoMsg}</p>
+          <button onClick={() => setInfoMsg(null)} className="hover:text-white text-xs flex-shrink-0" style={{ color: colors.textSecondary }}>✕</button>
         </div>
       )}
 
@@ -223,9 +231,9 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
       <div className="flex-shrink-0 px-6 pb-6">
         <div className="flex items-center gap-2 mb-4">
           <div className="flex-1 h-px" style={{ background: 'linear-gradient(to right, #ff6b35, transparent)' }} />
-          <div className="flex items-center gap-1.5 text-xs whitespace-nowrap" style={{ color: '#8faac4' }}>
+          <div className="flex items-center gap-1.5 text-xs whitespace-nowrap" style={{ color: colors.textSecondary }}>
             <span>These issues are high priority</span>
-            <Info size={12} style={{ color: '#7a9ab5' }} />
+            <Info size={12} style={{ color: colors.textSecondary }} />
           </div>
         </div>
 
@@ -251,7 +259,8 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
           </button>
           <button
             onClick={() => onNavigate('home')}
-            className="hover:text-white text-sm transition-colors underline underline-offset-2" style={{ color: '#8faac4' }}
+            className="text-sm transition-colors underline underline-offset-2"
+            style={{ color: colors.textSecondary }}
           >
             Skip for now
           </button>

@@ -4,6 +4,7 @@ import {
   Zap, Eye, RefreshCw, MessageSquare,
 } from 'lucide-react'
 import type { HeuristicAlert } from '@shared/types'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -191,6 +192,7 @@ function timeAgo(ts: number): string {
 }
 
 export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps): React.ReactElement {
+  const { colors } = useTheme()
   const [expandedAlert, setExpandedAlert] = useState<string | null>(null)
   const [expandedPattern, setExpandedPattern] = useState<string | null>(null)
   const [allAlerts, setAllAlerts] = useState<HeuristicAlert[]>(heuristicAlerts)
@@ -234,15 +236,15 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
       {/* Header */}
       <div
         className="flex-shrink-0 flex items-center justify-between px-6 py-4"
-        style={{ borderBottom: '1px solid rgba(30,58,95,0.4)' }}
+        style={{ borderBottom: `1px solid ${colors.border}` }}
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,107,53,0.12)', border: '1px solid rgba(255,107,53,0.25)' }}>
             <Brain size={17} className="text-accent-orange" />
           </div>
           <div>
-            <h1 className="text-white font-bold text-base leading-tight">Patterns</h1>
-            <p className="text-[11px]" style={{ color: '#8faac4' }}>Named attention pathologies · {undismissed.length} active</p>
+            <h1 className="font-bold text-base leading-tight" style={{ color: colors.textPrimary }}>Patterns</h1>
+            <p className="text-[11px]" style={{ color: colors.textSecondary }}>Named attention pathologies · {undismissed.length} active</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -258,7 +260,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
             onClick={refresh}
             disabled={refreshing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 disabled:opacity-50"
-            style={{ background: 'rgba(30,58,95,0.4)', color: '#90a4ae', border: '1px solid rgba(30,58,95,0.5)' }}
+            style={{ background: colors.accentBg, color: colors.textSecondary, border: `1px solid ${colors.border}` }}
           >
             <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
             Refresh
@@ -301,10 +303,10 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
 
         {/* Alert timeline */}
         <section>
-          <h2 className="text-white text-sm font-semibold mb-3 flex items-center gap-2">
-            <Clock size={14} style={{ color: '#8faac4' }} />
+          <h2 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: colors.textPrimary }}>
+            <Clock size={14} style={{ color: colors.textSecondary }} />
             Detected This Session
-            {recent.length === 0 && <span className="text-xs font-normal ml-1" style={{ color: '#7a9ab5' }}>— none yet</span>}
+            {recent.length === 0 && <span className="text-xs font-normal ml-1" style={{ color: colors.textSecondary }}>— none yet</span>}
           </h2>
           {recent.length > 0 ? (
             <div className="flex flex-col gap-1.5">
@@ -313,8 +315,8 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                   key={alert.id}
                   className="rounded-xl overflow-hidden"
                   style={{
-                    border: `1px solid ${alert.dismissed ? 'rgba(30,58,95,0.3)' : `${SEVERITY_COLOR[alert.severity]}33`}`,
-                    background: alert.dismissed ? 'rgba(8,15,30,0.4)' : SEVERITY_BG[alert.severity],
+                    border: `1px solid ${alert.dismissed ? colors.border : `${SEVERITY_COLOR[alert.severity]}33`}`,
+                    background: alert.dismissed ? colors.cardBg : SEVERITY_BG[alert.severity],
                     opacity: alert.dismissed ? 0.55 : 1,
                   }}
                 >
@@ -324,17 +326,17 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                   >
                     <div
                       className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                      style={{ background: alert.dismissed ? '#334155' : SEVERITY_COLOR[alert.severity] }}
+                      style={{ background: alert.dismissed ? colors.border : SEVERITY_COLOR[alert.severity] }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-white text-xs font-medium truncate">{alert.title}</p>
+                        <p className="text-xs font-medium truncate" style={{ color: colors.textPrimary }}>{alert.title}</p>
                         {alert.switchRate !== undefined && (
-                          <span className="text-[10px]" style={{ color: '#8faac4' }}>{alert.switchRate}/h</span>
+                          <span className="text-[10px]" style={{ color: colors.textSecondary }}>{alert.switchRate}/h</span>
                         )}
                       </div>
                     </div>
-                    <span className="text-[10px] flex-shrink-0" style={{ color: '#7a9ab5' }}>{timeAgo(alert.detectedAt)}</span>
+                    <span className="text-[10px] flex-shrink-0" style={{ color: colors.textSecondary }}>{timeAgo(alert.detectedAt)}</span>
                     <span
                       className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0"
                       style={{ background: `${SEVERITY_COLOR[alert.severity]}22`, color: SEVERITY_COLOR[alert.severity] }}
@@ -342,14 +344,14 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                       {alert.severity}
                     </span>
                     {expandedAlert === alert.id
-                      ? <ChevronUp size={12} className="flex-shrink-0" style={{ color: '#8faac4' }} />
-                      : <ChevronDown size={12} className="flex-shrink-0" style={{ color: '#8faac4' }} />}
+                      ? <ChevronUp size={12} className="flex-shrink-0" style={{ color: colors.textSecondary }} />
+                      : <ChevronDown size={12} className="flex-shrink-0" style={{ color: colors.textSecondary }} />}
                   </button>
                   {expandedAlert === alert.id && (
                     <div className="px-4 pb-3 flex flex-col gap-2">
-                      <p className="text-xs leading-relaxed" style={{ color: '#c4d4e8' }}>{alert.description}</p>
+                      <p className="text-xs leading-relaxed" style={{ color: colors.textSecondary }}>{alert.description}</p>
                       {alert.app && (
-                        <p className="text-[11px]" style={{ color: '#8faac4' }}>Source: <span style={{ color: '#a8c4d8' }}>{alert.app}</span></p>
+                        <p className="text-[11px]" style={{ color: colors.textSecondary }}>Source: <span style={{ color: colors.textPrimary }}>{alert.app}</span></p>
                       )}
                       <div className="flex items-center gap-2 mt-0.5">
                         <button
@@ -359,7 +361,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                           <MessageSquare size={10} />
                           Ask AI for help
                         </button>
-                        <span className="text-[10px]" style={{ color: '#7a9ab5' }}>
+                        <span className="text-[10px]" style={{ color: colors.textSecondary }}>
                           {new Date(alert.detectedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
@@ -371,22 +373,22 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
           ) : (
             <div
               className="rounded-xl flex flex-col items-center justify-center py-8 text-center"
-              style={{ background: 'rgba(8,15,30,0.4)', border: '1px solid rgba(30,58,95,0.3)' }}
+              style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
             >
-              <Eye size={20} className="mb-2" style={{ color: '#7a9ab5' }} />
-              <p className="text-xs" style={{ color: '#8faac4' }}>No patterns detected yet this session.</p>
-              <p className="text-[10px] mt-1" style={{ color: '#7a9ab5' }}>Patterns appear here as you work — the daemon watches quietly.</p>
+              <Eye size={20} className="mb-2" style={{ color: colors.textSecondary }} />
+              <p className="text-xs" style={{ color: colors.textSecondary }}>No patterns detected yet this session.</p>
+              <p className="text-[10px] mt-1" style={{ color: colors.textSecondary }}>Patterns appear here as you work — the daemon watches quietly.</p>
             </div>
           )}
         </section>
 
         {/* Full taxonomy */}
         <section>
-          <h2 className="text-white text-sm font-semibold mb-1 flex items-center gap-2">
-            <Brain size={14} style={{ color: '#8faac4' }} />
+          <h2 className="text-sm font-semibold mb-1 flex items-center gap-2" style={{ color: colors.textPrimary }}>
+            <Brain size={14} style={{ color: colors.textSecondary }} />
             Pattern Taxonomy
           </h2>
-          <p className="text-xs mb-3" style={{ color: '#7a9ab5' }}>13 named attention pathologies — definitions, mechanisms, and detection criteria.</p>
+          <p className="text-xs mb-3" style={{ color: colors.textSecondary }}>13 named attention pathologies — definitions, mechanisms, and detection criteria.</p>
           <div className="flex flex-col gap-1.5">
             {PATTERN_TAXONOMY.map((pattern) => {
               const stats = patternStats.get(pattern.type)
@@ -396,8 +398,8 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                   key={pattern.type}
                   className="rounded-xl overflow-hidden"
                   style={{
-                    border: `1px solid ${stats ? `${SEVERITY_COLOR[pattern.severity]}33` : 'rgba(30,58,95,0.3)'}`,
-                    background: stats ? SEVERITY_BG[pattern.severity] : 'rgba(8,15,30,0.4)',
+                    border: `1px solid ${stats ? `${SEVERITY_COLOR[pattern.severity]}33` : colors.border}`,
+                    background: stats ? SEVERITY_BG[pattern.severity] : colors.cardBg,
                   }}
                 >
                   <button
@@ -407,7 +409,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                     <span className="text-base flex-shrink-0 w-6">{pattern.icon}</span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-white text-xs font-semibold">{pattern.name}</p>
+                        <p className="text-xs font-semibold" style={{ color: colors.textPrimary }}>{pattern.name}</p>
                         <span
                           className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
                           style={{ background: `${SEVERITY_COLOR[pattern.severity]}22`, color: SEVERITY_COLOR[pattern.severity] }}
@@ -415,30 +417,30 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                           {pattern.severity}
                         </span>
                         {stats && (
-                          <span className="text-[10px]" style={{ color: '#8faac4' }}>
+                          <span className="text-[10px]" style={{ color: colors.textSecondary }}>
                             Detected {stats.count}× · last {timeAgo(stats.last)}
                           </span>
                         )}
                       </div>
                       {!isExpanded && (
-                        <p className="text-[11px] mt-0.5 truncate" style={{ color: '#8faac4' }}>{pattern.definition}</p>
+                        <p className="text-[11px] mt-0.5 truncate" style={{ color: colors.textSecondary }}>{pattern.definition}</p>
                       )}
                     </div>
                     {isExpanded
-                      ? <ChevronUp size={13} className="flex-shrink-0" style={{ color: '#8faac4' }} />
-                      : <ChevronDown size={13} className="flex-shrink-0" style={{ color: '#8faac4' }} />}
+                      ? <ChevronUp size={13} className="flex-shrink-0" style={{ color: colors.textSecondary }} />
+                      : <ChevronDown size={13} className="flex-shrink-0" style={{ color: colors.textSecondary }} />}
                   </button>
 
                   {isExpanded && (
                     <div className="px-4 pb-4 flex flex-col gap-3">
-                      <p className="text-xs leading-relaxed" style={{ color: '#c4d4e8' }}>{pattern.definition}</p>
+                      <p className="text-xs leading-relaxed" style={{ color: colors.textSecondary }}>{pattern.definition}</p>
 
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: '#8faac4' }}>Behavioral Signatures</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5" style={{ color: colors.textSecondary }}>Behavioral Signatures</p>
                         <ul className="flex flex-col gap-1">
                           {pattern.signatures.map((sig, i) => (
-                            <li key={i} className="flex items-start gap-2 text-[11px]" style={{ color: '#8faac4' }}>
-                              <Zap size={10} className="mt-0.5 flex-shrink-0" style={{ color: '#7a9ab5' }} />
+                            <li key={i} className="flex items-start gap-2 text-[11px]" style={{ color: colors.textSecondary }}>
+                              <Zap size={10} className="mt-0.5 flex-shrink-0" style={{ color: colors.textMuted }} />
                               {sig}
                             </li>
                           ))}
@@ -446,18 +448,18 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                       </div>
 
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#8faac4' }}>Mechanism</p>
-                        <p className="text-[11px] leading-relaxed" style={{ color: '#8faac4' }}>{pattern.mechanism}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: colors.textSecondary }}>Mechanism</p>
+                        <p className="text-[11px] leading-relaxed" style={{ color: colors.textSecondary }}>{pattern.mechanism}</p>
                       </div>
 
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#8faac4' }}>Research</p>
-                        <p className="text-[11px] italic leading-relaxed" style={{ color: '#8faac4' }}>{pattern.citation}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: colors.textSecondary }}>Research</p>
+                        <p className="text-[11px] italic leading-relaxed" style={{ color: colors.textSecondary }}>{pattern.citation}</p>
                       </div>
 
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#8faac4' }}>Detection Criteria</p>
-                        <p className="text-[11px] font-mono leading-relaxed" style={{ color: '#8faac4' }}>{pattern.detectionCriteria}</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: colors.textSecondary }}>Detection Criteria</p>
+                        <p className="text-[11px] font-mono leading-relaxed" style={{ color: colors.textSecondary }}>{pattern.detectionCriteria}</p>
                       </div>
 
                       <div className="flex items-center gap-2 pt-1">
@@ -469,7 +471,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
                           Ask AI about this pattern
                         </button>
                         {stats && (
-                          <span className="text-[10px]" style={{ color: '#7a9ab5' }}>
+                          <span className="text-[10px]" style={{ color: colors.textSecondary }}>
                             · detected {stats.count} time{stats.count !== 1 ? 's' : ''} this session
                           </span>
                         )}
