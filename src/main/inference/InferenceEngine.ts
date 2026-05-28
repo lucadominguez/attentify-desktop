@@ -25,8 +25,11 @@ const OPENROUTER_MODEL = 'anthropic/claude-haiku-4-5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
 const SAFE_CATEGORIES = new Set(['development', 'productivity', 'system'])
-// These categories always auto-block regardless of whether goals are active
-const HARDBLOCK_CATEGORIES = new Set(['adult', 'gambling', 'dating'])
+// These categories always use their full base confidence — never discounted for "no active goals".
+// adult/gambling/dating: obviously harmful; social_media/video_streaming: unambiguously distracting.
+// Without this, e.g. instagram (base 0.88) drops to max(0.55, 0.78) = 0.78 with no goals —
+// below the 0.85 auto-block threshold — and stays pending instead of auto-blocking.
+const HARDBLOCK_CATEGORIES = new Set(['adult', 'gambling', 'dating', 'social_media', 'video_streaming'])
 const BROWSER_PROCESSES_SET = new Set(['chrome', 'firefox', 'msedge', 'brave', 'vivaldi', 'opera', 'arc', 'thorium', 'librewolf', 'waterfox', 'floorp'])
 
 // ── Comprehensive distraction domain taxonomy ─────────────────────────────────
@@ -622,8 +625,16 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
 
   runBackgroundSweep(): void {
     if (!this.active) return
-    try { this.sweepDomains(); this.sweepApps() }
-    catch (e) { console.error('[InferenceEngine] sweep error:', e) }
+    const t0 = Date.now()
+    debugLog('sweep:start', {})
+    try {
+      this.sweepDomains()
+      this.sweepApps()
+      debugLog('sweep:complete', { durationMs: Date.now() - t0 })
+    } catch (e) {
+      debugLog('sweep:error', { error: String(e) })
+      console.error('[InferenceEngine] sweep error:', e)
+    }
   }
 
   private sweepDomains(): void {
@@ -759,12 +770,15 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
       : 'skip'
     debugLog('inference:candidate', { type, value, confidence: pct, source: meta.source, action, reasoning: meta.reasoning?.slice(0, 80) })
 
-    if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto') {
-      const existing = getInferences().find(
-        (i) => i.value === value && ['pending', 'auto_applied'].includes(i.status)
-      )
-      if (existing) return
+    // Dedup: skip if a non-rejected inference already exists for this value.
+    // Covers 'pending', 'auto_applied', AND 'confirmed' so a previously-confirmed
+    // domain doesn't generate a duplicate entry on re-detection.
+    const anyExisting = getInferences().find(
+      (i) => i.value === value && i.status !== 'rejected'
+    )
+    if (anyExisting) return
 
+    if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto') {
       insertInference({ type, value, goal_id: meta.goalId, confidence, reasoning: meta.reasoning, evidence, status: 'auto_applied', action: 'auto_block', created_at: Date.now() })
 
       if (type === 'domain') {
@@ -784,10 +798,6 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
         }
       }
     } else if (confidence >= CONFIDENCE_SUGGEST || (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'ask')) {
-      const existing = getInferences().find(
-        (i) => i.value === value && ['pending', 'auto_applied'].includes(i.status)
-      )
-      if (existing) return
       const inf = insertInference({ type, value, goal_id: meta.goalId, confidence, reasoning: meta.reasoning, evidence, status: 'pending', action: 'suggest', created_at: Date.now() })
       this.onSuggest?.(inf)
       console.log(`[InferenceEngine] suggest ${value} via ${meta.source} (${Math.round(confidence * 100)}%)`)

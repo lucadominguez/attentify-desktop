@@ -417,9 +417,9 @@ export function clearAgentMessages(): void {
 export function insertInference(inf: Omit<DbInference, 'id'>): DbInference {
   const i = { ...inf, id: randomUUID() }
 
-  // Deduplicate: don't insert if a pending inference for same value exists
+  // Deduplicate: don't insert if any non-rejected inference already exists for this value
   const existing = getDb().exec(
-    "SELECT id FROM inferences WHERE value=? AND status IN ('pending','auto_applied') LIMIT 1",
+    "SELECT id FROM inferences WHERE value=? AND status NOT IN ('rejected') LIMIT 1",
     [i.value]
   )
   if (existing[0]?.values[0]) return { ...i, id: existing[0].values[0][0] as string }

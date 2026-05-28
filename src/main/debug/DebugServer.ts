@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
-import { getStore } from '../store'
+import { getStore, patchStore } from '../store'
 import { getInferences, getRecentEvents } from '../data/repository'
-import { getRecentLogs, getLogPath } from './logger'
+import { getRecentLogs, getLogPath, debugLog } from './logger'
 import type { MonitorService } from '../monitoring/MonitorService'
 import type { InferenceEngine } from '../inference/InferenceEngine'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
@@ -153,7 +153,19 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       const eng = deps.engine()
       if (!eng) return json(res, { error: 'blocking engine not ready' }, 503)
       const result = eng.addDomain(domain)
-      return json(res, { ok: result.ok, domain, error: result.error })
+      if (result.ok) {
+        const s = getStore()
+        if (!s.blocklist.domains.find((d) => d.domain === domain)) {
+          patchStore({
+            blocklist: {
+              ...s.blocklist,
+              domains: [...s.blocklist.domains, { domain, addedAt: Date.now(), reason: 'debug:inject' }],
+            },
+          })
+        }
+        debugLog('debug:block', { domain })
+      }
+      return json(res, { ok: result.ok, domain, error: (result as { ok: boolean; error?: string }).error })
     }
 
     if (path === '/inject/unblock') {
@@ -162,6 +174,14 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       const eng = deps.engine()
       if (!eng) return json(res, { error: 'blocking engine not ready' }, 503)
       eng.removeDomain(domain)
+      const s = getStore()
+      patchStore({
+        blocklist: {
+          ...s.blocklist,
+          domains: s.blocklist.domains.filter((d) => d.domain !== domain),
+        },
+      })
+      debugLog('debug:unblock', { domain })
       return json(res, { ok: true, domain })
     }
 
@@ -214,6 +234,7 @@ export function startDebugServer(deps: Deps): void {
   })
 
   server.listen(DEBUG_PORT, '127.0.0.1', () => {
+    debugLog('debug:server:started', { port: DEBUG_PORT, pid: process.pid })
     console.log(`[DebugServer] http://127.0.0.1:${DEBUG_PORT} — GET /summary to start`)
   })
 }
