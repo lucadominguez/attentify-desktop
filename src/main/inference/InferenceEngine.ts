@@ -5,6 +5,7 @@ import {
   type DbInference,
 } from '../data/repository'
 import { getStore, patchStore } from '../store'
+import { debugLog } from '../debug/logger'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { ActivitySession } from '../../shared/types'
 
@@ -751,6 +752,12 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     meta: { reasoning: string; source: string; title?: string; goalId?: string }
   ): void {
     const evidence = { source: meta.source, title: meta.title }
+    const pct = Math.round(confidence * 100)
+    const action = confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto' ? 'auto_block'
+      : confidence >= CONFIDENCE_AUTO_BLOCK ? 'suggest(ask-mode)'
+      : confidence >= CONFIDENCE_SUGGEST ? 'suggest'
+      : 'skip'
+    debugLog('inference:candidate', { type, value, confidence: pct, source: meta.source, action, reasoning: meta.reasoning?.slice(0, 80) })
 
     if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto') {
       const existing = getInferences().find(

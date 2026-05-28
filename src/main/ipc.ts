@@ -11,6 +11,7 @@ import { saveApiKey, loadApiKey, deleteApiKey, hasApiKey } from './keystore'
 import { MonitorService } from './monitoring/MonitorService'
 import { AgentService } from './agent/AgentService'
 import { InferenceEngine } from './inference/InferenceEngine'
+import { debugLog } from './debug/logger'
 import {
   getActiveGoals, insertGoal, clearGoal,
   getPreferences, upsertPreference, deletePreference,
@@ -41,6 +42,14 @@ export function getMonitor(): MonitorService | null {
 
 export function getAgentSvc(): AgentService | null {
   return agentService
+}
+
+export function getInferenceEngine(): InferenceEngine | null {
+  return inferenceEngine
+}
+
+export function getBlockingEngine(): BlockingEngine | null {
+  return engine
 }
 
 export function stopTracking(): void {
@@ -201,6 +210,7 @@ export function initIpc(): void {
   inferenceEngine = new InferenceEngine(engine)
   inferenceEngine.setCallbacks({
     onAutoBlock: (domain, confidence) => {
+      debugLog('inference:auto-block', { domain, confidence: Math.round(confidence * 100) })
       sendMain('inference:auto-blocked', { domain, confidence })
       if (Notification.isSupported()) {
         new Notification({
@@ -211,6 +221,7 @@ export function initIpc(): void {
       }
     },
     onSuggest: (inf) => {
+      debugLog('inference:suggest', { value: inf.value, type: inf.type, confidence: Math.round(inf.confidence * 100), reasoning: inf.reasoning })
       sendMain('inference:suggest', inf)
       const pct = Math.round(inf.confidence * 100)
       // In-app toast for anything >= 70%
@@ -281,6 +292,7 @@ export function initIpc(): void {
   })
 
   monitor.on('url:blocked', (data: { domain: string; url: string }) => {
+    debugLog('monitor:url-blocked', { domain: data.domain, url: data.url })
     if (interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
       const session = getStore().sessions.find((s) => s.active)
       interstitialWin.webContents.send('interstitial:data', {
@@ -307,8 +319,9 @@ export function initIpc(): void {
   })
 
   monitor.on('guard:alert', (alert: unknown) => {
-    sendMain('guard:alert', alert)
     const a = alert as { category?: string; message?: string; domain?: string }
+    debugLog('guard:alert', { domain: a.domain, category: a.category, message: (a.message ?? '').slice(0, 80) })
+    sendMain('guard:alert', alert)
     if (Notification.isSupported()) {
       const body = (a.message ?? '').replace(/\*\*(.*?)\*\*/g, '$1').slice(0, 120)
       new Notification({

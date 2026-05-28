@@ -2,7 +2,8 @@ import { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } from 'ele
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { execSync } from 'child_process'
-import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking } from './ipc'
+import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine } from './ipc'
+import { startDebugServer } from './debug/DebugServer'
 import { getStore, patchStore } from './store'
 import { openDatabase, closeDatabase } from './data/db'
 import { migrateFromStateJson } from './data/repository'
@@ -175,6 +176,13 @@ app.whenReady().then(async () => {
   createInterstitialWindow()
   createTray()
   startTracking()
+
+  // Debug server — always on so agents can probe dev and prod builds
+  startDebugServer({
+    monitor: getMonitor,
+    inference: getInferenceEngine,
+    engine: getBlockingEngine,
+  })
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
