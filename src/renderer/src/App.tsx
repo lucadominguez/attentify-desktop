@@ -26,9 +26,6 @@ export default function App(): React.ReactElement {
   const [chatPreFill, setChatPreFill] = useState('')
   const [scanResults, setScanResults] = useState<ScanResult | null>(null)
   const [heuristicAlerts, setHeuristicAlerts] = useState<HeuristicAlert[]>([])
-  const [toastAlert, setToastAlert] = useState<HeuristicAlert | null>(null)
-  const [guardAlert, setGuardAlert] = useState<{ domain: string; category: string; message: string; searchQuery?: string } | null>(null)
-  const [autoBlockToast, setAutoBlockToast] = useState<{ domain: string; confidence: number; ts: number } | null>(null)
   const [liveAutoBlocks, setLiveAutoBlocks] = useState<{ domain: string; confidence: number; ts: number }[]>([])
   const [pendingActionCount, setPendingActionCount] = useState(0)
   const [breakMode, setBreakMode] = useState<{ endsAt: number; reason?: string } | null>(null)
@@ -49,35 +46,25 @@ export default function App(): React.ReactElement {
     return () => { offStart(); offEnd() }
   }, [])
 
-  // Listen for heuristic alert push events from main process
+  // Heuristic alerts — update patterns view, overlay handles the notification
   useEffect(() => {
-    api.onHeuristicAlert((alerts) => {
-      setHeuristicAlerts(alerts)
-      const newAlert = alerts.find((a) => !a.dismissed)
-      if (newAlert) {
-        setToastAlert(newAlert)
-        setTimeout(() => setToastAlert(null), 6000)
-      }
-    })
+    api.onHeuristicAlert((alerts) => setHeuristicAlerts(alerts))
   }, [])
 
-  // Listen for AI URL guard alerts
+  // Guard and auto-block — overlay handles notifications; update live data for Actions tab
   useEffect(() => {
-    return api.onGuardAlert((alert) => {
-      setGuardAlert(alert)
-      setTimeout(() => setGuardAlert(null), 12000)
+    const offGuard = api.onGuardAlert(() => { /* overlay handles it */ })
+    const offBlock = api.onInferenceAutoBlocked((evt) => {
+      setLiveAutoBlocks((prev) => [{ ...evt, ts: Date.now() }, ...prev].slice(0, 20))
     })
+    return () => { offGuard(); offBlock() }
   }, [])
 
-  // Listen for inference auto-block events
+  // Overlay action routing — open chat / navigate when overlay button is clicked
   useEffect(() => {
-    return api.onInferenceAutoBlocked((evt) => {
-      const entry = { ...evt, ts: Date.now() }
-      setAutoBlockToast(entry)
-      setLiveAutoBlocks((prev) => [entry, ...prev].slice(0, 20))
-      setTimeout(() => setAutoBlockToast(null), 8000)
-    })
-  }, [])
+    api.onOverlayOpenChat?.((msg: string) => { setChatPreFill(msg); setChatOpen(true) })
+    api.onOverlayNavigate?.((view: string) => handleNavigate(view as import('@shared/types').ViewName))
+  }, [handleNavigate])
 
   // Load pending inference count on mount and on new suggestions
   useEffect(() => {
@@ -297,55 +284,8 @@ export default function App(): React.ReactElement {
         )}
       </div>
 
-      {/* Heuristic alert toast */}
-      {toastAlert && (
-        <div
-          className="fixed bottom-5 right-5 max-w-[320px] z-50 animate-fade-in hud-panel"
-          style={{
-            background: 'rgba(8,14,26,0.98)',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 1px rgba(255,170,0,0.3)',
-            padding: '14px 16px',
-          }}
-        >
-          {/* TL corner accent override color for amber */}
-          <div className="absolute top-0 left-0 w-3 h-3 pointer-events-none" style={{ borderTop: '2px solid rgba(255,170,0,0.8)', borderLeft: '2px solid rgba(255,170,0,0.8)' }} />
-          <div className="absolute bottom-0 right-0 w-3 h-3 pointer-events-none" style={{ borderBottom: '2px solid rgba(255,170,0,0.5)', borderRight: '2px solid rgba(255,170,0,0.5)' }} />
-
-          <div className="flex items-start gap-3">
-            <div
-              className="flex-shrink-0 w-7 h-7 flex items-center justify-center"
-              style={{ border: '1px solid rgba(255,170,0,0.3)', background: 'rgba(255,170,0,0.08)' }}
-            >
-              <AlertTriangle size={13} style={{ color: '#ffaa00' }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: '#ffaa00', fontFamily: '"Share Tech Mono", monospace' }}>
-                {toastAlert.title}
-              </p>
-              <p className="text-[10px] mt-1 leading-relaxed" style={{ color: colors.textSecondary }}>
-                {toastAlert.description}
-              </p>
-              <button
-                onClick={() => { setToastAlert(null); handleNavigate('patterns') }}
-                className="mt-2 text-[9px] uppercase tracking-widest hover:text-white transition-colors"
-                style={{ color: 'rgba(0,200,255,0.6)', fontFamily: '"Share Tech Mono", monospace' }}
-              >
-                View Patterns →
-              </button>
-            </div>
-            <button
-              onClick={() => setToastAlert(null)}
-              className="flex-shrink-0 transition-colors"
-              style={{ color: 'rgba(0,200,255,0.3)' }}
-            >
-              <X size={12} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Auto-block notification */}
-      {autoBlockToast && (
+      {/* Auto-block notification — legacy, kept for liveAutoBlocks update only */}
+      {false && autoBlockToast && (
         <div
           className="fixed bottom-5 left-5 max-w-[320px] z-50 animate-fade-in hud-panel"
           style={{
@@ -388,8 +328,8 @@ export default function App(): React.ReactElement {
         </div>
       )}
 
-      {/* AI URL guard alert */}
-      {guardAlert && (
+      {/* AI URL guard alert — now handled by overlay window */}
+      {false && guardAlert && (
         <div
           className="fixed bottom-5 left-5 max-w-[340px] z-50 animate-fade-in hud-panel"
           style={{

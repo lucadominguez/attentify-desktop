@@ -4,6 +4,7 @@ import { existsSync } from 'fs'
 import { execSync } from 'child_process'
 import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine, getAgentSvc } from './ipc'
 import { startDebugServer } from './debug/DebugServer'
+import { notificationQueue } from './overlay/NotificationQueue'
 import { getStore, patchStore } from './store'
 import { openDatabase, closeDatabase } from './data/db'
 import { migrateFromStateJson, purgeOldData } from './data/repository'
@@ -177,6 +178,7 @@ app.whenReady().then(async () => {
   }
 
   initIpc()
+  notificationQueue.init(RENDERER_URL ?? null, join(__dirname, '..'))
   createMainWindow()
   createInterstitialWindow()
   createTray()

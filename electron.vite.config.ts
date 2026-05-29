@@ -26,7 +26,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(process.cwd(), 'src/renderer/index.html'),
-          interstitial: resolve(process.cwd(), 'src/renderer/interstitial.html')
+          interstitial: resolve(process.cwd(), 'src/renderer/interstitial.html'),
+          overlay: resolve(process.cwd(), 'src/renderer/overlay.html'),
         }
       }
     }

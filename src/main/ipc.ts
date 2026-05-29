@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow as ElectronBrowserWindow, Notification } from 'electron'
+import { ipcMain, dialog, BrowserWindow as ElectronBrowserWindow } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { writeFile } from 'fs/promises'
 import { getStore, patchStore } from './store'
@@ -12,6 +12,8 @@ import { MonitorService } from './monitoring/MonitorService'
 import { AgentService } from './agent/AgentService'
 import { InferenceEngine } from './inference/InferenceEngine'
 import { debugLog } from './debug/logger'
+import { notificationQueue } from './overlay/NotificationQueue'
+import { randomUUID } from 'crypto'
 import {
   getActiveGoals, insertGoal, clearGoal,
   getPreferences, upsertPreference, deletePreference,
@@ -198,13 +200,7 @@ export function initIpc(): void {
 
   // Auto-register startup daemon on first elevated run so future launches skip UAC
   if (actuallyElevated && !isStartupDaemonRegistered()) {
-    const registered = registerStartupDaemon(process.execPath)
-    if (registered && Notification.isSupported()) {
-      new Notification({
-        title: 'Productivity Daemon',
-        body: 'Auto-elevation registered. The app will now launch with admin privileges automatically on login — no more UAC prompts.',
-      }).show()
-    }
+    registerStartupDaemon(process.execPath)
   }
 
   monitor = new MonitorService()
@@ -220,37 +216,43 @@ export function initIpc(): void {
     onAutoBlock: (domain, confidence) => {
       debugLog('inference:auto-block', { domain, confidence: Math.round(confidence * 100) })
       sendMain('inference:auto-blocked', { domain, confidence })
-      if (Notification.isSupported()) {
-        new Notification({
-          title: 'Site Auto-Blocked',
-          body: `${domain} was automatically blocked (${Math.round(confidence * 100)}% confidence).`,
-          urgency: 'critical',
-        }).show()
-      }
+      notificationQueue.push({
+        id: randomUUID(),
+        type: 'auto-block',
+        title: 'Blocked',
+        rawMessage: `${domain} was automatically blocked (${Math.round(confidence * 100)}% confidence).`,
+        domain,
+        confidence,
+        actions: [
+          { label: 'Take 5 min break', type: 'break', durationMs: 5 * 60 * 1000 },
+          { label: 'View Actions', type: 'view-actions' },
+          { label: 'Ignore', type: 'dismiss' },
+        ],
+      })
     },
     onSuggest: (inf) => {
       debugLog('inference:suggest', { value: inf.value, type: inf.type, confidence: Math.round(inf.confidence * 100), reasoning: inf.reasoning })
       sendMain('inference:suggest', inf)
-      const pct = Math.round(inf.confidence * 100)
-      // In-app toast for anything >= 70%
       if (inf.confidence >= 0.70) {
-        sendMain('guard:alert', {
-          url: '',
-          domain: inf.type === 'domain' ? inf.value : '',
-          title: `AI flagged ${inf.value}`,
-          category: 'possible distraction',
-          message: inf.reasoning
-            ? `${inf.reasoning} (${pct}% confidence) — review in Actions.`
-            : `${inf.value} looks like a distraction (${pct}% confidence).`,
-          timestamp: Date.now(),
+        const actions = inf.type === 'domain'
+          ? [
+              { label: 'Block it', type: 'block' as const, domain: inf.value },
+              { label: 'Ask AI', type: 'chat' as const, chatMsg: `Why was ${inf.value} flagged? Should I block it?` },
+              { label: 'Ignore', type: 'dismiss' as const },
+            ]
+          : [
+              { label: 'View Actions', type: 'view-actions' as const },
+              { label: 'Ignore', type: 'dismiss' as const },
+            ]
+        notificationQueue.push({
+          id: randomUUID(),
+          type: 'suggest',
+          title: 'Flagged',
+          rawMessage: inf.reasoning ?? `${inf.value} looks like a distraction (${Math.round(inf.confidence * 100)}% confidence).`,
+          domain: inf.type === 'domain' ? inf.value : undefined,
+          confidence: inf.confidence,
+          actions,
         })
-      }
-      // OS notification for high-confidence suggestions
-      if (inf.confidence >= 0.80 && Notification.isSupported()) {
-        new Notification({
-          title: 'Distraction Flagged',
-          body: `${inf.value} flagged as a distraction (${pct}%). Review in Actions tab.`,
-        }).show()
       }
     },
     onSearchAlert: (query, predictedDomain, category) => {
@@ -327,32 +329,49 @@ export function initIpc(): void {
   })
 
   monitor.on('guard:alert', (alert: unknown) => {
-    const a = alert as { category?: string; message?: string; domain?: string }
+    const a = alert as { category?: string; message?: string; domain?: string; searchQuery?: string }
     debugLog('guard:alert', { domain: a.domain, category: a.category, message: (a.message ?? '').slice(0, 80) })
     sendMain('guard:alert', alert)
-    if (Notification.isSupported()) {
-      const body = (a.message ?? '').replace(/\*\*(.*?)\*\*/g, '$1').slice(0, 120)
-      new Notification({
-        title: `Guard · ${a.category ?? 'Distraction detected'}`,
-        body: body || (a.domain ? `Potential distraction: ${a.domain}` : 'Distraction detected'),
-      }).show()
-    }
+    const rawMsg = (a.message ?? '').replace(/\*\*(.*?)\*\*/g, '$1')
+    const actions = a.domain
+      ? [
+          { label: 'Block it', type: 'block' as const, domain: a.domain },
+          { label: 'Ask AI', type: 'chat' as const, chatMsg: a.searchQuery ? `I searched "${a.searchQuery}" — should I be worried?` : `Tell me about my browsing pattern on ${a.domain}` },
+          { label: 'Ignore', type: 'dismiss' as const },
+        ]
+      : [
+          { label: 'Ask AI', type: 'chat' as const, chatMsg: a.searchQuery ? `I searched "${a.searchQuery}" — is this a distraction?` : 'Am I getting distracted?' },
+          { label: 'Ignore', type: 'dismiss' as const },
+        ]
+    notificationQueue.push({
+      id: randomUUID(),
+      type: 'guard',
+      title: a.category ?? 'Guard',
+      rawMessage: rawMsg || (a.domain ? `Potential distraction: ${a.domain}` : 'Distraction detected'),
+      domain: a.domain,
+      actions,
+    })
   })
 
   monitor.on('patterns', (alerts: unknown[]) => {
     const s = getStore()
     patchStore({ heuristicAlerts: [...s.heuristicAlerts, ...alerts as typeof s.heuristicAlerts].slice(-200) })
     sendMain('heuristic:alert', alerts)
-    // OS notification for high/medium severity patterns
-    if (Notification.isSupported()) {
-      const typed = alerts as import('../shared/types').HeuristicAlert[]
-      const top = typed.find((a) => a.severity === 'high') ?? typed.find((a) => a.severity === 'medium')
-      if (top) {
-        new Notification({
-          title: top.title,
-          body: top.description.slice(0, 120),
-        }).show()
-      }
+    // Show the highest-severity alert through the overlay
+    const typed = alerts as import('../shared/types').HeuristicAlert[]
+    const top = typed.find((a) => a.severity === 'high') ?? typed.find((a) => a.severity === 'medium')
+    if (top) {
+      notificationQueue.push({
+        id: randomUUID(),
+        type: 'heuristic',
+        title: top.type,
+        rawMessage: top.description,
+        actions: [
+          { label: 'Take 5 min break', type: 'break', durationMs: 5 * 60 * 1000 },
+          { label: 'Ask AI', type: 'chat', chatMsg: `I just got a "${top.title}" alert. What should I do?` },
+          { label: 'Ignore', type: 'dismiss' },
+        ],
+      })
     }
   })
 
@@ -440,6 +459,25 @@ export function initIpc(): void {
     const s = getStore()
     patchStore({ sessions: s.sessions.map((sess) => (sess.id === id ? { ...sess, active: false } : sess)) })
     engine?.stop()
+  })
+
+  // ── Overlay notification actions ──────────────────────────────────────────
+
+  ipcMain.on('overlay:dismiss', (_e, id: string) => {
+    notificationQueue.onDismiss(id)
+  })
+
+  ipcMain.on('overlay:action', (_e, id: string, action: { type: string; domain?: string; durationMs?: number; chatMsg?: string }) => {
+    notificationQueue.onDismiss(id)
+    // Route actions that need main-process involvement
+    if (action.type === 'chat' && action.chatMsg) {
+      mainWin?.show()
+      sendMain('overlay:open-chat', action.chatMsg)
+    }
+    if (action.type === 'view-actions') {
+      mainWin?.show()
+      sendMain('overlay:navigate', 'actions')
+    }
   })
 
   // ── Break mode ────────────────────────────────────────────────────────────
@@ -532,6 +570,7 @@ export function initIpc(): void {
     agentService?.init(key)
     monitor?.getUrlGuard().init(key)
     inferenceEngine?.init(key)
+    notificationQueue.refreshClient()
     return { ok: true }
   })
 

@@ -144,6 +144,32 @@ const api = {
     return () => ipcRenderer.off('break:ended', handler)
   },
 
+  // ── Overlay notification system ───────────────────────────────────────────
+  onOverlayShow: (cb: (notif: unknown) => void): (() => void) => {
+    const handler = (_e: unknown, notif: unknown): void => cb(notif)
+    ipcRenderer.on('overlay:show', handler)
+    return () => ipcRenderer.off('overlay:show', handler)
+  },
+  onOverlayUpdate: (cb: (update: { id: string; aiMessage: string }) => void): (() => void) => {
+    const handler = (_e: unknown, update: unknown): void => cb(update as { id: string; aiMessage: string })
+    ipcRenderer.on('overlay:update', handler)
+    return () => ipcRenderer.off('overlay:update', handler)
+  },
+  overlayAction: (id: string, action: unknown): void =>
+    ipcRenderer.send('overlay:action', id, action),
+  overlayDismiss: (id: string): void =>
+    ipcRenderer.send('overlay:dismiss', id),
+  onOverlayOpenChat: (cb: (msg: string) => void): (() => void) => {
+    const handler = (_e: unknown, msg: string): void => cb(msg)
+    ipcRenderer.on('overlay:open-chat', handler)
+    return () => ipcRenderer.off('overlay:open-chat', handler)
+  },
+  onOverlayNavigate: (cb: (view: string) => void): (() => void) => {
+    const handler = (_e: unknown, view: string): void => cb(view)
+    ipcRenderer.on('overlay:navigate', handler)
+    return () => ipcRenderer.off('overlay:navigate', handler)
+  },
+
   onInterstitialData: (cb: (data: { blocked: string; type: string; endsAt?: number }) => void) => {
     ipcRenderer.on('interstitial:data', (_e, data) => cb(data))
   },
