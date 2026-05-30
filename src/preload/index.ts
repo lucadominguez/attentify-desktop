@@ -186,6 +186,12 @@ const api = {
   minimizeWindow: (): void => ipcRenderer.send('window:minimize'),
   maximizeWindow: (): void => ipcRenderer.send('window:maximize'),
   closeWindow: (): void => ipcRenderer.send('window:close'),
+
+  onNavigate: (cb: (view: string) => void): (() => void) => {
+    const handler = (_e: unknown, view: string): void => cb(view)
+    ipcRenderer.on('navigate', handler)
+    return () => ipcRenderer.off('navigate', handler)
+  },
 }
 
 contextBridge.exposeInMainWorld('electronAPI', api)

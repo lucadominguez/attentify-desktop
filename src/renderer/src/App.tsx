@@ -15,7 +15,7 @@ import SettingsView from './views/Settings'
 import Onboarding from './views/Onboarding'
 import ChatPanel from './chat/ChatPanel'
 import type { ViewName, AppStore, ScanResult, HeuristicAlert } from '@shared/types'
-import { Minus, Square, X, AlertTriangle, Eye, Shield, Coffee } from 'lucide-react'
+import { Minus, Square, X, Coffee } from 'lucide-react'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -29,6 +29,26 @@ export default function App(): React.ReactElement {
   const [liveAutoBlocks, setLiveAutoBlocks] = useState<{ domain: string; confidence: number; ts: number }[]>([])
   const [pendingActionCount, setPendingActionCount] = useState(0)
   const [breakMode, setBreakMode] = useState<{ endsAt: number; reason?: string } | null>(null)
+
+  const { colors } = useTheme()
+
+  const handleNavigate = useCallback((v: ViewName) => {
+    setView(v)
+  }, [])
+
+  const handleScanComplete = useCallback((results: ScanResult) => {
+    setScanResults(results)
+    setView('focus-scan-results')
+    api.getStore().then(setStore)
+  }, [])
+
+  const handleOnboardingComplete = useCallback(() => {
+    api.setStore({ onboardingComplete: true }).then(setStore)
+  }, [])
+
+  const refreshStore = useCallback(() => {
+    api.getStore().then(setStore)
+  }, [])
 
   useEffect(() => {
     api.getStore().then((s) => {
@@ -60,10 +80,13 @@ export default function App(): React.ReactElement {
     return () => { offGuard(); offBlock() }
   }, [])
 
-  // Overlay action routing — open chat / navigate when overlay button is clicked
+  // Overlay action routing + extension "open rules" request
   useEffect(() => {
     api.onOverlayOpenChat?.((msg: string) => { setChatPreFill(msg); setChatOpen(true) })
     api.onOverlayNavigate?.((view: string) => handleNavigate(view as import('@shared/types').ViewName))
+    // Browser extension calls /daemon/focus-rules → daemon sends 'navigate' IPC to renderer
+    const off = api.onNavigate?.((view: string) => handleNavigate(view as import('@shared/types').ViewName))
+    return () => { off?.() }
   }, [handleNavigate])
 
   // Load pending inference count on mount and on new suggestions
@@ -76,24 +99,6 @@ export default function App(): React.ReactElement {
     loadPending()
     const off = api.onInferenceSuggest(() => loadPending())
     return off
-  }, [])
-
-  const handleNavigate = useCallback((v: ViewName) => {
-    setView(v)
-  }, [])
-
-  const handleScanComplete = useCallback((results: ScanResult) => {
-    setScanResults(results)
-    setView('focus-scan-results')
-    api.getStore().then(setStore)
-  }, [])
-
-  const handleOnboardingComplete = useCallback(() => {
-    api.setStore({ onboardingComplete: true }).then(setStore)
-  }, [])
-
-  const refreshStore = useCallback(() => {
-    api.getStore().then(setStore)
   }, [])
 
   if (!store) {
@@ -111,7 +116,6 @@ export default function App(): React.ReactElement {
     return <Onboarding onComplete={handleOnboardingComplete} />
   }
 
-  const { colors } = useTheme()
   const activeSession = store.sessions.find((s) => s.active)
   const activeAlerts = heuristicAlerts.filter((a) => !a.dismissed)
   const activeAlertCount = activeAlerts.length
@@ -284,114 +288,6 @@ export default function App(): React.ReactElement {
         )}
       </div>
 
-      {/* Auto-block notification — legacy, kept for liveAutoBlocks update only */}
-      {false && autoBlockToast && (
-        <div
-          className="fixed bottom-5 left-5 max-w-[320px] z-50 animate-fade-in hud-panel"
-          style={{
-            background: 'rgba(8,14,26,0.98)',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 1px rgba(255,68,68,0.4)',
-            padding: '12px 14px',
-          }}
-        >
-          <div className="absolute top-0 left-0 w-3 h-3 pointer-events-none" style={{ borderTop: '2px solid rgba(255,68,68,0.8)', borderLeft: '2px solid rgba(255,68,68,0.8)' }} />
-          <div className="absolute bottom-0 right-0 w-3 h-3 pointer-events-none" style={{ borderBottom: '2px solid rgba(255,68,68,0.4)', borderRight: '2px solid rgba(255,68,68,0.4)' }} />
-
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center" style={{ border: '1px solid rgba(255,68,68,0.35)', background: 'rgba(255,68,68,0.1)' }}>
-              <Shield size={13} style={{ color: '#ff4444' }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#ff4444', fontFamily: '"Share Tech Mono", monospace' }}>
-                AI Auto-Blocked
-              </p>
-              <p className="text-[11px] font-bold mt-0.5 truncate" style={{ color: '#ff6666' }}>
-                {autoBlockToast.domain}
-              </p>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="text-[9px]" style={{ color: 'rgba(255,68,68,0.6)', fontFamily: '"Share Tech Mono", monospace' }}>
-                  {Math.round(autoBlockToast.confidence * 100)}% confidence
-                </span>
-                <button
-                  onClick={() => { handleNavigate('actions'); setAutoBlockToast(null) }}
-                  className="text-[9px] uppercase tracking-widest transition-colors hover:text-white"
-                  style={{ color: 'rgba(0,200,255,0.6)', fontFamily: '"Share Tech Mono", monospace' }}
-                >
-                  View →
-                </button>
-              </div>
-            </div>
-            <button onClick={() => setAutoBlockToast(null)} className="flex-shrink-0 transition-colors" style={{ color: 'rgba(255,68,68,0.35)' }}>
-              <X size={12} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* AI URL guard alert — now handled by overlay window */}
-      {false && guardAlert && (
-        <div
-          className="fixed bottom-5 left-5 max-w-[340px] z-50 animate-fade-in hud-panel"
-          style={{
-            background: 'rgba(8,14,26,0.98)',
-            boxShadow: '0 8px 40px rgba(0,0,0,0.6), 0 0 1px rgba(0,200,255,0.25)',
-            padding: '14px 16px',
-          }}
-        >
-          <div className="absolute top-0 left-0 w-3 h-3 pointer-events-none" style={{ borderTop: '2px solid rgba(0,200,255,0.6)', borderLeft: '2px solid rgba(0,200,255,0.6)' }} />
-          <div className="absolute bottom-0 right-0 w-3 h-3 pointer-events-none" style={{ borderBottom: '2px solid rgba(0,200,255,0.3)', borderRight: '2px solid rgba(0,200,255,0.3)' }} />
-
-          <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-7 h-7 flex items-center justify-center" style={{ border: '1px solid rgba(0,200,255,0.3)', background: 'rgba(0,200,255,0.08)' }}>
-              <Eye size={13} style={{ color: '#00c8ff' }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: '#00c8ff', fontFamily: '"Share Tech Mono", monospace' }}>
-                AI GUARD · {guardAlert.category}
-              </p>
-              {guardAlert.searchQuery && (
-                <p className="text-[9px] mt-0.5 uppercase tracking-wide" style={{ color: 'rgba(0,200,255,0.5)', fontFamily: '"Share Tech Mono", monospace' }}>
-                  searched: "{guardAlert.searchQuery}"
-                </p>
-              )}
-              <p className="text-[10px] mt-1 leading-relaxed" style={{ color: colors.textSecondary }}>
-                {guardAlert.message.replace(/\*\*(.*?)\*\*/g, '$1')}
-              </p>
-              <div className="flex gap-3 mt-2">
-                {guardAlert.domain && (
-                  <button
-                    onClick={() => {
-                      api.addDomain(guardAlert.domain)
-                      setGuardAlert(null)
-                    }}
-                    className="text-[9px] uppercase tracking-widest transition-colors"
-                    style={{ color: '#ff4444', fontFamily: '"Share Tech Mono", monospace' }}
-                  >
-                    Block {guardAlert.domain} →
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setChatPreFill(guardAlert.domain
-                      ? `Tell me about my browsing pattern on ${guardAlert.domain}`
-                      : `I just searched "${guardAlert.searchQuery}" — is this a sign I'm getting distracted?`
-                    )
-                    setChatOpen(true)
-                    setGuardAlert(null)
-                  }}
-                  className="text-[9px] uppercase tracking-widest transition-colors"
-                  style={{ color: 'rgba(0,200,255,0.6)', fontFamily: '"Share Tech Mono", monospace' }}
-                >
-                  Ask AI →
-                </button>
-              </div>
-            </div>
-            <button onClick={() => setGuardAlert(null)} className="flex-shrink-0 transition-colors" style={{ color: 'rgba(0,200,255,0.3)' }}>
-              <X size={12} />
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

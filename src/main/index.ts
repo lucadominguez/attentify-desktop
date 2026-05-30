@@ -2,8 +2,8 @@ import { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } from 'ele
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { execSync } from 'child_process'
-import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine, getAgentSvc } from './ipc'
-import { startDebugServer } from './debug/DebugServer'
+import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine, getAgentSvc, getContentRuleEngine } from './ipc'
+import { startDebugServer, setDebugMainWindow } from './debug/DebugServer'
 import { notificationQueue } from './overlay/NotificationQueue'
 import { getStore, patchStore } from './store'
 import { openDatabase, closeDatabase } from './data/db'
@@ -60,6 +60,7 @@ function createMainWindow(): void {
   })
 
   setMainWindow(mainWin)
+  setDebugMainWindow(mainWin)
 
   if (RENDERER_URL) {
     mainWin.loadURL(RENDERER_URL)
@@ -190,6 +191,7 @@ app.whenReady().then(async () => {
     inference: getInferenceEngine,
     engine: getBlockingEngine,
     agent: getAgentSvc,
+    contentRules: getContentRuleEngine,
   })
 
   app.on('activate', () => {

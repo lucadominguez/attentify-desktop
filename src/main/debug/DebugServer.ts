@@ -10,7 +10,12 @@ import type { MonitorService } from '../monitoring/MonitorService'
 import type { InferenceEngine } from '../inference/InferenceEngine'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { AgentService } from '../agent/AgentService'
+import type { ContentRuleEngine } from '../blocking/ContentRuleEngine'
 import type { ActivitySession } from '../../shared/types'
+
+// Injected by index.ts so DebugServer can bring the main window to front
+let _mainWinRef: import('electron').BrowserWindow | null = null
+export function setDebugMainWindow(win: import('electron').BrowserWindow | null): void { _mainWinRef = win }
 
 export const DEBUG_PORT = 9119
 const PORT_FILE = join('C:\\ProgramData', 'ProductivityDaemon', 'debug-port')
@@ -21,6 +26,7 @@ interface Deps {
   inference: () => InferenceEngine | null
   engine: () => BlockingEngine | null
   agent: () => AgentService | null
+  contentRules?: () => ContentRuleEngine | null
 }
 
 // ── Route helpers ─────────────────────────────────────────────────────────────
@@ -124,6 +130,26 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
     if (path === '/agent/messages') {
       const limit = parseInt(url.searchParams.get('limit') ?? '20', 10)
       return json(res, getAgentMessages(limit))
+    }
+
+    if (path === '/content-rules') {
+      const cre = deps.contentRules?.()
+      return json(res, {
+        rules: cre?.getRules() ?? [],
+        extensionConnected: cre?.isExtensionConnected() ?? false,
+        bypassScores: cre?.getAllBypassScores() ?? {},
+      })
+    }
+
+    if (path === '/extension/status') {
+      const cre = deps.contentRules?.()
+      return json(res, {
+        connected: cre?.isExtensionConnected() ?? false,
+        rules: cre?.getRules().length ?? 0,
+        enabledRules: cre?.getRules().filter((r) => r.enabled).length ?? 0,
+        bypassScores: cre?.getAllBypassScores() ?? {},
+        recentBypasses: cre?.getBypassAttempts(undefined, 20) ?? [],
+      })
     }
 
     return json(res, { error: 'Not found', routes: ROUTES }, 404)
@@ -300,6 +326,71 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       return json(res, result)
     }
 
+    // ── Content rule / extension endpoints ──────────────────────────────────
+
+    if (path === '/content-rules/predefined') {
+      const cre = deps.contentRules?.()
+      if (!cre) return json(res, { error: 'ContentRuleEngine not ready' }, 503)
+      const rules = cre.installPredefined()
+      return json(res, { ok: true, count: rules.length })
+    }
+
+    const ruleToggleMatch = path.match(/^\/content-rules\/([^/]+)\/toggle$/)
+    if (ruleToggleMatch) {
+      const id = ruleToggleMatch[1]!
+      const enabled = body.enabled !== false
+      const cre = deps.contentRules?.()
+      if (!cre) return json(res, { error: 'ContentRuleEngine not ready' }, 503)
+      const ok = cre.toggleRule(id, enabled)
+      return json(res, { ok, id, enabled })
+    }
+
+    if (path === '/extension/bypass') {
+      const cre = deps.contentRules?.()
+      if (!cre) return json(res, { ok: true }) // silently accept even if engine not ready
+      const attempt = {
+        ruleId: (body.ruleId as string) ?? 'unknown',
+        method: (body.method as import('../../shared/types').BypassAttempt['method']) ?? 'url_navigation',
+        url: (body.url as string) ?? '',
+        timestamp: (body.timestamp as number) ?? Date.now(),
+        searchTerm: body.searchTerm as string | undefined,
+      }
+      const result = cre.handleBypass(attempt)
+      debugLog('extension:bypass', { ruleId: attempt.ruleId, method: attempt.method, score: result.score, escalation: result.escalation })
+      return json(res, { ok: true, score: result.score, escalation: result.escalation })
+    }
+
+    if (path === '/extension/heartbeat') {
+      deps.contentRules?.()?.heartbeat()
+      return json(res, { ok: true })
+    }
+
+    if (path === '/extension/escalate') {
+      const domain = body.domain as string
+      const action = body.action as string
+      if (domain && (action === 'block_5m' || action === 'block_1h')) {
+        const durationMs = action === 'block_5m' ? 5 * 60 * 1000 : 60 * 60 * 1000
+        deps.engine()?.addDomain(domain, durationMs)
+        debugLog('extension:escalate', { domain, action })
+      }
+      return json(res, { ok: true })
+    }
+
+    if (path === '/extension/check-in') {
+      debugLog('extension:check-in', { ruleId: body.ruleId, domain: body.domain, score: body.score })
+      return json(res, { ok: true })
+    }
+
+    if (path === '/daemon/focus-rules') {
+      // Browser extension requests daemon window to open on the Actions/Rules tab
+      if (_mainWinRef && !_mainWinRef.isDestroyed()) {
+        _mainWinRef.show()
+        _mainWinRef.focus()
+        _mainWinRef.webContents.send('navigate', 'actions')
+      }
+      return json(res, { ok: !!_mainWinRef, focused: true })
+    }
+
     if (path === '/inject/break') {
       // Start/end break mode via the debug API
       const action = (body.action as string) ?? 'start'
@@ -341,8 +432,16 @@ const ROUTES = {
   'POST /inject/scan':      'run FocusScan and return results',
   'POST /inject/block':     '{ domain } — add domain to blocklist',
   'POST /inject/unblock':   '{ domain } — remove domain from blocklist',
-  'POST /inject/sweep':     'trigger background inference sweep immediately',
-  'POST /inject/break':     '{ action:"start"|"end", durationMs? } — control break mode',
+  'POST /inject/sweep':               'trigger background inference sweep immediately',
+  'POST /inject/break':               '{ action:"start"|"end", durationMs? } — control break mode',
+  'GET /content-rules':               'all element-blocking rules + bypass scores',
+  'GET /extension/status':            'extension connection state + recent bypasses',
+  'POST /content-rules/predefined':   'install the 10 predefined rules',
+  'POST /content-rules/:id/toggle':   '{ enabled } — enable/disable a rule',
+  'POST /extension/bypass':           '{ ruleId, method, url, timestamp? } — record bypass attempt',
+  'POST /extension/heartbeat':        'mark extension as connected',
+  'POST /extension/escalate':         '{ domain, score, action:"block_5m"|"block_1h" } — escalate block',
+  'POST /extension/check-in':         '{ ruleId, domain, score } — trigger agent check-in',
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────

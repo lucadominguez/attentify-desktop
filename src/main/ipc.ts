@@ -13,6 +13,7 @@ import { AgentService } from './agent/AgentService'
 import { InferenceEngine } from './inference/InferenceEngine'
 import { debugLog } from './debug/logger'
 import { notificationQueue } from './overlay/NotificationQueue'
+import { ContentRuleEngine } from './blocking/ContentRuleEngine'
 import { randomUUID } from 'crypto'
 import {
   getActiveGoals, insertGoal, clearGoal,
@@ -21,12 +22,12 @@ import {
   getAgentMessages, insertAgentMessage, clearAgentMessages, getDomains,
 } from './data/repository'
 import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory, AppSettings } from '../shared/types'
-import { randomUUID } from 'crypto'
 
 let engine: BlockingEngine | null = null
 let monitor: MonitorService | null = null
 let agentService: AgentService | null = null
 let inferenceEngine: InferenceEngine | null = null
+let contentRuleEngine: ContentRuleEngine | null = null
 let interstitialWin: BrowserWindow | null = null
 let mainWin: BrowserWindow | null = null
 
@@ -60,6 +61,10 @@ export function getInferenceEngine(): InferenceEngine | null {
 
 export function getBlockingEngine(): BlockingEngine | null {
   return engine
+}
+
+export function getContentRuleEngine(): ContentRuleEngine | null {
+  return contentRuleEngine
 }
 
 export function stopTracking(): void {
@@ -204,11 +209,13 @@ export function initIpc(): void {
   }
 
   monitor = new MonitorService()
+  contentRuleEngine = new ContentRuleEngine()
   agentService = new AgentService({
     engine,
     tracker: monitor.getTracker(),
     heuristics: monitor.getHeuristics(),
     monitor,
+    contentRules: contentRuleEngine,
   })
 
   inferenceEngine = new InferenceEngine(engine)
@@ -856,6 +863,75 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
 
   ipcMain.handle('interstitial:hide', () => interstitialWin?.hide())
   ipcMain.handle('interstitial:proceed', () => interstitialWin?.hide())
+
+  // ── Content Rule Engine (browser extension element blocking) ─────────────
+
+  // Wire up bypass escalation → agent check-in + overlay notification
+  contentRuleEngine.on('bypass', (attempt: import('../../shared/types').BypassAttempt, score: number, escalation: string) => {
+    if (escalation === 'warn') {
+      const rule = contentRuleEngine!.getRules().find((r) => r.id === attempt.ruleId)
+      agentService?.notifyDistraction({
+        id: randomUUID(),
+        app: 'browser',
+        title: `Bypass attempt on ${rule?.displayName ?? attempt.ruleId} (${score}x)`,
+        url: attempt.url,
+        category: 'browser',
+        startTime: Date.now() - 30000,
+        endTime: Date.now(),
+        duration: 30000,
+        isDistraction: true,
+      })
+    }
+    if (escalation === 'block_5m' || escalation === 'block_1h') {
+      const rule = contentRuleEngine!.getRules().find((r) => r.id === attempt.ruleId)
+      if (rule?.domain) {
+        const ms = escalation === 'block_5m' ? 5 * 60 * 1000 : 60 * 60 * 1000
+        engine?.addDomain(rule.domain, ms)
+        sendMain('inference:auto-blocked', { domain: rule.domain, confidence: 1.0 })
+        notificationQueue.push({
+          id: randomUUID(),
+          type: 'auto-block',
+          title: 'Escalated Block',
+          rawMessage: `${rule.displayName} bypass detected ${score}x — ${rule.domain} blocked for ${escalation === 'block_5m' ? '5 minutes' : '1 hour'}.`,
+          domain: rule.domain,
+          confidence: 1.0,
+          actions: [
+            { label: 'Understood', type: 'dismiss' },
+            { label: 'Ask AI', type: 'chat', chatMsg: `I tried to access ${rule.displayName} ${score} times. Should I be worried?` },
+          ],
+        })
+      }
+    }
+  })
+
+  ipcMain.handle('content-rules:get', () => contentRuleEngine?.getRules() ?? [])
+
+  ipcMain.handle('content-rules:add', (_e, rule: import('../../shared/types').ContentRule) => {
+    const added = contentRuleEngine?.addRule(rule)
+    return { ok: !!added, rule: added }
+  })
+
+  ipcMain.handle('content-rules:toggle', (_e, id: string, enabled: boolean) => {
+    const ok = contentRuleEngine?.toggleRule(id, enabled) ?? false
+    return { ok }
+  })
+
+  ipcMain.handle('content-rules:delete', (_e, id: string) => {
+    const ok = contentRuleEngine?.deleteRule(id) ?? false
+    return { ok }
+  })
+
+  ipcMain.handle('content-rules:install-predefined', () => {
+    const rules = contentRuleEngine?.installPredefined() ?? []
+    return { ok: true, count: rules.length, rules }
+  })
+
+  ipcMain.handle('extension:status', () => ({
+    connected: contentRuleEngine?.isExtensionConnected() ?? false,
+    rules: contentRuleEngine?.getRules().length ?? 0,
+    enabledRules: contentRuleEngine?.getRules().filter((r) => r.enabled).length ?? 0,
+    bypassScores: contentRuleEngine?.getAllBypassScores() ?? {},
+  }))
 }
 
 export function startTracking(): void {

@@ -155,6 +155,32 @@ export interface BreakMode {
   reason?: string
 }
 
+export interface ContentRule {
+  id: string
+  domain: string
+  displayName: string
+  category: string
+  severity: 'high' | 'medium' | 'low'
+  selectors: string[]
+  urlPatterns: string[]
+  action: 'hide' | 'redirect' | 'blur' | 'overlay'
+  redirectTarget?: string
+  antiBypassSearchTerms: string[]
+  antiBypassUrlPatterns: string[]
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
+  autoApplied: boolean
+}
+
+export interface BypassAttempt {
+  ruleId: string
+  method: 'url_navigation' | 'search_query' | 'incognito_window' | 'mobile_redirect' | 'iframe_embed' | 'user_agent_spoof'
+  url: string
+  timestamp: number
+  searchTerm?: string
+}
+
 export interface AppStore {
   blocklist: {
     domains: BlockedDomain[]
@@ -174,6 +200,7 @@ export interface AppStore {
   settings: AppSettings
   blockEventCount: number
   breakMode?: BreakMode
+  contentRules?: ContentRule[]
 }
 
 export type ViewName =

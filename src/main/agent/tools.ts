@@ -3,6 +3,7 @@ import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { ActivityTracker } from '../tracking/ActivityTracker'
 import type { HeuristicEngine } from '../heuristics/HeuristicEngine'
 import type { MonitorService } from '../monitoring/MonitorService'
+import type { ContentRuleEngine } from '../blocking/ContentRuleEngine'
 import {
   insertGoal, getActiveGoals, clearGoal,
   upsertPreference, getPreferences, deletePreference,
@@ -308,6 +309,67 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
       required: ['inference_id', 'action'],
     },
   },
+  {
+    name: 'create_content_rule',
+    description: 'Create an element-level block rule for the browser extension. Use this when the user wants to block a specific feature of a site (e.g. YouTube Shorts, Instagram Reels) without blocking the entire domain. Requires the browser extension to be installed.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        domain: { type: 'string', description: 'The domain to target, e.g. "youtube.com"' },
+        display_name: { type: 'string', description: 'Human-readable name, e.g. "YouTube Shorts"' },
+        selectors: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'CSS selectors for elements to hide, e.g. ["ytd-shorts", "#shorts-container"]',
+        },
+        url_patterns: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'URL glob patterns to redirect away from, e.g. ["*://*.youtube.com/shorts/*"]',
+        },
+        severity: {
+          type: 'string',
+          enum: ['high', 'medium', 'low'],
+          description: 'How addictive/distracting this content is',
+        },
+        enabled: { type: 'boolean', description: 'Whether to activate immediately. Defaults to true.' },
+      },
+      required: ['domain', 'display_name', 'selectors'],
+    },
+  },
+  {
+    name: 'list_content_rules',
+    description: 'List all element-level blocking rules for the browser extension, including which are enabled and bypass attempt counts.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        enabled_only: { type: 'boolean', description: 'Only show enabled rules. Default false.' },
+      },
+    },
+  },
+  {
+    name: 'toggle_content_rule',
+    description: 'Enable or disable an element-level blocking rule by ID.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        rule_id: { type: 'string', description: 'The rule ID to toggle, e.g. "youtube-shorts"' },
+        enabled: { type: 'boolean', description: 'true to enable, false to disable' },
+      },
+      required: ['rule_id', 'enabled'],
+    },
+  },
+  {
+    name: 'get_bypass_attempts',
+    description: 'Get recent bypass attempts — times when the user tried to access content that was element-blocked. Use this to understand whether to escalate to a full domain block.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        rule_id: { type: 'string', description: 'Filter by rule ID. Omit for all rules.' },
+        limit: { type: 'number', description: 'Max attempts to return. Default 20.' },
+      },
+    },
+  },
 ]
 
 // ── Tool executor ─────────────────────────────────────────────────────────────
@@ -317,6 +379,7 @@ export interface ToolDeps {
   tracker: ActivityTracker
   heuristics: HeuristicEngine
   monitor?: MonitorService
+  contentRules?: ContentRuleEngine
 }
 
 export type ToolResult = Record<string, unknown>
@@ -564,6 +627,72 @@ export async function executeTool(
       } else {
         resolveInference(inf.id, 'rejected')
         return { ok: true, action: 'rejected', value: inf.value }
+      }
+    }
+
+    case 'create_content_rule': {
+      const cre = deps.contentRules
+      if (!cre) return { error: 'Browser extension not available — install the extension first' }
+      const rule = cre.addRule({
+        id: (input['domain'] as string).replace(/[^a-z0-9]/gi, '-').toLowerCase() + '-' + randomUUID().slice(0, 6),
+        domain: input['domain'] as string,
+        displayName: input['display_name'] as string,
+        category: 'custom',
+        severity: (input['severity'] as 'high' | 'medium' | 'low') ?? 'medium',
+        selectors: (input['selectors'] as string[]) ?? [],
+        urlPatterns: (input['url_patterns'] as string[]) ?? [],
+        action: 'hide',
+        antiBypassSearchTerms: [],
+        antiBypassUrlPatterns: [],
+        enabled: (input['enabled'] as boolean) !== false,
+        autoApplied: true,
+      })
+      return { ok: true, rule_id: rule.id, domain: rule.domain, enabled: rule.enabled, selectors: rule.selectors.length }
+    }
+
+    case 'list_content_rules': {
+      const cre = deps.contentRules
+      if (!cre) return { error: 'Browser extension not available' }
+      const all = cre.getRules()
+      const filtered = (input['enabled_only'] as boolean) ? all.filter((r) => r.enabled) : all
+      return {
+        rules: filtered.map((r) => ({
+          id: r.id,
+          display_name: r.displayName,
+          domain: r.domain,
+          enabled: r.enabled,
+          severity: r.severity,
+          selectors: r.selectors.length,
+          bypass_count: cre.getBypassScore(r.id),
+        })),
+        extension_connected: cre.isExtensionConnected(),
+      }
+    }
+
+    case 'toggle_content_rule': {
+      const cre = deps.contentRules
+      if (!cre) return { error: 'Browser extension not available' }
+      const ok = cre.toggleRule(input['rule_id'] as string, input['enabled'] as boolean)
+      return ok
+        ? { ok: true, rule_id: input['rule_id'], enabled: input['enabled'] }
+        : { ok: false, error: `Rule "${input['rule_id']}" not found` }
+    }
+
+    case 'get_bypass_attempts': {
+      const cre = deps.contentRules
+      if (!cre) return { error: 'Browser extension not available' }
+      const attempts = cre.getBypassAttempts(input['rule_id'] as string | undefined, (input['limit'] as number) ?? 20)
+      const scores = cre.getAllBypassScores()
+      return {
+        attempts: attempts.map((a) => ({
+          rule_id: a.ruleId,
+          method: a.method,
+          url: a.url,
+          timestamp: new Date(a.timestamp).toISOString(),
+          search_term: a.searchTerm,
+        })),
+        bypass_scores: scores,
+        total_bypasses: Object.values(scores).reduce((s, n) => s + n, 0),
       }
     }
 
