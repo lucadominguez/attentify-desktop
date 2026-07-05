@@ -1,8 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { BrowserWindow, screen } from 'electron'
 import { join } from 'path'
-import { loadApiKey } from '../keystore'
 import { getActiveGoals } from '../data/repository'
+import { getEffectiveApiKey, canUseAi, recordUsage } from '../billing'
 import { debugLog } from '../debug/logger'
 
 export interface OverlayAction {
@@ -25,7 +25,7 @@ export interface OverlayNotification {
 }
 
 const ANTHROPIC_MODEL  = 'claude-haiku-4-5-20251001'
-const OPENROUTER_MODEL = 'anthropic/claude-haiku-4-5'
+const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 const W = 400
 const H = 190
@@ -49,13 +49,13 @@ class NotificationQueue {
   }
 
   refreshClient(): void {
-    const key = loadApiKey()
+    const key = getEffectiveApiKey()
     if (!key) { this.client = null; return }
     const isOR = key.startsWith('sk-or-')
     this.model = isOR ? OPENROUTER_MODEL : ANTHROPIC_MODEL
     this.client = new Anthropic({
       apiKey: key,
-      ...(isOR ? { baseURL: OPENROUTER_BASE, defaultHeaders: { 'HTTP-Referer': 'https://productivitydaemon.app', 'X-Title': 'Productivity Daemon' } } : {}),
+      ...(isOR ? { baseURL: OPENROUTER_BASE, defaultHeaders: { 'HTTP-Referer': 'https://attentify.ai', 'X-Title': 'Attentify' } } : {}),
     })
   }
 
@@ -156,7 +156,7 @@ class NotificationQueue {
   }
 
   private async generateAiMessage(notif: OverlayNotification): Promise<string> {
-    if (!this.client) return notif.rawMessage
+    if (!this.client || !canUseAi()) return notif.rawMessage
 
     const goals = getActiveGoals().slice(0, 3).map((g) => g.text).join('; ') || 'none set'
     const hour = new Date().getHours()
@@ -185,6 +185,7 @@ Rules: Be direct and specific. Name the actual site/behavior. Address user as "y
         max_tokens: 60,
         messages: [{ role: 'user', content: prompt }],
       })
+      recordUsage(this.model, resp.usage?.input_tokens ?? 0, resp.usage?.output_tokens ?? 0)
       const text = (resp.content.find((b) => b.type === 'text') as { type: 'text'; text: string } | undefined)?.text?.trim() ?? ''
       return text || notif.rawMessage
     } catch {

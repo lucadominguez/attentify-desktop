@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Productivity Daemon — Comprehensive QA Stress Test
+ * Attentify — Comprehensive QA Stress Test
  * Run from Windows: node scripts/stress-test.mjs
  */
 
@@ -838,11 +838,11 @@ async function suite9() {
 
   // Path
   total++;
-  if (logs.path && (logs.path.includes('ProductivityDaemon') || logs.path.includes('debug.log'))) {
+  if (logs.path && (logs.path.includes('Attentify') || logs.path.includes('debug.log'))) {
     passed++;
     console.log(`  ✓ log path: ${logs.path}`);
   } else {
-    fail('S9-PATH', 'path contains ProductivityDaemon', logs.path || 'N/A', 'LOW');
+    fail('S9-PATH', 'path contains Attentify', logs.path || 'N/A', 'LOW');
   }
 
   // Entries structure
@@ -991,7 +991,7 @@ async function gauntlet() {
 // ============================================================
 async function main() {
   console.log('═══════════════════════════════════════════════');
-  console.log('  PRODUCTIVITY DAEMON — QA STRESS TEST');
+  console.log('  ATTENTIFY — QA STRESS TEST');
   console.log('═══════════════════════════════════════════════');
   console.log(`Started: ${new Date().toISOString()}`);
   console.log(`Target: ${BASE}`);

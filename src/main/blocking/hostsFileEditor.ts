@@ -70,7 +70,7 @@ function rebuildHosts(domains: string[]): void {
     domains.length > 0
       ? [
           BLOCK_TAG_START,
-          '# DO NOT EDIT — managed by Productivity Daemon',
+          '# DO NOT EDIT — managed by Attentify',
           ...domains.flatMap((d) => [`${SINKHOLE} ${d}`, `${SINKHOLE_V6} ${d}`]),
           BLOCK_TAG_END,
         ].join('\n')

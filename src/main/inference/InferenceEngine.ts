@@ -5,6 +5,7 @@ import {
   type DbInference,
 } from '../data/repository'
 import { getStore, patchStore } from '../store'
+import { canUseAi, recordUsage } from '../billing'
 import { debugLog } from '../debug/logger'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { ActivitySession } from '../../shared/types'
@@ -21,7 +22,7 @@ const AI_CACHE_TTL          = 20 * 60 * 1000
 const AI_RATE_LIMIT_MS      = 4000  // min ms between AI calls
 
 const ANTHROPIC_MODEL  = 'claude-haiku-4-5-20251001'
-const OPENROUTER_MODEL = 'anthropic/claude-haiku-4-5'
+const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
 const SAFE_CATEGORIES = new Set(['development', 'productivity', 'system'])
@@ -306,7 +307,7 @@ export class InferenceEngine {
       apiKey,
       ...(isOpenRouter ? {
         baseURL: OPENROUTER_BASE,
-        defaultHeaders: { 'HTTP-Referer': 'https://productivitydaemon.app', 'X-Title': 'Productivity Daemon' },
+        defaultHeaders: { 'HTTP-Referer': 'https://attentify.ai', 'X-Title': 'Attentify' },
       } : {}),
     })
   }
@@ -590,6 +591,9 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
 
   private async drainAiQueue(): Promise<void> {
     if (this.aiProcessing || this.aiQueue.length === 0 || !this.client) return
+    // Free AI allowance exhausted — drop queued reasoning. Exact domain/keyword
+    // matching (handleCandidate) still works without AI, so blocking continues.
+    if (!canUseAi()) { this.aiQueue.length = 0; return }
     this.aiProcessing = true
 
     while (this.aiQueue.length > 0) {
@@ -607,6 +611,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
           max_tokens: 80,
           messages: [{ role: 'user', content: item.prompt }],
         })
+        recordUsage(this.model, response.usage?.input_tokens ?? 0, response.usage?.output_tokens ?? 0)
         const text = response.content.find((b) => b.type === 'text')?.text ?? ''
         const jsonMatch = text.match(/\{[\s\S]*?\}/)
         if (jsonMatch) {

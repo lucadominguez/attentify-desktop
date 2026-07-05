@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import {
   BarChart2, Activity, X, AlertTriangle, RefreshCw,
   ChevronUp, ChevronDown, Clock, Zap, TrendingUp, MessageSquare, Lightbulb, Download, Check, Globe,
@@ -7,6 +7,10 @@ import type { HeuristicAlert, ActivitySession, AppCategory } from '@shared/types
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
+
+// Stable empty array so the useMemo below keeps a constant dependency identity
+// before data loads (a fresh [] each render would invalidate the memo every time).
+const EMPTY_SESSIONS: ActivitySession[] = []
 
 // ── Animated stat number (counts up on mount) ─────────────────────────────────
 function AnimatedStat({ value }: { value: string }): React.ReactElement {
@@ -70,6 +74,18 @@ function fmt(ms: number): string {
   if (h > 0) return `${h}h`
   if (m > 0) return `${m}m`
   return `${s}s`
+}
+
+// Below this much tracked time, ratios and streaks are statistical noise — a "100%
+// focus score" off 8 minutes means nothing. We gate insight cards behind it and show
+// a "keep tracking" state instead, so the app never contradicts itself.
+const INSIGHT_MIN_MS = 20 * 60 * 1000
+
+// Duration display that distinguishes a real zero ("0m") from a metric with no data
+// behind it. Pass hasData=false when nothing was tracked at all.
+function durOrZero(ms: number, hasData: boolean): string {
+  if (!hasData) return 'No data'
+  return ms > 0 ? fmt(ms) : '0m'
 }
 function fmtTime(ts: number): string { return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }
 function fmtDate(ts: number): string { return new Date(ts).toLocaleDateString([], { month: 'short', day: 'numeric' }) }
@@ -395,6 +411,8 @@ function SessionTimeline({ sessions }: { sessions: ActivitySession[] }): React.R
   const hourMarks = [0, 3, 6, 9, 12, 15, 18, 21]
   const focusedMs = todaySessions.filter((s) => !s.isDistraction).reduce((t, s) => t + s.duration, 0)
   const distMs = todaySessions.filter((s) => s.isDistraction).reduce((t, s) => t + s.duration, 0)
+  // Collapse a near-empty timeline rather than render an empty frame.
+  if (focusedMs + distMs < 120000) return null
   return (
     <div className="section-panel p-3">
       <div className="flex items-center justify-between mb-2">
@@ -552,7 +570,17 @@ function HourlyHeatmapRow({ hourRows }: { hourRows: HourRow[] }): React.ReactEle
 
 function CategoryBreakdown({ sessions }: { sessions: ActivitySession[] }): React.ReactElement {
   const cats = buildCategoryBreakdown(sessions)
-  if (cats.length === 0) return <p className="text-[10px] text-center py-4" style={{ color: 'rgba(0,200,255,0.3)' }}>No category data yet</p>
+  const total = cats.reduce((s, c) => s + c.ms, 0)
+  // A donut that's one 99% "Other" slice is worse than nothing — below a real
+  // breakdown, show a compact empty state instead of a misleading chart.
+  const meaningfulMs = cats.filter((c) => c.cat.toLowerCase() !== 'other').reduce((s, c) => s + c.ms, 0)
+  if (cats.length === 0 || total < 120000 || meaningfulMs / total < 0.15) {
+    return (
+      <p className="text-[10px] text-center py-6 leading-relaxed" style={{ color: 'rgba(120,150,180,0.5)' }}>
+        Not enough recognised activity yet.<br />Category breakdown appears as apps are classified.
+      </p>
+    )
+  }
   const donutData = cats.slice(0, 7).map((c) => ({ label: c.cat, value: c.ms, color: c.color }))
   return (
     <div className="flex items-center gap-3">
@@ -691,6 +719,25 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
 
   const { colors } = useTheme()
 
+  // Memoized session-derived aggregates. Declared BEFORE the early return so the
+  // hook order is stable. Each builder scans every session with several filter/sort
+  // passes; keying on recentSessions avoids recomputing them on unrelated re-renders
+  // (Insights tab switches, export/refresh button state changes).
+  const sessionsForDerive = data?.recentSessions ?? EMPTY_SESSIONS
+  const derived = useMemo(() => {
+    const totalTracked = sessionsForDerive.reduce((s, r) => s + r.duration, 0)
+    return {
+      totalTracked,
+      dayRows: buildDayRows(sessionsForDerive),
+      appRows: buildAppRows(sessionsForDerive, totalTracked),
+      hourRows: buildHourRows(sessionsForDerive),
+      matrix: buildHourOfWeekMatrix(sessionsForDerive),
+      streaks: computeStreaks(sessionsForDerive),
+      idlePeriods: buildIdlePeriods(sessionsForDerive),
+      relapses: buildRelapses(sessionsForDerive),
+    }
+  }, [sessionsForDerive])
+
   if (loading || !data) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -707,12 +754,9 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
   const totalWeekly = weekly.focusedTime + weekly.distractedTime
   const focusPct = totalWeekly > 0 ? (weekly.focusedTime / totalWeekly) * 100 : 0
   const activeAlerts = heuristicAlerts.filter((a) => !a.dismissed)
-  const dayRows = buildDayRows(recentSessions)
-  const totalTracked = recentSessions.reduce((s, r) => s + r.duration, 0)
-  const appRows = buildAppRows(recentSessions, totalTracked)
-  const hourRows = buildHourRows(recentSessions)
-  const matrix = buildHourOfWeekMatrix(recentSessions)
-  const streaks = computeStreaks(recentSessions)
+
+  const { totalTracked, dayRows, appRows, hourRows, matrix, streaks, idlePeriods, relapses } = derived
+
   const weeklyAvgScore = dayRows.length > 0 ? Math.round(dayRows.reduce((s, r) => s + r.score, 0) / dayRows.length) : 0
   const todayTracked = today.focusedTime + today.distractedTime + today.neutralTime
   const switchFreq = recentSessions.length > 0 && totalTracked > 0
@@ -725,8 +769,6 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
   const insights = generateInsights(focusPct, weekly.distractedTime, streaks, switchFreq, appRows, hourRows, totalWeekly)
 
   const todayStart = new Date().setHours(0, 0, 0, 0)
-  const idlePeriods = buildIdlePeriods(recentSessions)
-  const relapses = buildRelapses(recentSessions)
   const todayIdlePeriods = idlePeriods.filter((ip) => ip.start >= todayStart)
   const todayIdleMs = todayIdlePeriods.reduce((s, ip) => s + ip.duration, 0)
   const todayRelapses = relapses.filter((r) => r.ts >= todayStart)
@@ -825,7 +867,17 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
       </div>
 
       {/* ── AI Insights ──────────────────────────────────────────────────── */}
-      {insights.length > 0 && (
+      {/* Gated behind a minimum-data threshold so we never praise "100% focus"
+          off a few minutes of tracking (which reads as broken next to the
+          fragmented-streak stats). Until then, one honest "keep tracking" card. */}
+      {totalWeekly < INSIGHT_MIN_MS ? (
+        <div className="section-panel px-3 py-3 flex items-center gap-2.5">
+          <Lightbulb size={12} style={{ color: colors.accent, flexShrink: 0 }} />
+          <p className="text-[10px] leading-relaxed" style={{ color: colors.textSecondary }}>
+            Not enough data yet to draw conclusions — keep Attentify running and insights will appear once there's enough activity to be meaningful.
+          </p>
+        </div>
+      ) : insights.length > 0 && (
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${insights.length}, 1fr)` }}>
           {insights.map((ins, i) => (
             <div key={i} className="section-panel px-3 py-2.5 flex flex-col gap-1.5 animate-entry"
@@ -849,11 +901,11 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
       {/* Today KPIs */}
       <div className="grid grid-cols-4 gap-1.5">
         {[
-          { label: 'Focus Score', value: `${Math.round(today.focusScore)}%`, color: today.focusScore >= 70 ? '#00e676' : today.focusScore >= 40 ? '#ffaa00' : '#ff4444', sub: todayTracked > 0 ? `${fmt(todayTracked)} tracked` : 'no data', tooltip: `${Math.round(today.focusScore)}% focus score` },
-          { label: 'Focused', value: today.focusedTime > 0 ? fmt(today.focusedTime) : '—', color: '#00c8ff', sub: todayTracked > 0 ? `${Math.round((today.focusedTime / todayTracked) * 100)}% of tracked` : '—', tooltip: `${fmt(today.focusedTime)} on productive apps today` },
-          { label: 'Distracted', value: today.distractedTime > 0 ? fmt(today.distractedTime) : '—', color: today.distractedTime > 3600000 ? '#ff4444' : '#ffaa00', sub: todayTracked > 0 ? `${Math.round((today.distractedTime / todayTracked) * 100)}% of tracked` : '—', tooltip: `${fmt(today.distractedTime)} on distracting apps` },
-          { label: 'Switch Rate', value: switchFreq > 0 ? `${switchFreq}/h` : '—', color: switchFreq > 20 ? '#ff4444' : switchFreq > 10 ? '#ffaa00' : '#00e676', sub: switchFreq > 20 ? 'fragmented' : switchFreq > 0 ? 'solid' : 'no data', tooltip: `${switchFreq} app switches/h` },
-          { label: 'Idle Time', value: todayIdleMs > 0 ? fmt(todayIdleMs) : '—', color: todayIdleMs > 3600000 ? '#ffaa00' : 'rgba(0,200,255,0.5)', sub: todayIdlePeriods.length > 0 ? `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m` : 'no idle gaps', tooltip: `${fmt(todayIdleMs)} idle today (gaps ≥3m between sessions)` },
+          { label: 'Focus Score', value: todayTracked > 0 ? `${Math.round(today.focusScore)}%` : 'No data', color: today.focusScore >= 70 ? '#00e676' : today.focusScore >= 40 ? '#ffaa00' : '#ff4444', sub: todayTracked > 0 ? `${fmt(todayTracked)} tracked` : 'keep tracking', tooltip: `${Math.round(today.focusScore)}% focus score` },
+          { label: 'Focused', value: durOrZero(today.focusedTime, todayTracked > 0), color: '#00c8ff', sub: todayTracked > 0 ? `${Math.round((today.focusedTime / todayTracked) * 100)}% of tracked` : 'keep tracking', tooltip: `${fmt(today.focusedTime)} on productive apps today` },
+          { label: 'Distracted', value: durOrZero(today.distractedTime, todayTracked > 0), color: today.distractedTime > 3600000 ? '#ff4444' : '#ffaa00', sub: todayTracked > 0 ? `${Math.round((today.distractedTime / todayTracked) * 100)}% of tracked` : 'keep tracking', tooltip: `${fmt(today.distractedTime)} on distracting apps` },
+          { label: 'Switch Rate', value: todayTracked > 0 ? `${switchFreq}/h` : 'No data', color: switchFreq > 20 ? '#ff4444' : switchFreq > 10 ? '#ffaa00' : '#00e676', sub: todayTracked > 0 ? (switchFreq > 20 ? 'fragmented' : 'steady') : 'keep tracking', tooltip: `${switchFreq} app switches/h` },
+          { label: 'Idle Time', value: durOrZero(todayIdleMs, todayTracked > 0), color: todayIdleMs > 3600000 ? '#ffaa00' : 'rgba(0,200,255,0.5)', sub: todayIdlePeriods.length > 0 ? `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m` : (todayTracked > 0 ? 'no idle gaps' : 'keep tracking'), tooltip: `${fmt(todayIdleMs)} idle today (gaps ≥3m between sessions)` },
           { label: 'Relapses', value: String(todayRelapses.length), color: todayRelapses.length > 3 ? '#ff4444' : todayRelapses.length > 0 ? '#ffaa00' : '#00e676', sub: todayRelapses.length > 0 ? 'returned to dist.' : 'none today', tooltip: `${todayRelapses.length} times returned to distraction within 30m` },
           { label: 'Blocked', value: String(today.blockEvents || 0), color: '#00c8ff', sub: 'blocked today', tooltip: `${today.blockEvents} blocked attempts today` },
           { label: 'Sessions', value: String(today.focusSessions), color: '#00c8ff', sub: 'started today', tooltip: `${today.focusSessions} focus sessions today` },

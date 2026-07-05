@@ -2,7 +2,7 @@
 
 ## Process model
 
-Productivity Daemon uses Electron's two-process model:
+Attentify uses Electron's two-process model:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

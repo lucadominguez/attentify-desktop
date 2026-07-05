@@ -21,6 +21,20 @@ export type BlockEvent = {
   timestamp: number
 }
 
+// Curated set of the highest-traffic distractions, blocked automatically the moment
+// a Deep Focus session starts (minus whatever the user allowlisted). Deep Focus means
+// "block the obvious time-sinks without me having to list them."
+export const DEEP_FOCUS_DOMAINS: string[] = [
+  'twitter.com', 'x.com', 'instagram.com', 'facebook.com', 'tiktok.com', 'snapchat.com',
+  'reddit.com', 'threads.net', 'pinterest.com', 'tumblr.com', 'linkedin.com', 'quora.com',
+  'youtube.com', 'youtu.be', 'twitch.tv', 'netflix.com', 'hulu.com', 'disneyplus.com',
+  'primevideo.com', 'hbomax.com', 'max.com', 'vimeo.com', 'dailymotion.com', 'kick.com',
+  'news.ycombinator.com', '9gag.com', 'imgur.com', 'buzzfeed.com', 'dailymail.co.uk',
+  'cnn.com', 'foxnews.com', 'discord.com', 'amazon.com', 'ebay.com', 'aliexpress.com',
+  'temu.com', 'steampowered.com', 'store.steampowered.com', 'epicgames.com',
+  'chess.com', 'lichess.org', 'coolmathgames.com', 'espn.com', 'twitch.tv',
+]
+
 export class BlockingEngine extends EventEmitter {
   private domains: BlockedDomain[] = []
   private processes: BlockedProcess[] = []
@@ -31,6 +45,9 @@ export class BlockingEngine extends EventEmitter {
   private blockEventCount = 0
   private tickCount = 0
   private protectionApplied = false
+  // Domains added by an active Deep Focus session (kept separate from the user's
+  // persistent blocklist so they survive a store refresh and are cleaned up on exit).
+  private deepDomains: string[] = []
 
   constructor(elevation: ElevationStatus) {
     super()
@@ -47,12 +64,43 @@ export class BlockingEngine extends EventEmitter {
   }
 
   loadState(domains: BlockedDomain[], processes: BlockedProcess[]): void {
-    this.domains = domains
+    this.domains = [...domains]
+    // Re-apply any active Deep Focus blocks so a store refresh never silently drops them.
+    for (const d of this.deepDomains) {
+      if (!this.domains.find((x) => x.domain === d)) this.domains.push({ domain: d, addedAt: Date.now(), reason: 'deep-focus' })
+    }
     this.processes = processes
     if (this.active && this.elevation === 'full') {
       this.syncHostsFile()
     }
     this.syncAppBlocker()
+  }
+
+  // ── Deep Focus ────────────────────────────────────────────────────────────────
+
+  startDeepFocus(allowlist: string[], expiresInMs?: number): number {
+    const allow = new Set((allowlist ?? []).map((a) => a.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '')))
+    this.deepDomains = []
+    for (const d of DEEP_FOCUS_DOMAINS) {
+      if (allow.has(d)) continue
+      if (this.domains.find((x) => x.domain === d)) continue // already blocked by the user — leave it
+      const r = this.addDomain(d, expiresInMs)
+      if (r.ok) this.deepDomains.push(d)
+    }
+    return this.deepDomains.length
+  }
+
+  endDeepFocus(): void {
+    for (const d of this.deepDomains) this.removeDomain(d)
+    this.deepDomains = []
+  }
+
+  isDeepDomain(domain: string): boolean {
+    return this.deepDomains.includes(domain)
+  }
+
+  inDeepFocus(): boolean {
+    return this.deepDomains.length > 0
   }
 
   // Apply all protection layers without starting the session poller.

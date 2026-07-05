@@ -91,7 +91,7 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
                 className="flex items-center gap-1 text-[11px] transition-colors"
                 style={{ color: colors.textMuted }}
               >
-                <MessageSquare size={10} /> Ask Daemon
+                <MessageSquare size={10} /> Ask Attentify
               </button>
             )}
           </div>

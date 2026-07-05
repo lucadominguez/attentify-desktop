@@ -144,7 +144,7 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
               attention leak{unfixedCount !== 1 ? 's' : ''}
             </h1>
             <p className="text-sm mt-1" style={{ color: colors.textSecondary }}>
-              Each issue below has a one-click fix or you can ask Daemon to handle it.
+              Each issue below has a one-click fix or you can ask Attentify to handle it.
             </p>
           </div>
           <p className="text-xs mt-1" style={{ color: colors.textSecondary }}>

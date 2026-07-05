@@ -45,6 +45,10 @@ function relativeDate(ts: number): string {
 
 const DAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
+// Common distractions offered as one-tap suggestion chips to seed the blocklist.
+const DOMAIN_SUGGESTIONS = ['twitter.com', 'instagram.com', 'reddit.com', 'youtube.com', 'tiktok.com', 'facebook.com']
+const PROCESS_SUGGESTIONS = ['Discord', 'Steam', 'Spotify', 'Slack', 'Telegram']
+
 const CAT_COLOR: Record<AppCategory, string> = {
   browser: '#2196f3', social: '#ef5350', entertainment: '#ef5350',
   gaming: '#ff6b35', productivity: '#4caf50', communication: '#ffb800',
@@ -138,7 +142,9 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
   const sessionRemaining = activeSession?.endsAt ? Math.max(0, activeSession.endsAt - now) : null
   const activeSchedules = store.schedules.filter((s) => s.active)
 
-  const visibleSessions = showAll ? activitySessions : activitySessions.slice(0, 40)
+  // Suppress sub-minute sessions — a log full of "0m" rows is noise, not signal.
+  const loggedSessions = activitySessions.filter((s) => s.duration >= 60000)
+  const visibleSessions = showAll ? loggedSessions : loggedSessions.slice(0, 40)
   const grouped = new Map<string, ActivitySession[]>()
   for (const s of visibleSessions) {
     const key = relativeDate(s.startTime)
@@ -150,12 +156,12 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
     <div className="p-4 animate-fade-in space-y-3 overflow-y-auto h-full">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-xl flex items-center gap-2" style={{ color: colors.textPrimary }}>
-            <Shield size={19} className={isShieldOn ? 'text-accent-green' : 'text-navy-500'} />
-            Overview
-          </h1>
-          <p className="text-[10px] mt-0.5" style={{ color: colors.textSecondary }}>Protection status · blocklist management · activity log</p>
+        <div className="flex items-center gap-2.5">
+          <Shield size={18} style={{ color: colors.accent, flexShrink: 0 }} />
+          <div>
+            <h1 className="font-semibold text-[15px]" style={{ color: colors.textPrimary }}>Protection</h1>
+            <p className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>Blocklists, feed blocks, and activity log</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {onChatWith && (
@@ -163,22 +169,24 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
               onClick={handleAskDaemon}
               title="Get AI analysis of your current protection setup and activity"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-colors"
-              style={{ background: 'rgba(33,150,243,0.1)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.2)' }}
+              style={{ background: colors.accentBg, color: colors.accent, border: `1px solid ${colors.border}` }}
             >
               <MessageSquare size={11} /> Ask AI
             </button>
           )}
+          {/* Passive status badge — not a control. Green (on) or a quiet neutral
+              (idle); never red, since "idle" is not an error. */}
           <div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold"
-            title={isShieldOn ? 'Protection layers active' : 'No active session'}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium"
+            title={isShieldOn ? 'Protection layers active' : 'No active session or blocklist yet'}
             style={{
-              background: isShieldOn ? 'rgba(76,175,80,0.12)' : colors.accentBg,
+              background: isShieldOn ? 'rgba(76,175,80,0.1)' : 'transparent',
               border: `1px solid ${isShieldOn ? 'rgba(76,175,80,0.25)' : colors.border}`,
               color: isShieldOn ? '#4caf50' : colors.textMuted,
             }}
           >
-            <div className={`w-1.5 h-1.5 rounded-full ${isShieldOn ? 'bg-accent-green animate-pulse' : ''}`} style={!isShieldOn ? { background: colors.border } : undefined} />
-            {isShieldOn ? 'Protection Active' : 'Protection Idle'}
+            <div className={`w-1.5 h-1.5 rounded-full ${isShieldOn ? 'bg-accent-green' : ''}`} style={!isShieldOn ? { background: colors.textDim } : undefined} />
+            {isShieldOn ? 'Protection active' : 'Protection idle'}
           </div>
         </div>
       </div>
@@ -316,10 +324,27 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
             )}
           </div>
 
+          {/* Tappable suggestions — a friendlier way to seed the blocklist than a
+              placeholder that reads like an entered value. */}
+          <div className="flex flex-wrap gap-1">
+            {DOMAIN_SUGGESTIONS
+              .filter((s) => !store.blocklist.domains.some((d) => d.domain === s))
+              .slice(0, 4)
+              .map((s) => (
+                <button
+                  key={s}
+                  onClick={async () => { await api.addDomain(s); onRefresh() }}
+                  className="text-[10px] px-2 py-0.5 rounded-full transition-colors hover:brightness-125"
+                  style={{ background: colors.accentBg, color: colors.accent, border: `1px solid ${colors.border}` }}
+                >
+                  + {s}
+                </button>
+              ))}
+          </div>
           <div className="flex gap-1.5">
             <input
               type="text"
-              placeholder="twitter.com"
+              placeholder="Add a site…"
               value={newDomain}
               onChange={(e) => setNewDomain(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddDomain()}
@@ -374,10 +399,25 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
             )}
           </div>
 
+          <div className="flex flex-wrap gap-1">
+            {PROCESS_SUGGESTIONS
+              .filter((s) => !store.blocklist.processes.some((p) => p.name.toLowerCase() === s.toLowerCase()))
+              .slice(0, 4)
+              .map((s) => (
+                <button
+                  key={s}
+                  onClick={async () => { await api.addProcess(s); onRefresh() }}
+                  className="text-[10px] px-2 py-0.5 rounded-full transition-colors hover:brightness-125"
+                  style={{ background: 'rgba(255,184,0,0.1)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.2)' }}
+                >
+                  + {s}
+                </button>
+              ))}
+          </div>
           <div className="flex gap-1.5">
             <input
               type="text"
-              placeholder="Discord"
+              placeholder="Add an app…"
               value={newProcess}
               onChange={(e) => setNewProcess(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddProcess()}
@@ -397,6 +437,36 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
           </div>
         </div>
       </div>
+
+      {/* Feed blocks — enforced by the browser extension, not the hosts file */}
+      {(store.feedBlocks?.length ?? 0) > 0 && (
+        <div className="rounded-xl p-3" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
+          <div className="flex items-center gap-1.5 mb-2">
+            <Shield size={12} style={{ color: '#4caf50' }} />
+            <p className="text-[11px] font-semibold" style={{ color: colors.textPrimary }}>Feed Blocks</p>
+            <span className="ml-auto text-[9px]" style={{ color: colors.textSecondary }}>via browser extension</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {store.feedBlocks!.map((f) => (
+              // A blocked feed is the app doing its job → read as confirmed/green,
+              // not red (red is reserved for problems).
+              <div
+                key={f.domain}
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
+                title={`${f.displayName} is hidden by the Attentify browser extension`}
+                style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.22)' }}
+              >
+                <Shield size={10} style={{ color: '#4caf50' }} />
+                <span className="text-[10px] font-medium" style={{ color: colors.textPrimary }}>{f.displayName}</span>
+                <span className="text-[8.5px] px-1 py-0.5 rounded" style={{ background: 'rgba(76,175,80,0.15)', color: '#4caf50' }}>hidden</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[9px]" style={{ color: colors.textSecondary }}>
+            Distracting feeds are hidden in your browser. Install the extension and Attentify syncs these automatically.
+          </p>
+        </div>
+      )}
 
       {/* Schedules */}
       {activeSchedules.length > 0 && (
@@ -429,10 +499,10 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
         <div className="flex items-center gap-1.5 mb-3">
           <Clock size={12} style={{ color: colors.textSecondary }} />
           <p className="text-[11px] font-semibold" style={{ color: colors.textPrimary }}>Activity Log</p>
-          <span className="ml-auto text-[9px]" style={{ color: colors.textSecondary }}>{activitySessions.length} sessions tracked</span>
+          <span className="ml-auto text-[9px]" style={{ color: colors.textSecondary }}>{loggedSessions.length} sessions tracked</span>
         </div>
 
-        {activitySessions.length === 0 ? (
+        {loggedSessions.length === 0 ? (
           <p className="text-[10px] text-center py-6" style={{ color: colors.textSecondary }}>No activity recorded yet — tracking starts automatically in the background</p>
         ) : (
           <div className="space-y-3">
@@ -487,12 +557,12 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
               </div>
             ))}
 
-            {activitySessions.length > 40 && !showAll && (
+            {loggedSessions.length > 40 && !showAll && (
               <button
                 onClick={() => setShowAll(true)}
                 className="w-full text-[10px] py-1.5 transition-colors" style={{ color: colors.textSecondary }}
               >
-                Show all {activitySessions.length} sessions →
+                Show all {loggedSessions.length} sessions →
               </button>
             )}
           </div>

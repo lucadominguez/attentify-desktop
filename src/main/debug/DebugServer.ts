@@ -18,7 +18,7 @@ let _mainWinRef: import('electron').BrowserWindow | null = null
 export function setDebugMainWindow(win: import('electron').BrowserWindow | null): void { _mainWinRef = win }
 
 export const DEBUG_PORT = 9119
-const PORT_FILE = join('C:\\ProgramData', 'ProductivityDaemon', 'debug-port')
+const PORT_FILE = join('C:\\ProgramData', 'Attentify', 'debug-port')
 const FALLBACK_PORTS = [9119, 9120, 9121, 9122, 9123]
 
 interface Deps {

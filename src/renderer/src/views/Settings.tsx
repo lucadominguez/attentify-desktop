@@ -1,13 +1,14 @@
 import React, { useState } from 'react'
-import { Shield, Zap, Bell, Key, CheckCircle } from 'lucide-react'
+import { Shield, Zap, Bell, Key, CheckCircle, Sparkles, Sun, Moon, TrendingUp, ChevronRight } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
-import type { AppStore } from '@shared/types'
+import type { AppStore, UsageState, CloudState, ViewName } from '@shared/types'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
 interface SettingsProps {
   store: AppStore
   onRefresh: () => void
+  onNavigate?: (view: ViewName) => void
 }
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }): React.ReactElement {
@@ -25,16 +26,50 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
   )
 }
 
-export default function SettingsView({ store, onRefresh }: SettingsProps): React.ReactElement {
-  const { colors } = useTheme()
+export default function SettingsView({ store, onRefresh, onNavigate }: SettingsProps): React.ReactElement {
+  const { colors, theme, toggle } = useTheme()
   const currentMode = store.settings.blockingMode ?? 'auto'
   const [apiInput, setApiInput] = useState('')
   const [apiSaved, setApiSaved] = useState(false)
   const [hasKey, setHasKey] = useState<boolean | null>(null)
+  const [usage, setUsage] = useState<UsageState | null>(null)
+  const [cloud, setCloud] = useState<CloudState | null>(null)
+  const [licenseInput, setLicenseInput] = useState('')
+  const [licenseBusy, setLicenseBusy] = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
 
   React.useEffect(() => {
     api.getApiKeyStatus().then((s) => setHasKey(s.hasKey))
+    api.getUsage().then(setUsage).catch(() => {})
+    api.getCloud().then(setCloud).catch(() => {})
+    const off = api.onUsageChanged((u) => setUsage(u))
+    return off
   }, [])
+
+  const saveLicense = async (): Promise<void> => {
+    if (!licenseInput.trim()) return
+    setLicenseBusy(true)
+    const state = await api.setCloudLicense(licenseInput.trim())
+    setCloud(state)
+    setLicenseInput('')
+    setLicenseBusy(false)
+    api.getUsage().then(setUsage).catch(() => {})
+  }
+
+  const clearLicense = async (): Promise<void> => {
+    const state = await api.clearCloudLicense()
+    setCloud(state)
+    api.getUsage().then(setUsage).catch(() => {})
+  }
+
+  const subscribe = async (): Promise<void> => {
+    setCheckingOut(true)
+    try {
+      const res = await api.cloudCheckout()
+      if (res.url) await api.openExternal(res.url)
+    } catch { /* ignore */ }
+    setCheckingOut(false)
+  }
 
   const setMode = async (mode: 'auto' | 'ask'): Promise<void> => {
     await api.setStore({ settings: { ...store.settings, blockingMode: mode } })
@@ -70,11 +105,55 @@ export default function SettingsView({ store, onRefresh }: SettingsProps): React
           Settings
         </h1>
         <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
-          Configure how the Daemon responds to threats
+          Configure how Attentify responds to threats
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
+
+        {/* ── Appearance ────────────────────────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={theme === 'dark' ? <Moon size={11} /> : <Sun size={11} />} label="Appearance" />
+          <div
+            className="flex items-center justify-between p-4 rounded-lg"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <div>
+              <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Theme</p>
+              <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+                {theme === 'dark' ? 'Dark — easier on the eyes at night' : 'Light — brighter for daytime'}
+              </p>
+            </div>
+            <button
+              onClick={toggle}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-medium transition-all"
+              style={{ background: colors.accentBg, border: `1px solid ${colors.border}`, color: colors.accent }}
+            >
+              {theme === 'dark' ? <><Sun size={13} /> Switch to light</> : <><Moon size={13} /> Switch to dark</>}
+            </button>
+          </div>
+        </section>
+
+        {/* ── Extra modules ─────────────────────────────────────────────────── */}
+        {onNavigate && (
+          <section>
+            <SectionHeader icon={<Sparkles size={11} />} label="Extra Modules" />
+            <button
+              onClick={() => onNavigate('algo-track')}
+              className="w-full flex items-center gap-3 p-4 rounded-lg text-left transition-all hover:brightness-110"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+            >
+              <TrendingUp size={16} style={{ color: colors.accent, flexShrink: 0 }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>AlgoTrack</p>
+                <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+                  See how algorithmic feeds pull you in — an optional side module.
+                </p>
+              </div>
+              <ChevronRight size={14} style={{ color: colors.textMuted }} />
+            </button>
+          </section>
+        )}
 
         {/* ── Blocking Mode ─────────────────────────────────────────────────── */}
         <section>
@@ -213,6 +292,92 @@ export default function SettingsView({ store, onRefresh }: SettingsProps): React
           </div>
         </section>
 
+        {/* ── Free AI & Cloud ──────────────────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={<Sparkles size={11} />} label="AI Usage & Cloud" />
+          <div
+            className="p-4 space-y-3"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            {cloud?.active ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-bold" style={{ color: '#4caf50' }}>Cloud active — unlimited AI</p>
+                  <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted }}>
+                    {cloud.email ? `Subscribed as ${cloud.email}` : 'Subscription active'} · $5/mo
+                  </p>
+                </div>
+                <button
+                  onClick={() => void clearLicense()}
+                  className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest"
+                  style={{ background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.25)', color: 'rgba(255,68,68,0.7)', fontFamily: '"Share Tech Mono", monospace' }}
+                >
+                  Unlink
+                </button>
+              </div>
+            ) : usage?.hasOwnKey ? (
+              <p className="text-[10px]" style={{ color: colors.textSecondary }}>
+                Using your own API key — usage is billed directly to you and is never metered here.
+              </p>
+            ) : (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold" style={{ color: colors.textPrimary }}>Free AI credit</span>
+                  <span className="text-[10px] tabular-nums" style={{ color: usage?.exhausted ? '#ff6666' : '#4caf50' }}>
+                    ${(usage?.usedUsd ?? 0).toFixed(2)} / ${(usage?.limitUsd ?? 1).toFixed(2)} used
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, Math.round(((usage?.usedUsd ?? 0) / (usage?.limitUsd || 1)) * 100))}%`,
+                      background: usage?.exhausted ? '#ff5252' : '#4caf50',
+                    }}
+                  />
+                </div>
+                <p className="text-[9px]" style={{ color: colors.textMuted }}>
+                  {usage?.exhausted
+                    ? 'Your free AI credit is used up. Subscribe to Cloud for $5/mo to keep using AI features — or add your own key below.'
+                    : 'The app includes free AI to get you started. When it runs out, subscribe to Cloud ($5/mo) or add your own key.'}
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    onClick={() => void subscribe()}
+                    disabled={checkingOut}
+                    className="flex-1 py-2 text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                    style={{ background: 'rgba(76,175,80,0.12)', border: '1px solid rgba(76,175,80,0.3)', color: '#4caf50', fontFamily: '"Share Tech Mono", monospace' }}
+                  >
+                    {checkingOut ? 'Opening…' : 'Subscribe $5/mo'}
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    value={licenseInput}
+                    onChange={(e) => setLicenseInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && void saveLicense()}
+                    placeholder="Have a license? pd_live_…"
+                    className="flex-1 px-3 py-2 text-[10px] outline-none"
+                    style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: colors.textPrimary }}
+                  />
+                  <button
+                    onClick={() => void saveLicense()}
+                    disabled={!licenseInput.trim() || licenseBusy}
+                    className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest disabled:opacity-40"
+                    style={{ background: 'rgba(0,200,255,0.08)', border: '1px solid rgba(0,200,255,0.25)', color: '#00c8ff', fontFamily: '"Share Tech Mono", monospace' }}
+                  >
+                    {licenseBusy ? '…' : 'Link'}
+                  </button>
+                </div>
+                {cloud?.license && !cloud.active && (
+                  <p className="text-[9px]" style={{ color: '#ff8866' }}>That license isn’t active yet — check your subscription or re-enter it.</p>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+
         {/* ── API Key ────────────────────────────────────────────────────────── */}
         <section>
           <SectionHeader icon={<Key size={11} />} label="AI API Key" />
@@ -225,8 +390,8 @@ export default function SettingsView({ store, onRefresh }: SettingsProps): React
                 className="w-2 h-2 rounded-full flex-shrink-0"
                 style={{ background: hasKey ? '#4caf50' : '#ffaa00', boxShadow: hasKey ? '0 0 6px #4caf50' : '0 0 6px #ffaa00' }}
               />
-              <span className="text-[10px]" style={{ color: hasKey ? '#4caf50' : '#ffaa00' }}>
-                {hasKey === null ? 'Checking...' : hasKey ? 'API key configured' : 'No API key — AI features disabled'}
+              <span className="text-[10px]" style={{ color: hasKey ? '#4caf50' : '#00c8ff' }}>
+                {hasKey === null ? 'Checking...' : hasKey ? 'Your own API key configured' : 'Optional — AI already works via included free credit'}
               </span>
             </div>
 
@@ -278,7 +443,7 @@ export default function SettingsView({ store, onRefresh }: SettingsProps): React
               </div>
             )}
             <p className="mt-2 text-[9px]" style={{ color: colors.textMuted }}>
-              Anthropic API key (sk-ant-...) or OpenRouter key (sk-or-...). Used for AI inference, guard alerts, and the Daemon Assistant.
+              Anthropic API key (sk-ant-...) or OpenRouter key (sk-or-...). Used for AI inference, guard alerts, and the Attentify assistant.
             </p>
           </div>
         </section>

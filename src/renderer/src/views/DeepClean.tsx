@@ -386,7 +386,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                       onClick={() => onChatWith(buildChatMessage(results))}
                       className="text-[10px] text-indigo-400 hover:text-indigo-300 transition-colors"
                     >
-                      Ask Daemon instead →
+                      Ask Attentify instead →
                     </button>
                   )}
                   {pendingSteps.length > 0 && (
@@ -495,7 +495,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                     onClick={() => onChatWith(buildChatMessage(results))}
                     className="ml-auto text-[10px] hover:text-accent-blue transition-colors" style={{ color: colors.textSecondary }}
                   >
-                    Ask Daemon to handle all →
+                    Ask Attentify to handle all →
                   </button>
                 )}
               </div>
@@ -556,7 +556,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                               onChatWith(`Help me fix this scan issue: ${issue.title} — ${issue.description}`)
                             }}
                             className="text-[10px] hover:text-accent-blue transition-colors flex-shrink-0 ml-1" style={{ color: colors.textSecondary }}
-                            title="Ask Daemon"
+                            title="Ask Attentify"
                           >
                             Ask AI
                           </button>

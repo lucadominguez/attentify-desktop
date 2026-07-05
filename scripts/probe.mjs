@@ -22,7 +22,7 @@
  *   node scripts/probe.mjs break:end
  */
 
-const PORT_FILE = 'C:\\ProgramData\\ProductivityDaemon\\debug-port'
+const PORT_FILE = 'C:\\ProgramData\\Attentify\\debug-port'
 const FALLBACK_PORTS = [9119, 9120, 9121, 9122, 9123]
 
 // Resolve the actual debug server port: check the port file first, then scan.
@@ -243,7 +243,7 @@ if (cmd === 'inject:sweep') {
 
 const summary = await get('/summary')
 
-banner(`Productivity Daemon  pid:${ping.pid}  uptime:${ping.uptime}s`)
+banner(`Attentify  pid:${ping.pid}  uptime:${ping.uptime}s`)
 
 const s = summary.appState
 console.log(`  elevation    : ${s.elevation}`)
@@ -277,4 +277,4 @@ for (const e of summary.logs.slice(-10)) {
 }
 
 console.log(`\n  Debug API: ${BASE}`)
-console.log(`  Log file:  C:\\ProgramData\\ProductivityDaemon\\logs\\debug.log\n`)
+console.log(`  Log file:  C:\\ProgramData\\Attentify\\logs\\debug.log\n`)

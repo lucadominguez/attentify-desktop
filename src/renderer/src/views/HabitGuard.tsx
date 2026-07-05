@@ -157,7 +157,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
             label: 'Block Events',
             value: weekly.blockEvents.toString(),
             color: '#2196f3',
-            tooltip: `${weekly.blockEvents} access attempts blocked this week by the daemon`,
+            tooltip: `${weekly.blockEvents} access attempts blocked this week by Attentify`,
           },
         ].map((chip) => (
           <div

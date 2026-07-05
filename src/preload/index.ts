@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   AppStore, ScanResult, FocusSession, ElevationStatus, IntentCheckResult,
   AgentDoneEvent, AgentProactiveEvent, HeuristicAlert, DailyStats, ActivitySession,
+  UsageState, CloudState,
 } from '../shared/types'
 
 const api = {
@@ -56,6 +57,19 @@ const api = {
   getApiKeyStatus: (): Promise<{ hasKey: boolean }> => ipcRenderer.invoke('apikey:get-status'),
   setApiKey: (key: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('apikey:set', key),
   deleteApiKey: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('apikey:delete'),
+
+  // ── Free-usage metering + Cloud subscription ───────────────────────────────
+  getUsage: (): Promise<UsageState> => ipcRenderer.invoke('usage:get'),
+  onUsageChanged: (cb: (usage: UsageState) => void): (() => void) => {
+    const handler = (_e: unknown, usage: UsageState): void => cb(usage)
+    ipcRenderer.on('usage:changed', handler)
+    return () => ipcRenderer.off('usage:changed', handler)
+  },
+  getCloud: (): Promise<CloudState> => ipcRenderer.invoke('cloud:get'),
+  setCloudLicense: (license: string): Promise<CloudState> => ipcRenderer.invoke('cloud:set-license', license),
+  clearCloudLicense: (): Promise<CloudState> => ipcRenderer.invoke('cloud:clear-license'),
+  cloudCheckout: (email?: string): Promise<{ url?: string; error?: string }> => ipcRenderer.invoke('cloud:checkout', email),
+  openExternal: (url: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('shell:open-external', url),
 
   // ── Goals ────────────────────────────────────────────────────────────────
   getGoals: () => ipcRenderer.invoke('goals:get'),
@@ -119,6 +133,9 @@ const api = {
 
   exportPdf: (): Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke('analytics:export-pdf'),
+
+  getAlwaysOn: (): Promise<{ enabled: boolean; startupRegistered: boolean }> => ipcRenderer.invoke('alwayson:get'),
+  setAlwaysOn: (enabled: boolean): Promise<{ ok: boolean; enabled: boolean; startupRegistered: boolean }> => ipcRenderer.invoke('alwayson:set', enabled),
 
   registerStartupDaemon: (): Promise<boolean> => ipcRenderer.invoke('daemon:register-startup'),
   unregisterStartupDaemon: (): Promise<boolean> => ipcRenderer.invoke('daemon:unregister-startup'),

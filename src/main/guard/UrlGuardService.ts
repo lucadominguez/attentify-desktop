@@ -1,8 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getActiveGoals, getPreferences, bufferEvent } from '../data/repository'
+import { canUseAi, recordUsage } from '../billing'
 
 const ANTHROPIC_MODEL  = 'claude-haiku-4-5-20251001'
-const OPENROUTER_MODEL = 'anthropic/claude-haiku-4-5'
+const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
 // Domains that are always productive — skip AI check entirely
@@ -119,8 +120,8 @@ export class UrlGuardService {
       ...(isOpenRouter ? {
         baseURL: OPENROUTER_BASE,
         defaultHeaders: {
-          'HTTP-Referer': 'https://productivitydaemon.app',
-          'X-Title': 'Productivity Daemon',
+          'HTTP-Referer': 'https://attentify.ai',
+          'X-Title': 'Attentify',
         },
       } : {}),
     })
@@ -193,7 +194,7 @@ export class UrlGuardService {
   }
 
   private async askAI(url: string, domain: string, title: string, searchQuery?: string): Promise<void> {
-    if (!this.client) return
+    if (!this.client || !canUseAi()) return
 
     const goals = getActiveGoals()
     const prefs = getPreferences()
@@ -227,6 +228,7 @@ Reply with a single JSON object (no markdown):
         messages: [{ role: 'user', content: prompt }],
       })
 
+      recordUsage(this.model, response.usage?.input_tokens ?? 0, response.usage?.output_tokens ?? 0)
       const text = response.content.find((b) => b.type === 'text')?.text ?? ''
       const jsonMatch = text.match(/\{[\s\S]*?\}/)
       if (!jsonMatch) return

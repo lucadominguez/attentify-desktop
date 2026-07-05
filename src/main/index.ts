@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } from 'electron'
 import { join } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, renameSync } from 'fs'
 import { execSync } from 'child_process'
 import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine, getAgentSvc, getContentRuleEngine } from './ipc'
 import { startDebugServer, setDebugMainWindow } from './debug/DebugServer'
@@ -12,9 +12,15 @@ import { migrateFromStateJson, purgeOldData } from './data/repository'
 // GPU shader + HTTP disk cache cause "Access is denied" / "Unable to move the cache"
 // errors when the process switches between elevated and non-elevated integrity levels,
 // because AppData is per-user-per-integrity-level. Fix: point every cache Chromium
-// touches to C:\ProgramData\ProductivityDaemon which is accessible at both levels.
+// touches to C:\ProgramData\Attentify which is accessible at both levels.
 if (process.platform === 'win32') {
-  const base = join('C:\\ProgramData', 'ProductivityDaemon')
+  const base = join('C:\\ProgramData', 'Attentify')
+  // One-time migration from the pre-rebrand data dir so existing installs keep
+  // their state, database, logs and caches after the Attentify rename.
+  try {
+    const legacy = join('C:\\ProgramData', 'ProductivityDaemon')
+    if (existsSync(legacy) && !existsSync(base)) renameSync(legacy, base)
+  } catch { /* non-fatal: a fresh dir will be created below */ }
   app.setPath('userData', base)
   app.setPath('cache', join(base, 'Cache'))
   // Tell Chromium's network stack to use the same location for the HTTP disk cache
@@ -26,6 +32,28 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disable-shader-disk-cache')
 
 const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
+
+// ── Single-instance guard ─────────────────────────────────────────────────────
+// Only one Attentify may run at a time. Two instances would race on the SQLite
+// file, the hosts-file editor and the debug-server port — corrupting state and
+// leaving orphaned blocks. If we can't get the lock, another instance already
+// owns it: hand off (it will focus its window via the 'second-instance' event)
+// and quit immediately. In dev, ELECTRON_RENDERER_URL is set and hot-reload spawns
+// short-lived processes, so we skip the guard there to avoid fighting the reloader.
+const gotSingleInstanceLock = RENDERER_URL ? true : app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+  // Nothing else should run in this process.
+  process.exit(0)
+}
+
+// Never let an unhandled rejection/exception silently kill the background service.
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] unhandledRejection:', reason)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[main] uncaughtException:', err)
+})
 
 function getIconPath(): string {
   const candidates = [
@@ -40,7 +68,17 @@ let mainWin: BrowserWindow | null = null
 let interstitialWin: BrowserWindow | null = null
 let tray: Tray | null = null
 
+// Bring the existing window to the foreground. Used both by the tray and when a
+// second launch attempt is handed off to us via the single-instance lock.
+function focusMainWindow(): void {
+  if (!mainWin) { createMainWindow(); return }
+  if (mainWin.isMinimized()) mainWin.restore()
+  if (!mainWin.isVisible()) mainWin.show()
+  mainWin.focus()
+}
+
 function createMainWindow(): void {
+  const iconPath = getIconPath()
   mainWin = new BrowserWindow({
     width: 980,
     height: 660,
@@ -51,6 +89,7 @@ function createMainWindow(): void {
     titleBarStyle: 'hidden',
     backgroundColor: '#0a1628',
     show: false,
+    ...(iconPath ? { icon: iconPath } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
@@ -120,13 +159,13 @@ function createTray(): void {
     const iconPath = getIconPath()
     const icon = iconPath ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty()
     tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 16, height: 16 }))
-    tray.setToolTip('Productivity Daemon — Protecting your attention')
+    tray.setToolTip('Attentify — Protecting your attention')
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Open Dashboard', click: () => mainWin?.show() },
+      { label: 'Open Dashboard', click: () => focusMainWindow() },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() },
     ]))
-    tray.on('double-click', () => mainWin?.show())
+    tray.on('double-click', () => focusMainWindow())
   } catch { /* non-fatal */ }
 }
 
@@ -155,6 +194,11 @@ ipcMain.handle('elevation:relaunch-admin', () => {
   setTimeout(() => app.quit(), 500)
   return true
 })
+
+// A second launch (e.g. from the Start menu / search bar) is handed to us here
+// instead of starting a new process — surface the existing window rather than
+// looking like nothing happened.
+app.on('second-instance', () => focusMainWindow())
 
 app.whenReady().then(async () => {
   // Open DB before anything else — IPC handlers need it
@@ -194,13 +238,13 @@ app.whenReady().then(async () => {
     contentRules: getContentRuleEngine,
   })
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createMainWindow()
-    else mainWin?.show()
-  })
+  app.on('activate', () => focusMainWindow())
 })
 
 app.on('window-all-closed', () => {
+  // When Always-On is enabled, behave like a background service: keep running in the
+  // tray (and keep enforcing blocks) instead of quitting when the window closes.
+  if (getStore().settings?.alwaysOn) return
   if (process.platform !== 'darwin') app.quit()
 })
 

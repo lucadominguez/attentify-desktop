@@ -70,13 +70,22 @@ export default function DeepFocusMode({ store, onRefresh }: DeepFocusModeProps):
               Until {new Date(activeSession.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
-          <button
-            onClick={handleStop}
-            className="flex items-center gap-2 text-sm font-semibold px-6 py-2.5 rounded-full transition-colors"
-            style={{ background: colors.cardBg, color: colors.textPrimary, border: `1px solid ${colors.border}` }}
-          >
-            <Square size={14} /> End session
-          </button>
+          {activeSession.endsAt && Date.now() < activeSession.endsAt ? (
+            <div
+              className="flex items-center gap-2 text-sm font-semibold px-6 py-2.5 rounded-full"
+              style={{ background: 'rgba(255,184,0,0.08)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.25)' }}
+            >
+              <Lock size={14} /> Locked until it ends
+            </div>
+          ) : (
+            <button
+              onClick={handleStop}
+              className="flex items-center gap-2 text-sm font-semibold px-6 py-2.5 rounded-full transition-colors"
+              style={{ background: colors.cardBg, color: colors.textPrimary, border: `1px solid ${colors.border}` }}
+            >
+              <Square size={14} /> End session
+            </button>
+          )}
         </div>
       ) : (
         <>

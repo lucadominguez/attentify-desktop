@@ -4,3 +4,6 @@ dist/
 *.tsbuildinfo
 .DS_Store
 Thumbs.db
+
+# Secret: bundled provider key lives here (copy config.example.ts → config.ts)
+src/main/config.ts

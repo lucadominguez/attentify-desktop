@@ -118,7 +118,7 @@ export const PREDEFINED_RULES: ContentRule[] = [
     action: 'hide',
     antiBypassSearchTerms: ['twitter trending', 'x trending', 'twitter explore'],
     antiBypassUrlPatterns: [],
-    enabled: false, createdAt: 0, updatedAt: 0, autoApplied: false,
+    enabled: true, createdAt: 0, updatedAt: 0, autoApplied: false,
   },
   {
     id: 'reddit-all',
@@ -138,7 +138,7 @@ export const PREDEFINED_RULES: ContentRule[] = [
     action: 'hide',
     antiBypassSearchTerms: ['reddit front page', 'r/all', 'reddit popular'],
     antiBypassUrlPatterns: ['*/r/all/*', '*/r/popular/*'],
-    enabled: false, createdAt: 0, updatedAt: 0, autoApplied: false,
+    enabled: true, createdAt: 0, updatedAt: 0, autoApplied: false,
   },
   {
     id: 'facebook-reels',

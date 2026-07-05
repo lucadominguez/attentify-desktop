@@ -4,8 +4,9 @@ import { platform } from 'process'
 import { join } from 'path'
 import { homedir } from 'os'
 
-const WIN_TASK_NAME = 'ProductivityDaemon'
-const MAC_PLIST_ID = 'com.productivitydaemon.app'
+const WIN_TASK_NAME = 'Attentify'
+const LEGACY_WIN_TASK_NAME = 'ProductivityDaemon' // pre-rebrand; cleaned up on (un)register
+const MAC_PLIST_ID = 'com.attentify.app'
 const MAC_PLIST_PATH = join(homedir(), `Library/LaunchAgents/${MAC_PLIST_ID}.plist`)
 
 function ps(cmd: string): void {
@@ -24,6 +25,8 @@ function registerWindowsTask(execPath: string): boolean {
       `schtasks /create /tn "${WIN_TASK_NAME}" /tr "${exe}" /sc onlogon /rl highest /f /it`,
       { stdio: 'ignore', timeout: 15000 }
     )
+    // Remove the pre-rebrand task so it doesn't launch the old path too.
+    try { execSync(`schtasks /delete /tn "${LEGACY_WIN_TASK_NAME}" /f`, { stdio: 'ignore', timeout: 5000 }) } catch { /* none */ }
     return true
   } catch { return false }
 }

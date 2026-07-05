@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Shield, ChevronRight, Lock, ScanLine, CheckCircle2, AlertTriangle, RefreshCw, Zap } from 'lucide-react'
-import PulsingSphere from '../components/PulsingSphere'
+import BrandMark from '../components/BrandMark'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -107,11 +107,11 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
   if (step === 'welcome') {
     return (
       <Wrapper>
-        <div className="mb-6">
-          <PulsingSphere mode="idle" size={160} />
+        <div className="mb-6" style={{ filter: 'drop-shadow(0 0 24px rgba(42,168,234,0.35))' }}>
+          <BrandMark size={150} />
         </div>
         <h1 className="text-4xl font-extrabold mb-2" style={{ letterSpacing: '-0.02em', color: colors.textPrimary }}>
-          Productivity Daemon
+          Attentify
         </h1>
         <p className="text-accent-blue font-semibold text-lg mb-3">Anti mind virus.</p>
         <p className="text-base leading-relaxed mb-10" style={{ color: colors.textSecondary }}>
@@ -190,7 +190,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         {elevation === 'soft' && (
           <>
             <p className="text-sm leading-relaxed mb-4" style={{ color: colors.textSecondary }}>
-              Productivity Daemon needs administrator rights to edit your system's hosts file — this is how site blocking works at the network layer, before browsers even load the page.
+              Attentify needs administrator rights to edit your system's hosts file — this is how site blocking works at the network layer, before browsers even load the page.
             </p>
             <div className="w-full p-4 rounded-xl mb-6 text-left" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
               <p className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: colors.textSecondary }}>What admin access enables</p>

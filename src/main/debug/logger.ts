@@ -1,7 +1,7 @@
 import { appendFileSync, existsSync, mkdirSync, statSync, renameSync } from 'fs'
 import { join } from 'path'
 
-const LOG_DIR = join('C:\\ProgramData', 'ProductivityDaemon', 'logs')
+const LOG_DIR = join('C:\\ProgramData', 'Attentify', 'logs')
 const LOG_PATH = join(LOG_DIR, 'debug.log')
 const MAX_BYTES = 4 * 1024 * 1024  // rotate at 4 MB
 

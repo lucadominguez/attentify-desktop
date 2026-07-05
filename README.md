@@ -1,8 +1,8 @@
-# Productivity Daemon
+# Attentify
 
 > An AI focus companion — system-level distraction blocking with a conversational interface.
 
-Productivity Daemon is a Windows/macOS desktop app built with Electron + React + TypeScript. It combines a **chat-first AI interface** with hard system-level controls: hosts-file blocking, process killing, and heuristic attention monitoring. No account, no telemetry, no network calls — everything runs locally.
+Attentify is a Windows/macOS desktop app built with Electron + React + TypeScript. It combines a **chat-first AI interface** with hard system-level controls: hosts-file blocking, process killing, and heuristic attention monitoring. No account, no telemetry, no network calls — everything runs locally.
 
 ---
 

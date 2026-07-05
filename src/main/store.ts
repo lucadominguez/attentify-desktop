@@ -12,6 +12,7 @@ const defaultSettings = {
   focusGoalHoursPerDay: 4,
   ollamaUrl: 'http://localhost:11434',
   ollamaModel: 'phi3:mini',
+  alwaysOn: false,
 }
 
 const defaultStore: AppStore = {
@@ -29,6 +30,13 @@ const defaultStore: AppStore = {
   chatHistory: [],
   settings: defaultSettings,
   blockEventCount: 0,
+  aiUsageUsd: 0,
+  cloudActive: false,
+  // Shown in the Overview as feed-level blocks (enforced by the browser extension).
+  feedBlocks: [
+    { domain: 'reddit.com', displayName: 'Reddit feed' },
+    { domain: 'twitter.com', displayName: 'Twitter / X feed' },
+  ],
 }
 
 function getStorePath(): string {
@@ -62,14 +70,23 @@ export function saveStore(store: AppStore): void {
   }
 }
 
-let _store: AppStore = loadStore()
+// Lazily loaded on first access. This MUST NOT be eagerly initialized at module
+// load time: index.ts calls app.setPath('userData', 'C:\\ProgramData\\Attentify')
+// during startup, but ES module imports are evaluated before that line runs. An
+// eager loadStore() here would therefore read from the *default* AppData path
+// (where nothing exists → onboardingComplete:false) while later saves go to the
+// ProgramData path — so every launch looked like a fresh install. Deferring the
+// load until getStore() is first called (inside app.whenReady, after setPath)
+// keeps reads and writes pointed at the same file.
+let _store: AppStore | null = null
 
 export function getStore(): AppStore {
+  if (_store === null) _store = loadStore()
   return _store
 }
 
 export function patchStore(patch: Partial<AppStore>): AppStore {
-  _store = { ..._store, ...patch }
+  _store = { ...getStore(), ...patch }
   saveStore(_store)
   return _store
 }

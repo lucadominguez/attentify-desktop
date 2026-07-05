@@ -20,11 +20,22 @@ interface Message {
 }
 
 const QUICK_COMMANDS = [
-  'Block Twitter for 2 hours',
-  "I'm writing until 5pm, be strict",
-  "What's distracting me most?",
-  'Block social media for today',
+  "I'm writing until 5pm, keep me off social",
+  'Hide YouTube Shorts but keep my subscriptions',
+  'No music videos or rage bait in my feed',
+  "What's been eating my focus this week?",
 ]
+
+// The chat is strictly conversational. URL-scoring / classification calls the
+// daemon makes internally sometimes look like `{"distraction":true,...}` — those
+// must never surface here. This guards the display so any raw-JSON / classification
+// payload that ever lands in the history is hidden rather than shown to the user.
+function looksLikeDebug(content: string): boolean {
+  const t = content.trim()
+  if (!t) return true
+  if (/^[[{]/.test(t) && /"(distraction|distractionProbability|intent|confidence|category|reasoning|predicted_domain)"\s*:/.test(t)) return true
+  return false
+}
 
 // ── Minimal markdown renderer ─────────────────────────────────────────────────
 
@@ -128,6 +139,8 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
   const [activeToolName, setActiveToolName] = useState<string | null>(null)
   const [streamingId, setStreamingId] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [paywalled, setPaywalled] = useState(false)
+  const [checkingOut, setCheckingOut] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const streamingIdRef = useRef<string | null>(null)
@@ -141,7 +154,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
         setMessages([{
           id: 'welcome',
           role: 'assistant',
-          content: "Hey. I'm your Daemon Assistant. Tell me what you need to focus on and I'll block everything that gets in the way.\n\nTry: **Block Instagram for 2 hours** or **Start a deep focus session**",
+          content: "Hey. I'm Attentify, your focus assistant. Tell me what you need to focus on and I'll block everything that gets in the way.\n\nTry: **Block Instagram for 2 hours** or **Start a deep focus session**",
           timestamp: Date.now(),
         }])
         return
@@ -149,6 +162,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
       // history already comes ASC from the API (getAgentMessages reverses DESC→ASC)
       const visible = rows
         .filter((r) => r.role === 'user' || r.role === 'assistant')
+        .filter((r) => !looksLikeDebug(r.content.startsWith('[proactive] ') ? r.content.slice(12) : r.content))
         .map((r) => ({
           id: r.id,
           role: r.role as 'user' | 'assistant',
@@ -158,14 +172,14 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
       setMessages(visible.length > 0 ? visible : [{
         id: 'welcome',
         role: 'assistant',
-        content: "Hey. I'm your Daemon Assistant. Tell me what you need to focus on and I'll block everything that gets in the way.\n\nTry: **Block Instagram for 2 hours** or **Start a deep focus session**",
+        content: "Hey. I'm Attentify, your focus assistant. Tell me what you need to focus on and I'll block everything that gets in the way.\n\nTry: **Block Instagram for 2 hours** or **Start a deep focus session**",
         timestamp: Date.now(),
       }])
     }).catch(() => {
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: "Hey. I'm your Daemon Assistant. Tell me what you need to focus on and I'll block everything that gets in the way.",
+        content: "Hey. I'm Attentify, your focus assistant. Tell me what you need to focus on and I'll block everything that gets in the way.",
         timestamp: Date.now(),
       }])
     })
@@ -210,9 +224,18 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
       setStreamingId(null)
       streamingIdRef.current = null
       setActiveToolName(null)
+      const isPaywall = err === 'PAYWALL'
+      if (isPaywall) setPaywalled(true)
       setMessages((prev) => [
         ...prev.filter((m) => !m.streaming),
-        { id: crypto.randomUUID(), role: 'assistant', content: `Error: ${err}`, timestamp: Date.now() },
+        {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: isPaywall
+            ? "You've used up your **$1 of free AI**. Subscribe to **Attentify Cloud** for **$5/month** to keep using the assistant — or add your own OpenRouter key in Settings (never metered)."
+            : `Error: ${err}`,
+          timestamp: Date.now(),
+        },
       ])
     })
 
@@ -275,10 +298,19 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
     setMessages([{
       id: 'welcome',
       role: 'assistant',
-      content: "History cleared. I'm your Daemon Assistant — tell me what you need to focus on.",
+      content: "History cleared. I'm Attentify, your focus assistant — tell me what you need to focus on.",
       timestamp: Date.now(),
     }])
   }, [confirmClear])
+
+  const handleSubscribe = useCallback(async (): Promise<void> => {
+    setCheckingOut(true)
+    try {
+      const res = await api.cloudCheckout()
+      if (res.url) await api.openExternal(res.url)
+    } catch { /* ignore */ }
+    setCheckingOut(false)
+  }, [])
 
   const showQuickCommands = messages.length <= 1 ||
     (messages.length === 1 && messages[0]?.id === 'welcome')
@@ -295,7 +327,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
             <MessageSquare size={14} className="text-accent-blue" />
           </div>
           <div>
-            <p className="font-semibold text-sm" style={{ color: colors.textPrimary }}>Daemon Assistant</p>
+            <p className="font-semibold text-sm" style={{ color: colors.textPrimary }}>Attentify Assistant</p>
             <p className="text-[10px]" style={{ color: colors.textMuted }}>Runs locally · No data leaves your device</p>
           </div>
         </div>
@@ -386,6 +418,20 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '' }: C
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Paywall — free AI exhausted */}
+      {paywalled && (
+        <div className="px-4 pb-2 flex-shrink-0">
+          <button
+            onClick={() => void handleSubscribe()}
+            disabled={checkingOut}
+            className="w-full py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 rounded-xl"
+            style={{ background: 'rgba(76,175,80,0.15)', border: '1px solid rgba(76,175,80,0.35)', color: '#4caf50' }}
+          >
+            {checkingOut ? 'Opening checkout…' : 'Subscribe — $5/month'}
+          </button>
         </div>
       )}
 

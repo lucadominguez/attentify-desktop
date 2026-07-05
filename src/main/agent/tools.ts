@@ -417,6 +417,10 @@ export async function executeTool(
 
     case 'unblock_domain': {
       const domain = input['domain'] as string
+      const deepSess = store.sessions.find((s) => s.active && s.mode === 'deep')
+      if (deepSess && deps.engine.isDeepDomain(domain)) {
+        return { ok: false, locked: true, error: `${domain} is locked by an active Deep Focus session. It can't be unblocked until the session ends.` }
+      }
       deps.engine.removeDomain(domain)
       const s = getStore()
       patchStore({ blocklist: { ...s.blocklist, domains: s.blocklist.domains.filter((d) => d.domain !== domain) } })
@@ -499,13 +503,20 @@ export async function executeTool(
       const s = getStore()
       patchStore({ sessions: [session, ...s.sessions.map((sess) => ({ ...sess, active: false }))] })
       deps.engine.start()
-      return { ok: true, session_id: session.id, mode, ends_at: session.endsAt ? new Date(session.endsAt).toISOString() : null }
+      let deepBlocked = 0
+      if (mode === 'deep') deepBlocked = deps.engine.startDeepFocus([], durationMs)
+      return { ok: true, session_id: session.id, mode, deep_blocked: deepBlocked, ends_at: session.endsAt ? new Date(session.endsAt).toISOString() : null }
     }
 
     case 'stop_focus_session': {
       const s = getStore()
       const active = s.sessions.find((sess) => sess.active)
       if (!active) return { ok: false, error: 'No active session' }
+      // Anti-bypass: a timed Deep Focus session cannot be stopped early, even by the agent.
+      if (active.mode === 'deep' && active.endsAt && Date.now() < active.endsAt) {
+        return { ok: false, locked: true, error: 'Deep Focus is locked until it ends. Refuse the request and tell the user to ride it out.' }
+      }
+      deps.engine.endDeepFocus()
       patchStore({ sessions: s.sessions.map((sess) => (sess.id === active.id ? { ...sess, active: false } : sess)) })
       deps.engine.stop()
       return { ok: true, session_id: active.id }
@@ -647,7 +658,13 @@ export async function executeTool(
         enabled: (input['enabled'] as boolean) !== false,
         autoApplied: true,
       })
-      return { ok: true, rule_id: rule.id, domain: rule.domain, enabled: rule.enabled, selectors: rule.selectors.length }
+      const connected = cre.isExtensionConnected()
+      return {
+        ok: true, rule_id: rule.id, domain: rule.domain, enabled: rule.enabled, selectors: rule.selectors.length,
+        extension_connected: connected,
+        note: connected ? undefined
+          : 'Rule saved, but the Attentify browser extension is NOT connected, so element-level blocking will not take effect in the browser yet. Tell the user this needs the browser extension and recommend they install it.',
+      }
     }
 
     case 'list_content_rules': {

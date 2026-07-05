@@ -1,7 +1,11 @@
 {
-  "name": "productivity-daemon",
+  "name": "attentify",
   "version": "1.0.0",
   "description": "Antivirus for attention — a system-level focus and distraction-blocking tool",
+  "author": {
+    "name": "Attentify",
+    "email": "ludomi2502@gmail.com"
+  },
   "main": "out/main/index.js",
   "type": "module",
   "scripts": {
@@ -13,8 +17,8 @@
     "package:all": "npm run build && electron-builder --win --mac"
   },
   "build": {
-    "appId": "com.productivitydaemon.app",
-    "productName": "Productivity Daemon",
+    "appId": "com.attentify.app",
+    "productName": "Attentify",
     "directories": {
       "output": "dist"
     },
@@ -31,7 +35,8 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "Attentify-Setup.${ext}"
     },
     "mac": {
       "target": "dmg",

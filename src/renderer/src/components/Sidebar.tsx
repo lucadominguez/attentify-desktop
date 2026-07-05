@@ -1,11 +1,10 @@
 import React, { useState } from 'react'
 import {
-  Home, Shield, Zap, Lock, Calendar, TrendingUp,
-  MessageSquare, Activity, RefreshCw, Brain, Sun, Moon, ListChecks, Settings,
+  Home, Shield, Lock, Calendar, Zap,
+  MessageSquare, Activity, RefreshCw, ListChecks, Settings,
 } from 'lucide-react'
 import type { ViewName, FocusSession, ElevationStatus } from '@shared/types'
-import PulsingSphere from './PulsingSphere'
-import { useTheme } from '../context/ThemeContext'
+import BrandMark from './BrandMark'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -23,33 +22,70 @@ interface NavItem {
   id: ViewName
   label: string
   icon: React.ReactNode
+  desc: string   // plain-language tooltip so every menu item explains itself
 }
 
+// Primary features — the everyday surfaces of a focus app.
 const mainNav: NavItem[] = [
-  { id: 'home',          label: 'Home',       icon: <Home size={14} /> },
-  { id: 'focus-shield',  label: 'Overview',   icon: <Shield size={14} /> },
-  { id: 'deep-clean',    label: 'Deep Clean', icon: <Zap size={14} /> },
-  { id: 'analytics',     label: 'Analytics',  icon: <Activity size={14} /> },
-  { id: 'patterns',      label: 'Patterns',   icon: <Brain size={14} /> },
-  { id: 'actions',       label: 'Actions',    icon: <ListChecks size={14} /> },
-  { id: 'settings',      label: 'Settings',   icon: <Settings size={14} /> },
+  { id: 'home',         label: 'Home',       icon: <Home size={15} />,      desc: 'Your dashboard — today\'s focus at a glance' },
+  { id: 'insights',     label: 'Insights',   icon: <Activity size={15} />,  desc: 'Where your time went and the habits behind it' },
+  { id: 'focus-shield', label: 'Protection', icon: <Shield size={15} />,    desc: 'Blocklists, feed blocks, and the activity log' },
+  { id: 'deep-focus',   label: 'Deep Focus', icon: <Lock size={15} />,      desc: 'Lock out distractions for a set time' },
+  { id: 'actions',      label: 'Actions',    icon: <ListChecks size={15} />,desc: 'Review and approve flagged distractions' },
 ]
 
-const toolsNav: NavItem[] = [
-  { id: 'deep-focus',        label: 'Deep Focus',     icon: <Lock size={14} /> },
-  { id: 'schedule-manager',  label: 'Scheduler',      icon: <Calendar size={14} /> },
-  { id: 'algo-track',        label: 'AlgoTrack',      icon: <TrendingUp size={14} /> },
+// Secondary utilities.
+const utilityNav: NavItem[] = [
+  { id: 'deep-clean',       label: 'Deep Clean', icon: <Zap size={15} />,      desc: 'Scan this device for installed distractions' },
+  { id: 'schedule-manager', label: 'Scheduler',  icon: <Calendar size={15} />, desc: 'Block automatically on a recurring schedule' },
+  { id: 'settings',         label: 'Settings',   icon: <Settings size={15} />, desc: 'Blocking mode, AI key, and preferences' },
 ]
 
 export default function Sidebar({
   currentView, onNavigate, onChatOpen, activeSession, elevation, alertCount = 0, pendingActionCount = 0,
 }: SidebarProps): React.ReactElement {
   const [relaunching, setRelaunching] = useState(false)
-  const { theme, toggle } = useTheme()
 
   const handleRelaunch = async (): Promise<void> => {
     setRelaunching(true)
     try { await api.relaunchAsAdmin() } catch { setRelaunching(false) }
+  }
+
+  const renderItem = (item: NavItem): React.ReactElement => {
+    const isActive = currentView === item.id
+    const badge =
+      item.id === 'insights' && alertCount > 0 ? { n: alertCount, color: '#ffaa00' } :
+      item.id === 'actions' && pendingActionCount > 0 ? { n: pendingActionCount, color: '#ffaa00' } :
+      null
+    return (
+      <button
+        key={item.id}
+        onClick={() => onNavigate(item.id)}
+        title={item.desc}
+        className={`sidebar-item w-full text-left ${isActive ? 'active' : ''}`}
+      >
+        <span
+          className="flex-shrink-0"
+          style={{ color: isActive ? '#00c8ff' : '#4a6a86', transition: 'color 0.15s' }}
+        >
+          {item.icon}
+        </span>
+        <span className="flex-1">{item.label}</span>
+        {badge && (
+          <span
+            className="flex-shrink-0 flex items-center justify-center text-[9px] font-bold rounded-full"
+            style={{
+              minWidth: 16, height: 16, padding: '0 4px',
+              background: `${badge.color}22`,
+              border: `1px solid ${badge.color}80`,
+              color: badge.color,
+            }}
+          >
+            {badge.n > 9 ? '9+' : badge.n}
+          </span>
+        )}
+      </button>
+    )
   }
 
   return (
@@ -63,47 +99,27 @@ export default function Sidebar({
     >
       {/* ── Logo ──────────────────────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-3 px-4 flex-shrink-0"
-        style={{ height: 52, borderBottom: '1px solid rgba(0,200,255,0.08)' }}
+        className="flex items-center gap-2.5 px-4 flex-shrink-0"
+        style={{ height: 56, borderBottom: '1px solid rgba(0,200,255,0.08)' }}
       >
-        {/* Diamond icon */}
-        <div className="flex-shrink-0 relative" style={{ width: 28, height: 28 }}>
-          <svg viewBox="0 0 28 28" width={28} height={28}>
-            <polygon
-              points="14,2 26,14 14,26 2,14"
-              fill="none"
-              stroke="rgba(0,200,255,0.9)"
-              strokeWidth="1.5"
-            />
-            <polygon
-              points="14,6 22,14 14,22 6,14"
-              fill="rgba(0,200,255,0.12)"
-              stroke="rgba(0,200,255,0.45)"
-              strokeWidth="1"
-            />
-            <circle cx="14" cy="14" r="2.5" fill="rgba(0,200,255,0.85)" />
-          </svg>
+        {/* Attentify shield mark */}
+        <div className="flex-shrink-0 relative" style={{ width: 26, height: 26 }}>
+          <BrandMark size={26} />
         </div>
 
         <div className="min-w-0 flex-1">
           <div
-            className="text-[11px] font-bold leading-tight tracking-widest uppercase"
-            style={{ color: '#cce8ff', letterSpacing: '0.2em' }}
+            className="text-[15px] font-semibold leading-none"
+            style={{ color: '#e8f4ff', letterSpacing: '0.01em' }}
           >
-            Productivity
-          </div>
-          <div
-            className="text-[9px] tracking-widest uppercase"
-            style={{ color: 'rgba(0,200,255,0.55)', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.25em' }}
-          >
-            Daemon
+            Attentify
           </div>
         </div>
 
-        {/* Status indicator */}
+        {/* Protection status dot */}
         {elevation === 'full' && activeSession && (
           <div
-            className="flex-shrink-0 w-1.5 h-1.5 rounded-full animate-glow-pulse"
+            className="flex-shrink-0 w-1.5 h-1.5 rounded-full"
             style={{ background: '#00e676', boxShadow: '0 0 6px #00e676' }}
             title="Full protection active"
           />
@@ -120,208 +136,68 @@ export default function Sidebar({
       {/* ── Elevation warning ─────────────────────────────────────────────── */}
       {(elevation === 'soft' || elevation === 'unknown') && (
         <div
-          className="mx-3 mt-2.5 flex-shrink-0"
+          className="mx-3 mt-2.5 flex-shrink-0 rounded-lg"
           style={{
-            background: 'rgba(255,107,53,0.06)',
-            border: '1px solid rgba(255,107,53,0.25)',
-            borderRadius: 2,
+            background: 'rgba(255,170,0,0.06)',
+            border: '1px solid rgba(255,170,0,0.22)',
             padding: '8px 10px',
           }}
         >
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-1 h-1 rounded-full" style={{ background: '#ff6b35' }} />
-            <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#ff6b35' }}>
-              Blocking Disabled
+            <div className="w-1 h-1 rounded-full" style={{ background: '#ffaa00' }} />
+            <p className="text-[10px] font-semibold" style={{ color: '#ffaa00' }}>
+              Blocking disabled
             </p>
           </div>
-          <p className="text-[9px] leading-relaxed mb-2" style={{ color: '#5a7a94' }}>
-            Admin rights required for site blocking.
+          <p className="text-[10px] leading-relaxed mb-2" style={{ color: '#6a89a6' }}>
+            Admin rights are required for site blocking.
           </p>
           <button
             onClick={handleRelaunch}
             disabled={relaunching}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-md transition-all disabled:opacity-60"
             style={{
-              background: 'rgba(255,107,53,0.12)',
-              color: '#ff6b35',
-              border: '1px solid rgba(255,107,53,0.25)',
-              letterSpacing: '0.15em',
+              background: 'rgba(0,200,255,0.10)',
+              color: '#00c8ff',
+              border: '1px solid rgba(0,200,255,0.28)',
             }}
           >
             {relaunching
-              ? <><RefreshCw size={8} className="animate-spin" /> Relaunching…</>
-              : <><Shield size={8} /> Enable Full</>}
+              ? <><RefreshCw size={11} className="animate-spin" /> Relaunching…</>
+              : <><Shield size={11} /> Enable protection</>}
           </button>
         </div>
       )}
 
       {/* ── Navigation ────────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto py-3">
-
-        {/* Main nav */}
+      <nav className="flex-1 overflow-y-auto pt-3 pb-2">
         <div className="mb-1">
-          <div className="px-4 mb-2 flex items-center gap-2">
-            <span className="hud-label">Command Center</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.12)' }} />
-          </div>
-
-          {mainNav.map((item) => {
-            const isActive = currentView === item.id
-            return (
-              <button
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
-                className={`sidebar-item w-full text-left ${isActive ? 'active' : ''}`}
-              >
-                <span
-                  className="flex-shrink-0"
-                  style={{ color: isActive ? '#00c8ff' : '#3a5a74', transition: 'color 0.15s' }}
-                >
-                  {item.icon}
-                </span>
-                <span className="flex-1">{item.label}</span>
-                {item.id === 'patterns' && alertCount > 0 && (
-                  <span
-                    className="flex-shrink-0 flex items-center justify-center text-[8px] font-bold"
-                    style={{
-                      width: 16, height: 16,
-                      background: 'rgba(255,68,68,0.2)',
-                      border: '1px solid rgba(255,68,68,0.5)',
-                      color: '#ff4444',
-                      fontFamily: '"Share Tech Mono", monospace',
-                    }}
-                  >
-                    {alertCount > 9 ? '9+' : alertCount}
-                  </span>
-                )}
-                {item.id === 'actions' && pendingActionCount > 0 && (
-                  <span
-                    className="flex-shrink-0 flex items-center justify-center text-[8px] font-bold"
-                    style={{
-                      width: 16, height: 16,
-                      background: 'rgba(255,170,0,0.2)',
-                      border: '1px solid rgba(255,170,0,0.5)',
-                      color: '#ffaa00',
-                      fontFamily: '"Share Tech Mono", monospace',
-                    }}
-                  >
-                    {pendingActionCount > 9 ? '9+' : pendingActionCount}
-                  </span>
-                )}
-                {isActive && (
-                  <span
-                    className="flex-shrink-0 text-[8px] animate-bracket-in"
-                    style={{ color: 'rgba(0,200,255,0.5)', fontFamily: 'monospace' }}
-                  >
-                    ◆
-                  </span>
-                )}
-              </button>
-            )
-          })}
+          {mainNav.map(renderItem)}
         </div>
 
-        {/* Tools nav */}
         <div className="mt-4">
-          <div className="px-4 mb-2 flex items-center gap-2">
-            <span className="hud-label">Tools</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.12)' }} />
+          <div className="px-4 mb-1.5 flex items-center gap-2">
+            <span className="hud-label">Utilities</span>
+            <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.10)' }} />
           </div>
-
-          {toolsNav.map((item) => {
-            const isActive = currentView === item.id
-            return (
-              <button
-                key={item.id}
-                onClick={() => onNavigate(item.id)}
-                className={`sidebar-item w-full text-left ${isActive ? 'active' : ''}`}
-              >
-                <span
-                  className="flex-shrink-0"
-                  style={{ color: isActive ? '#00c8ff' : 'rgba(255,170,0,0.45)', transition: 'color 0.15s' }}
-                >
-                  {item.icon}
-                </span>
-                <span className="flex-1">{item.label}</span>
-                {isActive && (
-                  <span
-                    className="flex-shrink-0 text-[8px] animate-bracket-in"
-                    style={{ color: 'rgba(0,200,255,0.5)', fontFamily: 'monospace' }}
-                  >
-                    ◆
-                  </span>
-                )}
-              </button>
-            )
-          })}
+          {utilityNav.map(renderItem)}
         </div>
-      </div>
+      </nav>
 
-      {/* ── Sphere + chat button ───────────────────────────────────────────── */}
-      <div
-        className="flex-shrink-0 flex flex-col items-center pb-5 pt-3"
-        style={{ borderTop: '1px solid rgba(0,200,255,0.08)' }}
-      >
-        {/* Theme toggle */}
-        <button
-          onClick={toggle}
-          className="flex items-center gap-1.5 mb-4 px-3 py-1.5 transition-all duration-200 hover:scale-105"
-          title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          style={{
-            background: theme === 'light' ? 'rgba(255,200,0,0.1)' : 'rgba(0,200,255,0.06)',
-            border: theme === 'light' ? '1px solid rgba(255,190,0,0.3)' : '1px solid rgba(0,200,255,0.18)',
-            color: theme === 'light' ? '#e6a800' : 'rgba(0,200,255,0.65)',
-            fontSize: 9,
-            fontFamily: '"Share Tech Mono", monospace',
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {theme === 'dark' ? <Sun size={10} /> : <Moon size={10} />}
-          {theme === 'dark' ? 'Light' : 'Dark'}
-        </button>
-        {/* Outer ring decoration */}
-        <div
-          className="relative cursor-pointer mb-5"
-          onClick={onChatOpen}
-          title="Open Daemon Assistant"
-        >
-          {/* Outer decorative ring */}
-          <div
-            className="absolute inset-0 rounded-full pointer-events-none"
-            style={{
-              margin: -8,
-              border: '1px solid rgba(0,200,255,0.15)',
-              borderRadius: '50%',
-            }}
-          />
-          {/* Second ring */}
-          <div
-            className="absolute inset-0 rounded-full pointer-events-none animate-pulse-slow"
-            style={{
-              margin: -4,
-              border: '1px solid rgba(0,200,255,0.08)',
-              borderRadius: '50%',
-            }}
-          />
-          <PulsingSphere mode={activeSession ? 'active' : 'idle'} size={100} />
-        </div>
-
+      {/* ── Assistant ─────────────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 p-3" style={{ borderTop: '1px solid rgba(0,200,255,0.08)' }}>
         <button
           onClick={onChatOpen}
-          className="flex items-center gap-1.5 px-4 py-1.5 transition-all duration-200 hover:scale-105"
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[12px] font-medium transition-all hover:brightness-110"
           style={{
-            background: 'rgba(0,200,255,0.06)',
-            border: '1px solid rgba(0,200,255,0.2)',
-            color: 'rgba(0,200,255,0.8)',
-            fontSize: 9,
-            fontFamily: '"Share Tech Mono", monospace',
-            letterSpacing: '0.2em',
-            textTransform: 'uppercase',
+            background: 'rgba(0,200,255,0.08)',
+            border: '1px solid rgba(0,200,255,0.22)',
+            color: '#7fd6ff',
           }}
+          title="Ask the Attentify assistant"
         >
-          <MessageSquare size={10} />
-          Ask Daemon
+          <MessageSquare size={13} />
+          Ask Attentify
         </button>
       </div>
     </aside>

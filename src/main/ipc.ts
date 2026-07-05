@@ -1,19 +1,24 @@
-import { ipcMain, dialog, BrowserWindow as ElectronBrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, BrowserWindow as ElectronBrowserWindow } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { writeFile } from 'fs/promises'
 import { getStore, patchStore } from './store'
+import {
+  getEffectiveApiKey, getUsageState, getCloudState, setCloudLicense, clearCloudLicense,
+  startCheckout, setUsageChangeCallback,
+} from './billing'
 import { BlockingEngine } from './blocking/BlockingEngine'
 import { processMessage } from './chat/ChatEngine'
 import { runFocusScan } from './scanner/FocusScan'
 import { checkElevation, verifyHostsWritable } from './blocking/hostsFileEditor'
 import { registerStartupDaemon, unregisterStartupDaemon, isStartupDaemonRegistered, getPlatformLabel } from './daemonManager'
-import { saveApiKey, loadApiKey, deleteApiKey, hasApiKey } from './keystore'
+import { saveApiKey, deleteApiKey, hasApiKey } from './keystore'
 import { MonitorService } from './monitoring/MonitorService'
 import { AgentService } from './agent/AgentService'
 import { InferenceEngine } from './inference/InferenceEngine'
 import { debugLog } from './debug/logger'
 import { notificationQueue } from './overlay/NotificationQueue'
 import { ContentRuleEngine } from './blocking/ContentRuleEngine'
+import { recordCloudEvent, startCloudSync, stopCloudSync } from './cloudSync'
 import { randomUUID } from 'crypto'
 import {
   getActiveGoals, insertGoal, clearGoal,
@@ -34,6 +39,8 @@ let mainWin: BrowserWindow | null = null
 // Break mode — suppresses interstitials and new auto-blocks for a timed window
 let breakEndAt: number | null = null
 let breakTimer: ReturnType<typeof setTimeout> | null = null
+// Deep Focus auto-end timer (cleared on manual stop)
+let deepFocusTimer: ReturnType<typeof setTimeout> | null = null
 
 function isBreakActive(): boolean {
   return breakEndAt !== null && Date.now() < breakEndAt
@@ -70,6 +77,7 @@ export function getContentRuleEngine(): ContentRuleEngine | null {
 export function stopTracking(): void {
   monitor?.stop()
   inferenceEngine?.stop()
+  stopCloudSync()
 }
 
 // ── Local intent check for unblock requests ──────────────────────────────────
@@ -282,13 +290,16 @@ export function initIpc(): void {
   const storedMode = (store.settings as AppSettings & { blockingMode?: 'auto' | 'ask' }).blockingMode ?? 'auto'
   inferenceEngine.setBlockingMode(storedMode)
 
-  // Initialize agent + URL guard if API key exists
-  const apiKey = loadApiKey()
-  if (apiKey) {
-    agentService.init(apiKey)
-    monitor.getUrlGuard().init(apiKey)
-    inferenceEngine.init(apiKey)
-  }
+  // Initialize agent + URL guard + inference with the effective key. This is the
+  // user's own key if they pasted one, otherwise the bundled OpenRouter key — so AI
+  // works out of the box. Spend against the bundled key is metered (see billing.ts).
+  const effectiveKey = getEffectiveApiKey()
+  agentService.init(effectiveKey)
+  monitor.getUrlGuard().init(effectiveKey)
+  inferenceEngine.init(effectiveKey)
+
+  // Push live free-usage updates to the renderer so the meter/paywall stay current.
+  setUsageChangeCallback((usage) => sendMain('usage:changed', usage))
 
   // Proactive agent callback
   agentService.setProactiveCallback((text) => {
@@ -306,6 +317,7 @@ export function initIpc(): void {
       interstitialWin.show()
     }
     patchStore({ blockEventCount: (getStore().blockEventCount ?? 0) + 1 })
+    recordCloudEvent({ type: 'block', domain: event.item, label: event.type, ts: Date.now() })
   })
 
   monitor.on('url:blocked', (data: { domain: string; url: string }) => {
@@ -321,6 +333,7 @@ export function initIpc(): void {
     }
     patchStore({ blockEventCount: (getStore().blockEventCount ?? 0) + 1 })
     sendMain('inference:auto-blocked', { domain: data.domain, confidence: 1.0 })
+    recordCloudEvent({ type: 'block', domain: data.domain, label: 'url', ts: Date.now() })
   })
 
   monitor.on('session', (session: ActivitySession) => {
@@ -332,6 +345,12 @@ export function initIpc(): void {
   monitor.on('distraction', (session: ActivitySession) => {
     if (session.duration >= 90000) {
       agentService?.notifyDistraction(session)
+    }
+    // Feed the cloud dashboard for substantial distraction reads (≥30s).
+    if (session.duration >= 30000) {
+      let domain: string | undefined
+      try { if (session.url) domain = new URL(session.url.startsWith('http') ? session.url : `https://${session.url}`).hostname.replace(/^www\./, '') } catch { /* ignore */ }
+      recordCloudEvent({ type: 'distraction', domain, label: session.app, value: Math.round(session.duration / 1000), ts: Date.now() })
     }
   })
 
@@ -422,9 +441,15 @@ export function initIpc(): void {
   })
 
   ipcMain.handle('blocking:remove-domain', (_e, domain: string) => {
+    // Anti-bypass: domains the active Deep Focus session is enforcing can't be removed.
+    const deep = getStore().sessions.find((s) => s.active && s.mode === 'deep')
+    if (deep && engine?.isDeepDomain(domain)) {
+      return { ok: false, locked: true, error: 'Locked by Deep Focus until the session ends.' }
+    }
     engine?.removeDomain(domain)
     const s = getStore()
     patchStore({ blocklist: { ...s.blocklist, domains: s.blocklist.domains.filter((d) => d.domain !== domain) } })
+    return { ok: true }
   })
 
   ipcMain.handle('blocking:add-process', (_e, name: string, expiresInMs?: number) => {
@@ -459,13 +484,42 @@ export function initIpc(): void {
     const s = getStore()
     patchStore({ sessions: [session, ...s.sessions.map((sess) => ({ ...sess, active: false }))] })
     engine?.start()
+
+    // Deep Focus: actually enforce it — block the curated distraction set (minus the
+    // allowlist) for the duration, and auto-end when the timer runs out.
+    if (mode === 'deep') {
+      const blocked = engine?.startDeepFocus(allowlist ?? [], durationMs) ?? 0
+      if (deepFocusTimer) clearTimeout(deepFocusTimer)
+      if (durationMs) {
+        deepFocusTimer = setTimeout(() => {
+          deepFocusTimer = null
+          engine?.endDeepFocus()
+          const cur = getStore()
+          patchStore({ sessions: cur.sessions.map((x) => (x.id === session.id ? { ...x, active: false } : x)) })
+          engine?.stop()
+          sendMain('store:refresh')
+          debugLog('deepfocus:auto-end', { sessionId: session.id })
+        }, durationMs)
+      }
+      debugLog('deepfocus:start', { durationMs, blocked })
+      return { ...session, deepBlocked: blocked }
+    }
     return session
   })
 
   ipcMain.handle('session:stop', (_e, id: string) => {
     const s = getStore()
-    patchStore({ sessions: s.sessions.map((sess) => (sess.id === id ? { ...sess, active: false } : sess)) })
+    const sess = s.sessions.find((x) => x.id === id)
+    // Anti-bypass: a Deep Focus session is a commitment. It cannot be ended early —
+    // only when its timer runs out (open-ended deep sessions can still be stopped).
+    if (sess && sess.active && sess.mode === 'deep' && sess.endsAt && Date.now() < sess.endsAt) {
+      return { ok: false, locked: true, endsAt: sess.endsAt, error: 'Deep Focus is locked until it ends.' }
+    }
+    if (deepFocusTimer) { clearTimeout(deepFocusTimer); deepFocusTimer = null }
+    engine?.endDeepFocus()
+    patchStore({ sessions: s.sessions.map((x) => (x.id === id ? { ...x, active: false } : x)) })
     engine?.stop()
+    return { ok: true }
   })
 
   // ── Overlay notification actions ──────────────────────────────────────────
@@ -578,11 +632,42 @@ export function initIpc(): void {
     monitor?.getUrlGuard().init(key)
     inferenceEngine?.init(key)
     notificationQueue.refreshClient()
+    sendMain('usage:changed', getUsageState())  // own key → no longer metered
     return { ok: true }
   })
 
   ipcMain.handle('apikey:delete', () => {
     deleteApiKey()
+    // Fall back to the bundled key so AI keeps working (metered again).
+    const k = getEffectiveApiKey()
+    agentService?.init(k)
+    monitor?.getUrlGuard().init(k)
+    inferenceEngine?.init(k)
+    notificationQueue.refreshClient()
+    sendMain('usage:changed', getUsageState())
+    return { ok: true }
+  })
+
+  // ── Free-usage metering + Cloud subscription ──────────────────────────────
+
+  ipcMain.handle('usage:get', () => getUsageState())
+
+  ipcMain.handle('cloud:get', () => getCloudState())
+
+  ipcMain.handle('cloud:set-license', async (_e, license: string) => {
+    const state = await setCloudLicense(license)
+    return state
+  })
+
+  ipcMain.handle('cloud:clear-license', () => {
+    clearCloudLicense()
+    return getCloudState()
+  })
+
+  ipcMain.handle('cloud:checkout', async (_e, email?: string) => startCheckout(email))
+
+  ipcMain.handle('shell:open-external', (_e, url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//.test(url)) void shell.openExternal(url)
     return { ok: true }
   })
 
@@ -775,7 +860,7 @@ export function initIpc(): void {
 </head><body>
 <div class="header">
   <div>
-    <h1>Productivity Daemon — Focus Report</h1>
+    <h1>Attentify — Focus Report</h1>
     <div class="header-sub">${dateStr}</div>
     <div class="header-sub" style="margin-top:1px">Weekly range: ${weekAgo} – ${todayShort}</div>
   </div>
@@ -817,7 +902,7 @@ export function initIpc(): void {
 ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application</th><th>Time Spent</th></tr></thead><tbody>${weeklyAppRows}</tbody></table>` : ''}
 
 <div class="footer">
-  <span>Productivity Daemon · productivity-daemon.app</span>
+  <span>Attentify · attentify.ai</span>
   <span>Exported ${new Date().toISOString()}</span>
 </div>
 </body></html>`
@@ -858,6 +943,26 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
   ipcMain.handle('daemon:unregister-startup', () => unregisterStartupDaemon())
   ipcMain.handle('daemon:startup-status', () => isStartupDaemonRegistered())
   ipcMain.handle('daemon:platform', () => getPlatformLabel())
+
+  // ── Always-On (runs like an antivirus: starts at login, stays in the tray, and
+  //    keeps enforcing blocks even when the window is closed) ──────────────────
+  ipcMain.handle('alwayson:get', () => ({
+    enabled: getStore().settings.alwaysOn === true,
+    startupRegistered: isStartupDaemonRegistered(),
+  }))
+
+  ipcMain.handle('alwayson:set', (_e, enabled: boolean) => {
+    const s = getStore()
+    patchStore({ settings: { ...s.settings, alwaysOn: !!enabled } })
+    if (enabled) {
+      registerStartupDaemon(process.execPath)   // relaunch at login (elevated on Windows)
+      engine?.protect()                          // make sure every protection layer is live now
+    } else {
+      unregisterStartupDaemon()
+    }
+    debugLog('alwayson:set', { enabled, startupRegistered: isStartupDaemonRegistered() })
+    return { ok: true, enabled: !!enabled, startupRegistered: isStartupDaemonRegistered() }
+  })
 
   // ── Interstitial ──────────────────────────────────────────────────────────
 
@@ -939,5 +1044,8 @@ export function startTracking(): void {
   if (store.settings?.trackingEnabled !== false) {
     monitor?.start()
     inferenceEngine?.start()
+    // Sync focus events to the cloud for Cloud-tier users (powers the web dashboard).
+    // The module itself no-ops for free users, so it's always safe to start.
+    startCloudSync()
   }
 }

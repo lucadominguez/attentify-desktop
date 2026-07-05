@@ -24,6 +24,11 @@ export class MonitorService extends EventEmitter {
   private currentUrl: string | null = null
   private currentTitle: string | null = null
   private active = false
+  // Heuristics are advisory, not real-time — throttle them so they run at most
+  // once per HEURISTICS_MIN_INTERVAL_MS instead of on every focus change (which
+  // can fire several times a minute, each doing a 1h DB query + ~12 array passes).
+  private lastHeuristicsRun = 0
+  private static readonly HEURISTICS_MIN_INTERVAL_MS = 20_000
 
   constructor() {
     super()
@@ -82,10 +87,15 @@ export class MonitorService extends EventEmitter {
 
       this.emit('session', enriched)
 
-      // Run heuristics
-      const alerts = this.heuristics.analyze(this.tracker.getSessions(Date.now() - 3600000))
-      if (alerts.length > 0) {
-        this.emit('patterns', alerts)
+      // Run heuristics — throttled. Skipping a run just defers pattern detection by
+      // a few seconds; the session is already persisted, so nothing is lost.
+      const nowTs = Date.now()
+      if (nowTs - this.lastHeuristicsRun >= MonitorService.HEURISTICS_MIN_INTERVAL_MS) {
+        this.lastHeuristicsRun = nowTs
+        const alerts = this.heuristics.analyze(this.tracker.getSessions(nowTs - 3600000))
+        if (alerts.length > 0) {
+          this.emit('patterns', alerts)
+        }
       }
 
       // Emit distraction event for proactive agent

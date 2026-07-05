@@ -148,6 +148,7 @@ export interface AppSettings {
   ollamaUrl: string
   ollamaModel: string
   blockingMode?: 'auto' | 'ask'
+  alwaysOn?: boolean
 }
 
 export interface BreakMode {
@@ -201,12 +202,44 @@ export interface AppStore {
   blockEventCount: number
   breakMode?: BreakMode
   contentRules?: ContentRule[]
+  // Estimated USD of AI spend against the bundled OpenRouter key (free-tier metering).
+  aiUsageUsd?: number
+  // Cloud ($5/mo) subscription state, when the user has linked a license key.
+  cloudLicense?: string
+  cloudActive?: boolean
+  cloudTier?: string
+  cloudEmail?: string
+  // Feed-level blocks displayed in the Overview (enforced by the browser extension,
+  // not the hosts file). Seeded with Reddit + Twitter/X on install.
+  feedBlocks?: FeedBlock[]
+}
+
+export interface FeedBlock {
+  domain: string
+  displayName: string
+}
+
+export interface UsageState {
+  usedUsd: number
+  limitUsd: number
+  remainingUsd: number
+  subscribed: boolean
+  hasOwnKey: boolean
+  exhausted: boolean
+}
+
+export interface CloudState {
+  license: string | null
+  active: boolean
+  tier: string | null
+  email: string | null
 }
 
 export type ViewName =
   | 'home'
   | 'focus-shield'
   | 'deep-clean'
+  | 'insights'
   | 'analytics'
   | 'patterns'
   | 'actions'

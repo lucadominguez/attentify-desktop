@@ -8,6 +8,7 @@ import DeepFocusMode from './views/DeepFocusMode'
 import ScheduleManager from './views/ScheduleManager'
 import AlgoTrack from './views/AlgoTrack'
 import Analytics from './views/Analytics'
+import Insights from './views/Insights'
 import FocusScanResults from './views/FocusScanResults'
 import Patterns from './views/Patterns'
 import Actions from './views/Actions'
@@ -29,6 +30,8 @@ export default function App(): React.ReactElement {
   const [liveAutoBlocks, setLiveAutoBlocks] = useState<{ domain: string; confidence: number; ts: number }[]>([])
   const [pendingActionCount, setPendingActionCount] = useState(0)
   const [breakMode, setBreakMode] = useState<{ endsAt: number; reason?: string } | null>(null)
+  const [alwaysOn, setAlwaysOn] = useState(false)
+  const [platform, setPlatform] = useState<'windows' | 'mac' | 'linux'>('windows')
 
   const { colors } = useTheme()
 
@@ -59,6 +62,20 @@ export default function App(): React.ReactElement {
       }
     })
   }, [])
+
+  useEffect(() => {
+    api.getAlwaysOn().then((r) => setAlwaysOn(r.enabled)).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    api.getPlatform().then(setPlatform).catch(() => {})
+  }, [])
+
+  const toggleAlwaysOn = useCallback(async (): Promise<void> => {
+    const next = !alwaysOn
+    setAlwaysOn(next)
+    try { await api.setAlwaysOn(next) } catch { setAlwaysOn(!next) }
+  }, [alwaysOn])
 
   useEffect(() => {
     const offStart = api.onBreakStarted((evt) => setBreakMode(evt))
@@ -106,7 +123,7 @@ export default function App(): React.ReactElement {
       <div className="flex items-center justify-center h-screen w-screen bg-navy-850">
         <div className="flex flex-col items-center gap-4">
           <div className="w-12 h-12 rounded-full border-2 border-accent-blue border-t-transparent animate-spin" />
-          <p className="text-navy-400 text-sm">Loading Productivity Daemon…</p>
+          <p className="text-navy-400 text-sm">Loading Attentify…</p>
         </div>
       </div>
     )
@@ -126,13 +143,14 @@ export default function App(): React.ReactElement {
       case 'home': return <Home store={store} onNavigate={handleNavigate} onScanComplete={handleScanComplete} onRefresh={refreshStore} latestAlert={latestAlert} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'focus-shield': return <Overview store={store} onRefresh={refreshStore} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'deep-clean': return <DeepClean store={store} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
+      case 'insights': return <Insights heuristicAlerts={heuristicAlerts} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'analytics': return <Analytics onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'deep-focus': return <DeepFocusMode store={store} onRefresh={refreshStore} />
       case 'schedule-manager': return <ScheduleManager store={store} onRefresh={refreshStore} />
       case 'algo-track': return <AlgoTrack store={store} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'patterns': return <Patterns heuristicAlerts={heuristicAlerts} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'actions': return <Actions onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} liveAutoBlocks={liveAutoBlocks} />
-      case 'settings': return <SettingsView store={store} onRefresh={refreshStore} />
+      case 'settings': return <SettingsView store={store} onRefresh={refreshStore} onNavigate={handleNavigate} />
       case 'focus-scan-results': return <FocusScanResults results={scanResults} store={store} onNavigate={handleNavigate} onRefresh={refreshStore} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       default: return <Home store={store} onNavigate={handleNavigate} onScanComplete={handleScanComplete} onRefresh={refreshStore} />
     }
@@ -149,14 +167,56 @@ export default function App(): React.ReactElement {
           borderBottom: '1px solid rgba(0,200,255,0.1)',
         }}
       >
-        {/* Left: corner bracket accent + traffic lights */}
+        {/* Left: macOS traffic lights (macOS only — Windows uses the right-side
+            controls). Rendering only the current platform's controls avoids the
+            "two sets of window buttons" look. */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" style={{ boxShadow: '0 0 4px rgba(255,95,87,0.4)' }} />
-            <div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" style={{ boxShadow: '0 0 4px rgba(254,188,46,0.3)' }} />
-            <div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" style={{ boxShadow: '0 0 4px rgba(40,200,64,0.3)' }} />
-          </div>
-          <div className="w-px h-3" style={{ background: 'rgba(0,200,255,0.15)' }} />
+          {platform === 'mac' && (
+            <>
+              <div className="titlebar-nodrag flex items-center gap-2">
+                <button
+                  onClick={() => api.closeWindow()}
+                  className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition-all"
+                  title="Close"
+                />
+                <button
+                  onClick={() => api.minimizeWindow()}
+                  className="w-3 h-3 rounded-full bg-[#febc2e] hover:brightness-90 transition-all"
+                  title="Minimize"
+                />
+                <button
+                  onClick={() => api.maximizeWindow()}
+                  className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition-all"
+                  title="Zoom"
+                />
+              </div>
+              <div className="w-px h-3" style={{ background: 'rgba(0,200,255,0.15)' }} />
+            </>
+          )}
+          <button
+            onClick={() => void toggleAlwaysOn()}
+            className="titlebar-nodrag flex items-center gap-1.5 rounded-full transition-all"
+            title={alwaysOn
+              ? 'Always-On is enabled: protection keeps running in the background (and at login) even when this window is closed. Click to turn off.'
+              : 'Turn on Always-On: protection stays active at all times like an antivirus, even when the app is closed, and starts automatically at login.'}
+            style={{
+              padding: '2px 8px',
+              border: `1px solid ${alwaysOn ? 'rgba(0,230,118,0.45)' : 'rgba(0,200,255,0.15)'}`,
+              background: alwaysOn ? 'rgba(0,230,118,0.10)' : 'transparent',
+            }}
+          >
+            <span
+              className="rounded-full"
+              style={{
+                width: 6, height: 6,
+                background: alwaysOn ? '#00e676' : 'rgba(0,200,255,0.3)',
+                boxShadow: alwaysOn ? '0 0 6px #00e676' : 'none',
+              }}
+            />
+            <span style={{ fontFamily: '"Share Tech Mono", monospace', fontSize: 9, letterSpacing: '0.15em', color: alwaysOn ? '#00e676' : 'rgba(0,200,255,0.4)' }}>
+              ALWAYS&nbsp;ON
+            </span>
+          </button>
         </div>
 
         {/* Center: monospace title */}
@@ -171,35 +231,40 @@ export default function App(): React.ReactElement {
               textTransform: 'uppercase',
             }}
           >
-            Productivity Daemon
+            Attentify
           </span>
           <div className="w-1 h-1 rounded-full" style={{ background: 'rgba(0,200,255,0.5)' }} />
         </div>
 
-        {/* Right: window controls */}
-        <div className="titlebar-nodrag flex items-center">
-          <button
-            onClick={() => api.minimizeWindow()}
-            className="flex items-center justify-center transition-colors hover:bg-white/5"
-            style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.35)' }}
-          >
-            <Minus size={11} />
-          </button>
-          <button
-            onClick={() => api.maximizeWindow()}
-            className="flex items-center justify-center transition-colors hover:bg-white/5"
-            style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.35)' }}
-          >
-            <Square size={10} />
-          </button>
-          <button
-            onClick={() => api.closeWindow()}
-            className="flex items-center justify-center transition-colors hover:bg-red-500/15"
-            style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.35)' }}
-          >
-            <X size={11} />
-          </button>
-        </div>
+        {/* Right: Windows / Linux window controls (hidden on macOS, which uses the
+            traffic lights on the left). */}
+        {platform !== 'mac' ? (
+          <div className="titlebar-nodrag flex items-center">
+            <button
+              onClick={() => api.minimizeWindow()}
+              className="flex items-center justify-center transition-colors hover:bg-white/5"
+              style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.5)' }}
+            >
+              <Minus size={11} />
+            </button>
+            <button
+              onClick={() => api.maximizeWindow()}
+              className="flex items-center justify-center transition-colors hover:bg-white/5"
+              style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.5)' }}
+            >
+              <Square size={10} />
+            </button>
+            <button
+              onClick={() => api.closeWindow()}
+              className="flex items-center justify-center transition-colors hover:bg-[#e81123]"
+              style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.5)' }}
+            >
+              <X size={11} />
+            </button>
+          </div>
+        ) : (
+          <div style={{ width: 60 }} />
+        )}
       </div>
 
       {/* Main layout */}
@@ -269,16 +334,28 @@ export default function App(): React.ReactElement {
                   </span>
                 )}
               </div>
-              <button
-                className="text-[10px] uppercase tracking-widest transition-colors hover:text-white"
-                style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}
-                onClick={async () => { await api.stopSession(activeSession.id); refreshStore() }}
-              >
-                End
-              </button>
+              {activeSession.mode === 'deep' && activeSession.endsAt && Date.now() < activeSession.endsAt ? (
+                <span
+                  className="text-[10px] uppercase tracking-widest"
+                  style={{ color: '#ffaa00', fontFamily: '"Share Tech Mono", monospace' }}
+                  title="Deep Focus is locked until its timer ends."
+                >
+                  Locked
+                </span>
+              ) : (
+                <button
+                  className="text-[10px] uppercase tracking-widest transition-colors hover:text-white"
+                  style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}
+                  onClick={async () => { await api.stopSession(activeSession.id); refreshStore() }}
+                >
+                  End
+                </button>
+              )}
             </div>
           )}
-          <div className={`flex-1 min-h-0 animate-fade-in ${view === 'home' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          {/* key={view} remounts on navigation so each screen fades in — gives a calm,
+              consistent sense of moving from one screen to the next. */}
+          <div key={view} className={`flex-1 min-h-0 animate-fade-in ${view === 'home' || view === 'insights' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             {renderView()}
           </div>
         </main>
@@ -349,9 +426,18 @@ declare global {
       addGoal: (text: string, priority?: number) => Promise<unknown>
       getGoals: () => Promise<unknown[]>
       clearGoal: (id: string) => Promise<{ ok: boolean }>
+      getAlwaysOn: () => Promise<{ enabled: boolean; startupRegistered: boolean }>
+      setAlwaysOn: (enabled: boolean) => Promise<{ ok: boolean; enabled: boolean; startupRegistered: boolean }>
       getApiKeyStatus: () => Promise<{ hasKey: boolean }>
       setApiKey: (key: string) => Promise<{ ok: boolean }>
       deleteApiKey: () => Promise<{ ok: boolean }>
+      getUsage: () => Promise<import('@shared/types').UsageState>
+      onUsageChanged: (cb: (usage: import('@shared/types').UsageState) => void) => (() => void)
+      getCloud: () => Promise<import('@shared/types').CloudState>
+      setCloudLicense: (license: string) => Promise<import('@shared/types').CloudState>
+      clearCloudLicense: () => Promise<import('@shared/types').CloudState>
+      cloudCheckout: (email?: string) => Promise<{ url?: string; error?: string }>
+      openExternal: (url: string) => Promise<{ ok: boolean }>
       minimizeWindow: () => void
       maximizeWindow: () => void
       closeWindow: () => void

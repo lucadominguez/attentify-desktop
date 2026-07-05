@@ -26,13 +26,19 @@ export async function openDatabase(): Promise<Database> {
 
   runMigrations(_db)
 
-  // Flush to disk every 5 seconds when dirty
+  // Persist to disk on an interval, but only when dirty. sql.js has no incremental
+  // write — flushToDisk() serializes the ENTIRE database each time — so we keep the
+  // cadence modest (10s) to avoid re-exporting a growing DB several times a second
+  // under active tracking. Worst-case data loss on a hard crash is ~10s of events;
+  // a clean quit always flushes (closeDatabase), and the event buffer batches writes.
   _flushTimer = setInterval(() => {
     if (_dirty) flushToDisk()
-  }, 5000)
+  }, FLUSH_INTERVAL_MS)
 
   return _db
 }
+
+const FLUSH_INTERVAL_MS = 10_000
 
 export function getDb(): Database {
   if (!_db) throw new Error('Database not initialized — call openDatabase() first')

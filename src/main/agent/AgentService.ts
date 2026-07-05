@@ -7,7 +7,29 @@ import {
   type DbAgentMessage,
 } from '../data/repository'
 import { getStore } from '../store'
+import { canUseAi, recordUsage } from '../billing'
 import type { ActivitySession } from '../../shared/types'
+
+// Sentinel error the renderer recognises to show the subscribe/upgrade prompt.
+export const PAYWALL_ERROR = 'PAYWALL'
+
+// Some models, when their tool-use is proxied through OpenRouter, occasionally emit
+// the tool invocation as raw text instead of a structured tool_use block — it shows
+// up in chat as "random code" (XML <invoke>/<function_calls> or a JSON call object).
+// Strip those artifacts so the user only sees prose. Conservative: only removes
+// blocks that clearly look like tool calls, never normal code the user asked for.
+export function sanitizeAssistantText(text: string): string {
+  let t = text
+  t = t.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '')
+  t = t.replace(/<function_results>[\s\S]*?<\/function_results>/gi, '')
+  t = t.replace(/<invoke\b[\s\S]*?<\/invoke>/gi, '')
+  t = t.replace(/<\/?(?:antml:[a-z_]+|tool_call|tool_use|parameter)\b[^>]*>/gi, '')
+  // fenced blocks that are really a tool call (contain a name/recipient_name key)
+  t = t.replace(/```[a-z_]*\s*\{[\s\S]*?"(?:name|recipient_name|tool_name)"\s*:[\s\S]*?\}\s*```/gi, '')
+  // a bare JSON object that is explicitly a tool_use envelope
+  t = t.replace(/\{[\s\S]*?"type"\s*:\s*"tool_use"[\s\S]*?\}\s*$/gi, '')
+  return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -21,7 +43,7 @@ export interface ChatCallbacks {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const ANTHROPIC_MODEL    = 'claude-sonnet-4-6'
-const OPENROUTER_MODEL   = 'anthropic/claude-sonnet-4-6'
+const OPENROUTER_MODEL   = 'anthropic/claude-sonnet-4.5'
 const OPENROUTER_BASE    = 'https://openrouter.ai/api'
 const MAX_TOKENS = 2048
 const MAX_TOOL_ROUNDS = 8
@@ -55,8 +77,8 @@ export class AgentService {
       ...(isOpenRouter ? {
         baseURL: OPENROUTER_BASE,
         defaultHeaders: {
-          'HTTP-Referer': 'https://productivitydaemon.app',
-          'X-Title': 'Productivity Daemon',
+          'HTTP-Referer': 'https://attentify.ai',
+          'X-Title': 'Attentify',
         },
       } : {}),
     })
@@ -83,6 +105,12 @@ export class AgentService {
   async chat(userText: string, callbacks: ChatCallbacks): Promise<void> {
     if (!this.client) {
       callbacks.onError('API key not set. Please configure your Anthropic API key in settings.')
+      return
+    }
+
+    // Free AI allowance exhausted and no own key / subscription — gate the assistant.
+    if (!canUseAi()) {
+      callbacks.onError(PAYWALL_ERROR)
       return
     }
 
@@ -135,6 +163,7 @@ export class AgentService {
         currentUrl,
         recentUrls,
         recentSearches,
+        extensionConnected: this.deps.contentRules?.isExtensionConnected() ?? false,
       })
 
       // Build message history (last 20 messages, oldest first)
@@ -152,8 +181,10 @@ export class AgentService {
       // Run the agentic loop
       const fullReply = await this.runLoop(systemPrompt, messages, callbacks)
 
-      // Persist assistant reply
-      const msg = insertAgentMessage({ role: 'assistant', content: fullReply, ts: Date.now() })
+      // Persist assistant reply (sanitized — strips any tool-call markup the model
+      // occasionally leaks as text when tool-use is proxied through OpenRouter)
+      const cleaned = sanitizeAssistantText(fullReply)
+      const msg = insertAgentMessage({ role: 'assistant', content: cleaned, ts: Date.now() })
       callbacks.onDone(msg)
     } catch (err) {
       callbacks.onError(err instanceof Error ? err.message : String(err))
@@ -193,6 +224,7 @@ export class AgentService {
       fullReply += roundText
 
       const finalMsg = await stream.finalMessage()
+      recordUsage(this.model, finalMsg.usage?.input_tokens ?? 0, finalMsg.usage?.output_tokens ?? 0)
       if (finalMsg.stop_reason !== 'tool_use') break
 
       // Execute all tool calls from this round
@@ -226,6 +258,7 @@ export class AgentService {
   async notifyDistraction(session: ActivitySession): Promise<void> {
     if (!this.client || !this.proactiveCallback || !this.proactiveEnabled) return
     if (!this.shouldProact()) return
+    if (!canUseAi()) return  // don't spend the free allowance on proactive nudges once exhausted
 
     try {
       this.lastProactiveTs = Date.now()
@@ -280,6 +313,8 @@ Speak directly to them, not about them.`,
           text += event.delta.text
         }
       }
+      const proMsg = await msgStream.finalMessage()
+      recordUsage(this.model, proMsg.usage?.input_tokens ?? 0, proMsg.usage?.output_tokens ?? 0)
 
       if (text.trim()) {
         this.proactiveCallback(text.trim())

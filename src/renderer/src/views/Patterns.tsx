@@ -377,7 +377,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
             >
               <Eye size={20} className="mb-2" style={{ color: colors.textSecondary }} />
               <p className="text-xs" style={{ color: colors.textSecondary }}>No patterns detected yet this session.</p>
-              <p className="text-[10px] mt-1" style={{ color: colors.textSecondary }}>Patterns appear here as you work — the daemon watches quietly.</p>
+              <p className="text-[10px] mt-1" style={{ color: colors.textSecondary }}>Patterns appear here as you work — Attentify watches quietly.</p>
             </div>
           )}
         </section>

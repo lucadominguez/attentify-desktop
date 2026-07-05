@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import initSqlJs from 'sql.js';
 
-const dataDir = 'C:\\ProgramData\\ProductivityDaemon';
+const dataDir = 'C:\\ProgramData\\Attentify';
 const dbPath = path.join(dataDir, 'daemon.db');
 
 console.log('=== Files in data dir ===');
