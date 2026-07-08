@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
-import { Shield, Zap, Bell, Key, CheckCircle, Sparkles, Sun, Moon, TrendingUp, ChevronRight } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Shield, Zap, Bell, Key, CheckCircle, Sparkles, Sun, Moon, TrendingUp, ChevronRight, RotateCcw, History, AlertTriangle } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
-import type { AppStore, UsageState, CloudState, ViewName } from '@shared/types'
+import type { AppStore, UsageState, CloudState, ViewName, ChangeEntry } from '@shared/types'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -38,6 +38,31 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
   const [licenseBusy, setLicenseBusy] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
 
+  // Safety & Recovery
+  const [changeCount, setChangeCount] = useState<number | null>(null)
+  const [changelog, setChangelog] = useState<ChangeEntry[] | null>(null)
+  const [confirmRevert, setConfirmRevert] = useState(false)
+  const [reverting, setReverting] = useState(false)
+  const [revertResult, setRevertResult] = useState<{ ok: boolean; undone: string[]; errors: string[] } | null>(null)
+
+  const refreshSafety = (): void => { api.getSafetyStatus().then((s) => setChangeCount(s.changeCount)).catch(() => {}) }
+
+  const handleRevert = async (): Promise<void> => {
+    setReverting(true)
+    try {
+      const res = await api.revertAllChanges()
+      setRevertResult(res)
+      setConfirmRevert(false)
+      refreshSafety()
+      onRefresh()
+    } finally { setReverting(false) }
+  }
+
+  const toggleLog = async (): Promise<void> => {
+    if (changelog) { setChangelog(null); return }
+    try { setChangelog(await api.getChangeLog(200)) } catch { setChangelog([]) }
+  }
+
   React.useEffect(() => {
     api.getApiKeyStatus().then((s) => setHasKey(s.hasKey))
     api.getUsage().then(setUsage).catch(() => {})
@@ -45,6 +70,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
     const off = api.onUsageChanged((u) => setUsage(u))
     return off
   }, [])
+
+  useEffect(() => { refreshSafety() }, [])
 
   const saveLicense = async (): Promise<void> => {
     if (!licenseInput.trim()) return
@@ -480,6 +507,126 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <p className="text-[9px] mt-3" style={{ color: 'rgba(255,170,0,0.6)' }}>
                 Run the app as Administrator once — it will register a Task Scheduler entry so future launches are automatically elevated without a UAC prompt.
               </p>
+            )}
+          </div>
+        </section>
+
+        {/* ── Safety & Recovery ─────────────────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={<RotateCcw size={11} />} label="Safety & Recovery" />
+          <div
+            className="p-4 rounded-lg"
+            style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
+          >
+            <div className="flex items-start gap-3">
+              <Shield size={16} style={{ color: '#00c8ff', marginTop: 2, flexShrink: 0 }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Restore my system</p>
+                <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: colors.textMuted }}>
+                  Undo everything Attentify has changed on this device — hosts-file blocks, firewall
+                  rules, browser DNS policies and the login startup entry — returning it to how it was
+                  before. Every change is recorded, so nothing is guessed at.
+                </p>
+                <p className="text-[9px] mt-1.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
+                  {changeCount === null ? '' : `${changeCount} change${changeCount === 1 ? '' : 's'} recorded`}
+                </p>
+              </div>
+            </div>
+
+            {/* Result banner */}
+            {revertResult && (
+              <div
+                className="mt-3 p-3 rounded-md"
+                style={{
+                  background: revertResult.ok ? 'rgba(0,230,118,0.06)' : 'rgba(255,170,0,0.06)',
+                  border: `1px solid ${revertResult.ok ? 'rgba(0,230,118,0.25)' : 'rgba(255,170,0,0.25)'}`,
+                }}
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  <CheckCircle size={11} style={{ color: revertResult.ok ? '#00e676' : '#ffaa00' }} />
+                  <p className="text-[10px] font-semibold" style={{ color: revertResult.ok ? '#00e676' : '#ffaa00' }}>
+                    {revertResult.ok ? 'System restored' : 'Restored with warnings'}
+                  </p>
+                </div>
+                {revertResult.undone.map((u, i) => (
+                  <p key={i} className="text-[9px]" style={{ color: colors.textMuted }}>· {u}</p>
+                ))}
+                {revertResult.errors.map((e, i) => (
+                  <p key={`e${i}`} className="text-[9px]" style={{ color: '#ffaa00' }}>! {e}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 mt-3">
+              {!confirmRevert ? (
+                <button
+                  onClick={() => { setRevertResult(null); setConfirmRevert(true) }}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium transition-all hover:brightness-110"
+                  style={{ background: 'rgba(255,90,90,0.10)', border: '1px solid rgba(255,90,90,0.30)', color: '#ff7a7a' }}
+                >
+                  <RotateCcw size={12} /> Restore my system
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={handleRevert}
+                    disabled={reverting}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-60"
+                    style={{ background: 'rgba(255,90,90,0.16)', border: '1px solid rgba(255,90,90,0.45)', color: '#ff7a7a' }}
+                  >
+                    <AlertTriangle size={12} /> {reverting ? 'Restoring…' : 'Yes, undo everything'}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRevert(false)}
+                    disabled={reverting}
+                    className="px-3 py-2 rounded-lg text-[11px] font-medium transition-all disabled:opacity-60"
+                    style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, color: colors.textMuted }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+              <button
+                onClick={toggleLog}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium transition-all hover:brightness-110 ml-auto"
+                style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.18)', color: '#7fd6ff' }}
+              >
+                <History size={12} /> {changelog ? 'Hide change log' : 'View change log'}
+              </button>
+            </div>
+
+            {/* Change log */}
+            {changelog && (
+              <div
+                className="mt-3 rounded-md overflow-y-auto"
+                style={{ maxHeight: 220, background: 'rgba(0,0,0,0.18)', border: `1px solid ${colors.border}` }}
+              >
+                {changelog.length === 0 ? (
+                  <p className="text-[10px] p-3" style={{ color: colors.textMuted }}>No changes recorded yet.</p>
+                ) : (
+                  changelog.map((c, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 px-3 py-1.5"
+                      style={{ borderBottom: i < changelog.length - 1 ? `1px solid ${colors.border}` : 'none' }}
+                    >
+                      <span
+                        className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded"
+                        style={{ background: 'rgba(0,200,255,0.08)', color: '#7fd6ff', fontFamily: '"Share Tech Mono", monospace', flexShrink: 0, minWidth: 54, textAlign: 'center' }}
+                      >
+                        {c.category}
+                      </span>
+                      <span className="text-[10px] flex-1 min-w-0 truncate" style={{ color: colors.textPrimary }}>
+                        {c.action}{c.target ? `: ${c.target}` : ''}{c.detail && !c.target ? ` — ${c.detail}` : ''}
+                      </span>
+                      <span className="text-[9px] flex-shrink-0" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
+                        {new Date(c.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         </section>

@@ -39,8 +39,22 @@ const defaultStore: AppStore = {
   ],
 }
 
+// The on-disk data directory. On Windows this is pinned to a FIXED absolute path
+// rather than app.getPath('userData'), deliberately: index.ts redirects userData to
+// C:\ProgramData\Attentify via app.setPath during startup, but that call happens
+// AFTER module imports are evaluated. If anything reads the store before setPath runs
+// (an eager load, or a side-effect in an imported module's constructor), it would read
+// from the *default* AppData path — where nothing exists → onboardingComplete:false →
+// onboarding shows — while later saves go to ProgramData. Reads and writes would target
+// different files and every launch would look like a fresh install. Hard-coding the path
+// here makes reads and writes deterministic regardless of setPath timing.
+function dataDir(): string {
+  if (process.platform === 'win32') return join('C:\\ProgramData', 'Attentify')
+  return app.getPath('userData')
+}
+
 function getStorePath(): string {
-  const dir = app.getPath('userData')
+  const dir = dataDir()
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
   return join(dir, 'state.json')
 }

@@ -63,6 +63,17 @@ export class BlockingEngine extends EventEmitter {
     this.elevation = status
   }
 
+  // Stop enforcing and wipe all in-memory blocks. Used by the full system restore so
+  // the next tick()/protect() doesn't immediately re-apply what we just reverted.
+  factoryReset(): void {
+    this.active = false
+    if (this.pollInterval) { clearInterval(this.pollInterval); this.pollInterval = null }
+    this.domains = []
+    this.processes = []
+    this.deepDomains = []
+    this.protectionApplied = false
+  }
+
   loadState(domains: BlockedDomain[], processes: BlockedProcess[]): void {
     this.domains = [...domains]
     // Re-apply any active Deep Focus blocks so a store refresh never silently drops them.

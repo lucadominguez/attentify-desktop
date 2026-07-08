@@ -235,6 +235,14 @@ export interface CloudState {
   email: string | null
 }
 
+export interface ChangeEntry {
+  ts: number
+  category: 'hosts' | 'firewall' | 'policy' | 'startup' | 'system'
+  action: string
+  target?: string
+  detail?: string
+}
+
 export type ViewName =
   | 'home'
   | 'focus-shield'

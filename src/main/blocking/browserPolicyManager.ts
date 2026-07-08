@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs'
 import { execSync } from 'child_process'
 import { platform } from 'process'
 import { join } from 'path'
+import { recordChange } from '../safety/changeJournal'
 
 // Firefox installation locations on Windows
 const FIREFOX_DIST_DIRS = [
@@ -25,12 +26,14 @@ export function applyBrowserPolicies(): void {
   if (platform !== 'win32') return
   applyFirefoxPolicy()
   applyChromiumRegistryPolicies()
+  recordChange({ category: 'policy', action: 'apply', detail: 'set browser DNS-over-HTTPS policies (Firefox + Chromium)' })
 }
 
 export function removeBrowserPolicies(): void {
   if (platform !== 'win32') return
   removeFirefoxPolicy()
   removeChromiumRegistryPolicies()
+  recordChange({ category: 'policy', action: 'remove', detail: 'restored browser DNS-over-HTTPS policies' })
 }
 
 function applyFirefoxPolicy(): void {

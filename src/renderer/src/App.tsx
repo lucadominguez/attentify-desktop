@@ -374,6 +374,9 @@ declare global {
     electronAPI: {
       getStore: () => Promise<import('@shared/types').AppStore>
       setStore: (patch: Partial<import('@shared/types').AppStore>) => Promise<import('@shared/types').AppStore>
+      getChangeLog: (limit?: number) => Promise<import('@shared/types').ChangeEntry[]>
+      getSafetyStatus: () => Promise<{ changeCount: number }>
+      revertAllChanges: () => Promise<{ ok: boolean; undone: string[]; errors: string[] }>
       runScan: () => Promise<import('@shared/types').ScanResult>
       addDomain: (domain: string, expiresInMs?: number) => Promise<{ ok: boolean; error?: string }>
       removeDomain: (domain: string) => Promise<void>

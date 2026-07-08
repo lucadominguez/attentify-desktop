@@ -3,6 +3,7 @@ import { writeFileSync, existsSync } from 'fs'
 import { platform } from 'process'
 import { join } from 'path'
 import { homedir } from 'os'
+import { recordChange } from './safety/changeJournal'
 
 const WIN_TASK_NAME = 'Attentify'
 const LEGACY_WIN_TASK_NAME = 'ProductivityDaemon' // pre-rebrand; cleaned up on (un)register
@@ -86,15 +87,19 @@ function isMacAgentRegistered(): boolean {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function registerStartupDaemon(execPath: string): boolean {
-  if (platform === 'win32') return registerWindowsTask(execPath)
-  if (platform === 'darwin') return registerMacAgent(execPath)
-  return false
+  const ok = platform === 'win32' ? registerWindowsTask(execPath)
+    : platform === 'darwin' ? registerMacAgent(execPath)
+    : false
+  if (ok) recordChange({ category: 'startup', action: 'apply', detail: 'registered launch-at-login entry' })
+  return ok
 }
 
 export function unregisterStartupDaemon(): boolean {
-  if (platform === 'win32') return unregisterWindowsTask()
-  if (platform === 'darwin') return unregisterMacAgent()
-  return false
+  const ok = platform === 'win32' ? unregisterWindowsTask()
+    : platform === 'darwin' ? unregisterMacAgent()
+    : false
+  if (ok) recordChange({ category: 'startup', action: 'remove', detail: 'removed launch-at-login entry' })
+  return ok
 }
 
 export function isStartupDaemonRegistered(): boolean {

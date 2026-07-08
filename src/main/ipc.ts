@@ -11,6 +11,8 @@ import { processMessage } from './chat/ChatEngine'
 import { runFocusScan } from './scanner/FocusScan'
 import { checkElevation, verifyHostsWritable } from './blocking/hostsFileEditor'
 import { registerStartupDaemon, unregisterStartupDaemon, isStartupDaemonRegistered, getPlatformLabel } from './daemonManager'
+import { revertAllChanges } from './safety/systemRestore'
+import { readChanges, changeCount } from './safety/changeJournal'
 import { saveApiKey, deleteApiKey, hasApiKey } from './keystore'
 import { MonitorService } from './monitoring/MonitorService'
 import { AgentService } from './agent/AgentService'
@@ -404,6 +406,25 @@ export function initIpc(): void {
   // ── Store ──────────────────────────────────────────────────────────────────
 
   ipcMain.handle('store:get', () => getStore())
+
+  // ── Safety & Recovery ─────────────────────────────────────────────────────────
+  // Read the change journal (most-recent-first) and its count for the recovery UI.
+  ipcMain.handle('safety:changelog', (_e, limit?: number) => readChanges(limit ?? 250))
+  ipcMain.handle('safety:status', () => ({ changeCount: changeCount() }))
+
+  // One-click "Restore my system": wipe every persistent change Attentify made and
+  // clear the app's own blocking state so nothing re-applies after the restore.
+  ipcMain.handle('safety:revert', () => {
+    const engine = getBlockingEngine()
+    try { engine?.factoryReset() } catch { /* continue with the OS-level revert regardless */ }
+    const s = getStore()
+    patchStore({
+      blocklist: { domains: [], processes: [] },
+      feedBlocks: [],
+      settings: { ...s.settings, alwaysOn: false },
+    })
+    return revertAllChanges()
+  })
 
   ipcMain.handle('store:set', (_e, patch) => {
     const updated = patchStore(patch)

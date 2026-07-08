@@ -1,6 +1,25 @@
 import { execSync } from 'child_process'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, copyFileSync } from 'fs'
+import { join } from 'path'
 import { platform } from 'process'
+import { recordChange } from '../safety/changeJournal'
+
+// Where the pristine, pre-Attentify copy of the hosts file is stashed the first time
+// we ever touch it — the anchor for a full system restore.
+const BACKUP_DIR = platform === 'win32'
+  ? join('C:\\ProgramData', 'Attentify', 'backups')
+  : join(process.env.HOME ?? '.', '.attentify', 'backups')
+const HOSTS_BACKUP = join(BACKUP_DIR, 'hosts.pre-attentify')
+
+// Copy the current hosts file aside exactly once, before the first modification, so
+// the user's original DNS config is always recoverable. Cheap and idempotent.
+function snapshotHostsOnce(): void {
+  try {
+    if (existsSync(HOSTS_BACKUP)) return
+    if (!existsSync(BACKUP_DIR)) mkdirSync(BACKUP_DIR, { recursive: true })
+    copyFileSync(HOSTS_PATH, HOSTS_BACKUP)
+  } catch { /* non-fatal */ }
+}
 
 export const HOSTS_PATH =
   platform === 'win32'
@@ -62,6 +81,7 @@ function getDaemonSection(content: string): string[] {
 }
 
 function rebuildHosts(domains: string[]): void {
+  snapshotHostsOnce()   // capture the pristine hosts file before our first edit
   let content = readHosts()
   const start = content.indexOf(BLOCK_TAG_START)
   const end = content.indexOf(BLOCK_TAG_END)
@@ -92,6 +112,7 @@ export function addDomainToHosts(domain: string): { ok: boolean; error?: string 
     const withWww = `www.${domain}`
     if (!existing.includes(withWww) && !domain.startsWith('www.')) existing.push(withWww)
     rebuildHosts(existing)
+    recordChange({ category: 'hosts', action: 'block', target: domain })
     return { ok: true }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -103,6 +124,7 @@ export function removeDomainFromHosts(domain: string): boolean {
   try {
     const existing = getDaemonSection(readHosts())
     rebuildHosts(existing.filter((d) => d !== domain && d !== `www.${domain}`))
+    recordChange({ category: 'hosts', action: 'unblock', target: domain })
     return true
   } catch {
     return false
@@ -120,6 +142,7 @@ export function listBlockedDomainsInHosts(): string[] {
 export function clearAllHostsEntries(): boolean {
   try {
     rebuildHosts([])
+    recordChange({ category: 'hosts', action: 'clear', detail: 'removed all managed host blocks' })
     return true
   } catch {
     return false

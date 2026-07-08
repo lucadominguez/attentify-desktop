@@ -1,5 +1,6 @@
 import { execSync } from 'child_process'
 import { platform } from 'process'
+import { recordChange } from '../safety/changeJournal'
 
 const DOH_RULE_TCP = 'PD_BlockDoH_TCP'
 const DOH_RULE_UDP = 'PD_BlockDoH_UDP'
@@ -42,7 +43,23 @@ export function applyFirewallRules(): void {
     removeFirewallRules()
     run(`netsh advfirewall firewall add rule name="${DOH_RULE_TCP}" dir=out action=block protocol=tcp remoteip="${DOH_IPS}" remoteport=443,853`)
     run(`netsh advfirewall firewall add rule name="${DOH_RULE_UDP}" dir=out action=block protocol=udp remoteip="${DOH_IPS}" remoteport=443,853`)
+    recordChange({ category: 'firewall', action: 'apply', target: 'DoH resolvers', detail: 'blocked encrypted-DNS resolver IPs' })
   } catch { /* non-fatal */ }
+}
+
+// Remove EVERY firewall rule Attentify has ever added. All of them share the PD_
+// prefix, so a single filtered sweep cleans up DoH, per-site and Tor rules at once —
+// including any left behind by an earlier build. Used by the full system restore.
+export function removeAllAttentifyFirewallRules(): void {
+  if (platform !== 'win32') return
+  try {
+    run(`powershell -NonInteractive -NoProfile -Command "Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like 'PD_*' } | Remove-NetFirewallRule -ErrorAction SilentlyContinue"`)
+  } catch { /* fall through to the named removals below */ }
+  // Belt-and-suspenders for the well-known rule names in case the sweep above is
+  // unavailable (older PowerShell without NetSecurity module).
+  removeFirewallRules()
+  unblockTorPorts()
+  recordChange({ category: 'firewall', action: 'clear', detail: 'removed all Attentify firewall rules' })
 }
 
 export function removeFirewallRules(): void {

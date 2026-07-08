@@ -8,6 +8,10 @@ import type {
 const api = {
   getStore: (): Promise<AppStore> => ipcRenderer.invoke('store:get'),
   setStore: (patch: Partial<AppStore>): Promise<AppStore> => ipcRenderer.invoke('store:set', patch),
+  // Safety & Recovery
+  getChangeLog: (limit?: number): Promise<import('../shared/types').ChangeEntry[]> => ipcRenderer.invoke('safety:changelog', limit),
+  getSafetyStatus: (): Promise<{ changeCount: number }> => ipcRenderer.invoke('safety:status'),
+  revertAllChanges: (): Promise<{ ok: boolean; undone: string[]; errors: string[] }> => ipcRenderer.invoke('safety:revert'),
 
   runScan: (): Promise<ScanResult> => ipcRenderer.invoke('scan:run'),
 
