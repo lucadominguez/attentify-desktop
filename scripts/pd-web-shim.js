@@ -15,7 +15,7 @@
         { domain: 'reddit.com', addedAt: now - 3 * HOUR, reason: 'auto:url_visit:88%' },
         { domain: 'x.com', addedAt: now - 2 * HOUR },
         { domain: 'tiktok.com', addedAt: now - 26 * HOUR },
-        { domain: 'draftkings.com', addedAt: now - 50 * HOUR, reason: 'auto:gambling:95%' },
+        { domain: 'instagram.com', addedAt: now - 50 * HOUR, reason: 'auto:social:91%' },
       ],
       processes: [{ name: 'Discord', addedAt: now - 5 * HOUR }],
     },
@@ -38,19 +38,77 @@
   };
   var hasKey = false;
 
+  var _sid = 0;
   function sess(app, title, url, cat, minsAgo, durMin, distract) {
     var end = now - minsAgo * MIN, dur = durMin * MIN;
-    return { id: 's-' + Math.random().toString(36).slice(2), app: app, title: title, url: url, category: cat, startTime: end - dur, endTime: end, duration: dur, isDistraction: !!distract };
+    return { id: 's-' + (_sid++), app: app, title: title, url: url, category: cat, startTime: end - dur, endTime: end, duration: dur, isDistraction: !!distract };
   }
-  var recent = [
-    sess('Code', 'focus.ts · attentify', '', 'development', 4, 38, false),
+  // Absolute-time session for the historical week (dayOffset days ago at h:m).
+  function hsess(dayOffset, h, m, app, title, url, cat, durMin, distract) {
+    var d = new Date(now); d.setDate(d.getDate() - dayOffset); d.setHours(h, m || 0, 0, 0);
+    var start = d.getTime();
+    return { id: 's-' + (_sid++), app: app, title: title, url: url, category: cat, startTime: start, endTime: start + durMin * MIN, duration: durMin * MIN, isDistraction: !!distract };
+  }
+
+  // Today (always within the last few hours, whatever time the demo loads).
+  var todaySessions = [
+    sess('Code', 'api/handlers.rs · attentify', '', 'development', 4, 38, false),
     sess('chrome', 'Build a REST API in Rust · YouTube', 'https://youtube.com/watch?v=abc', 'entertainment', 46, 12, false),
-    sess('chrome', 'reddit.com/r/all', 'https://reddit.com/r/all', 'social', 70, 9, true),
-    sess('Code', 'App.tsx', '', 'development', 95, 52, false),
-    sess('chrome', 'X / Twitter · Home', 'https://x.com/home', 'social', 150, 16, true),
+    sess('chrome', 'reddit.com/r/rust', 'https://reddit.com/r/rust', 'social', 70, 9, true),
+    sess('Code', 'api/router.rs', '', 'development', 95, 52, false),
+    sess('chrome', 'X / Home', 'https://x.com/home', 'social', 150, 16, true),
     sess('Slack', '#engineering', '', 'communication', 180, 14, false),
-    sess('chrome', 'Async Rust in 100 Seconds', 'https://youtube.com/watch?v=xyz', 'entertainment', 210, 7, false),
-    sess('Discord', '#general', '', 'social', 240, 22, true),
+    sess('Notion', 'Sprint board', '', 'productivity', 205, 18, false),
+    sess('chrome', 'Async Rust in 100 Seconds · YouTube', 'https://youtube.com/watch?v=xyz', 'entertainment', 230, 7, false),
+    sess('Discord', '#dev-team', '', 'social', 250, 12, true),
+  ];
+
+  // A full, realistic and SFW historical week (days 1–6) so Timesheets, Analytics and
+  // the custom cards all have rich data. Weekdays = focused work with afternoon dips;
+  // weekends = lighter with a side project. Everything here is work/study-appropriate.
+  function buildWeek() {
+    var out = [];
+    for (var day = 1; day <= 6; day++) {
+      var dow = new Date(now - day * 24 * HOUR).getDay(); // 0 Sun .. 6 Sat
+      var weekend = (dow === 0 || dow === 6);
+      if (!weekend) {
+        out.push(hsess(day, 9, 5, 'Code', 'api/handlers.rs', '', 'development', 55, false));
+        out.push(hsess(day, 10, 5, 'chrome', 'Tokio docs — tasks & scheduling', 'https://docs.rs/tokio', 'browser', 12, false));
+        out.push(hsess(day, 10, 22, 'chrome', 'reddit.com/r/rust', 'https://reddit.com/r/rust', 'social', 7, true));
+        out.push(hsess(day, 10, 35, 'Code', 'api/handlers.rs', '', 'development', 46, false));
+        out.push(hsess(day, 11, 25, 'Slack', '#engineering', '', 'communication', 13, false));
+        out.push(hsess(day, 11, 45, 'Notion', 'Sprint planning', '', 'productivity', 20, false));
+        out.push(hsess(day, 12, 30, 'chrome', 'X / Home', 'https://x.com/home', 'social', 14, true));
+        out.push(hsess(day, 12, 50, 'chrome', 'How Tokio schedules tasks · YouTube', 'https://youtube.com/watch?v=t1', 'entertainment', 16, false));
+        out.push(hsess(day, 13, 30, 'Code', 'tests/integration.rs', '', 'development', 42, false));
+        out.push(hsess(day, 14, 18, 'chrome', 'reddit.com/r/programming', 'https://reddit.com/r/programming', 'social', 9, true));
+        out.push(hsess(day, 14, 35, 'Figma', 'Dashboard v2', '', 'productivity', 26, false));
+        out.push(hsess(day, 15, 10, 'chrome', 'X / Home', 'https://x.com/home', 'social', 11, true));
+        out.push(hsess(day, 15, 30, 'Code', 'api/router.rs', '', 'development', 48, false));
+        out.push(hsess(day, 16, 25, 'Google Docs', 'Design doc — v2 API', '', 'productivity', 22, false));
+        out.push(hsess(day, 16, 50, 'Discord', '#dev-team', '', 'social', 12, true));
+        if (day % 2 === 0) out.push(hsess(day, 21, 15, 'chrome', 'TikTok', 'https://tiktok.com', 'entertainment', 17, true));
+        if (day % 3 === 0) out.push(hsess(day, 22, 5, 'chrome', 'Instagram', 'https://instagram.com', 'social', 13, true));
+      } else {
+        out.push(hsess(day, 11, 0, 'Code', 'side-project/main.go', '', 'development', 42, false));
+        out.push(hsess(day, 12, 10, 'chrome', 'reddit.com/r/all', 'https://reddit.com/r/all', 'social', 24, true));
+        out.push(hsess(day, 14, 30, 'chrome', 'Sourdough for beginners · YouTube', 'https://youtube.com/watch?v=c1', 'entertainment', 26, false));
+        out.push(hsess(day, 15, 20, 'chrome', 'Instagram', 'https://instagram.com', 'social', 18, true));
+        out.push(hsess(day, 16, 10, 'chrome', 'TikTok', 'https://tiktok.com', 'entertainment', 21, true));
+        out.push(hsess(day, 20, 0, 'Steam', 'Stardew Valley', '', 'gaming', 55, true));
+      }
+    }
+    return out.filter(function (s) { return s.startTime < now; });
+  }
+
+  var recent = todaySessions.concat(buildWeek());
+
+  // Behavioural patterns (clean, work-context) — power the Logic page + Analytics.
+  var alerts = [
+    { id: 'h1', type: 'doom-loop', severity: 'high', title: 'Doom-loop on Reddit', description: 'You cycled Reddit → X → Reddit six times in 40 minutes this afternoon, each visit a little longer than the last.', detectedAt: now - 95 * MIN, app: 'chrome', dismissed: false, switchRate: 0 },
+    { id: 'h2', type: 'rapid-switching', severity: 'medium', title: 'Rapid context switching', description: '72 app switches per hour around 3pm — well above your focused baseline of ~18/hour.', detectedAt: now - 3 * HOUR, app: 'chrome', dismissed: false, switchRate: 72 },
+    { id: 'h3', type: 'tab-anxiety', severity: 'medium', title: 'Tab anxiety while writing', description: 'You reopened X five times in ten minutes while working on the design doc.', detectedAt: now - 5 * HOUR, app: 'chrome', dismissed: false },
+    { id: 'h4', type: 'late-night', severity: 'low', title: 'Late-night scrolling', description: '17 minutes on TikTok after 11pm on Tuesday — your focus the next morning dipped ~15%.', detectedAt: now - 30 * HOUR, app: 'chrome', dismissed: false },
   ];
 
   function analytics() {
@@ -72,12 +130,15 @@
         timePerApp: { 'Code': 14 * HOUR, 'chrome': 6 * HOUR, 'Slack': 2 * HOUR, 'Discord': 1 * HOUR },
         sessionCount: 38, blockEvents: 263,
       },
-      heuristicAlerts: [],
+      heuristicAlerts: alerts,
       recentSessions: recent,
       domains: [
-        { domain: 'reddit.com', category: 'social', classification: 'distraction', confidence: 0.88, total_ms: 42 * MIN, last_seen: now - 70 * MIN },
-        { domain: 'x.com', category: 'social', classification: 'distraction', confidence: 0.85, total_ms: 31 * MIN, last_seen: now - 150 * MIN },
-        { domain: 'youtube.com', category: 'video', classification: 'mixed', confidence: 0.60, total_ms: 19 * MIN, last_seen: now - 46 * MIN },
+        { domain: 'reddit.com', category: 'social', classification: 'distraction', confidence: 0.88, total_ms: 96 * MIN, last_seen: now - 70 * MIN },
+        { domain: 'x.com', category: 'social', classification: 'distraction', confidence: 0.85, total_ms: 78 * MIN, last_seen: now - 150 * MIN },
+        { domain: 'tiktok.com', category: 'entertainment', classification: 'distraction', confidence: 0.92, total_ms: 55 * MIN, last_seen: now - 30 * HOUR },
+        { domain: 'instagram.com', category: 'social', classification: 'distraction', confidence: 0.90, total_ms: 44 * MIN, last_seen: now - 20 * HOUR },
+        { domain: 'youtube.com', category: 'video', classification: 'mixed', confidence: 0.55, total_ms: 71 * MIN, last_seen: now - 46 * MIN },
+        { domain: 'docs.rs', category: 'browser', classification: 'productive', confidence: 0.80, total_ms: 62 * MIN, last_seen: now - 3 * HOUR },
       ],
     };
   }
@@ -239,39 +300,82 @@
     endBreak: function () { emit('break:ended'); return Promise.resolve({ ok: true }); },
     getBreakStatus: function () { return Promise.resolve(null); },
 
-    getInferences: function () { return Promise.resolve([]); },
+    getInferences: function () { return Promise.resolve([
+      { id: 'inf1', type: 'domain', value: 'news.ycombinator.com', confidence: 0.74, reasoning: 'Opened 9 times today in short bursts between coding tasks, each under a minute — classic micro-escape, not a deliberate read.', status: 'pending', action: 'block' },
+      { id: 'inf2', type: 'domain', value: 'amazon.com', confidence: 0.66, reasoning: 'Three visits during your afternoon work block, none tied to a search you started — likely idle browsing.', status: 'pending', action: 'block' },
+      { id: 'inf3', type: 'app', value: 'Discord', confidence: 0.58, reasoning: 'Frequent tab-outs to #dev-team during deep-work blocks; some are work chatter, some are drift.', status: 'pending', action: 'block' },
+    ]); },
     resolveInference: function () { return Promise.resolve({ ok: true }); },
 
     getAgentHistory: function () { return Promise.resolve([]); },
     clearChatHistory: function () { return Promise.resolve({ ok: true }); },
     dismissProactive: function () { return Promise.resolve({ ok: true }); },
 
-    getGoals: function () { return Promise.resolve([]); },
+    getGoals: function () { return Promise.resolve([
+      { id: 'g1', text: 'Ship the v2 API by Friday', priority: 2 },
+      { id: 'g2', text: 'Write 500 words every morning', priority: 1 },
+      { id: 'g3', text: 'No social before lunch', priority: 1 },
+    ]); },
     addGoal: function (text) { return Promise.resolve({ id: 'g-' + Date.now(), text: text }); },
     clearGoal: function () { return Promise.resolve({ ok: true }); },
-    getPreferences: function () { return Promise.resolve([]); },
+    getPreferences: function () { return Promise.resolve([
+      { key: 'work hours', value: '9am–5pm on weekdays', scope: 'weekdays', confidence: 0.9, source: 'user' },
+      { key: 'reddit', value: 'r/rust and r/programming are for work', scope: 'always', confidence: 0.82, source: 'user' },
+      { key: 'peak focus', value: 'mornings before noon', scope: 'morning', confidence: 0.86, source: 'agent' },
+      { key: 'youtube', value: 'conference talks and tutorials count as work', scope: 'always', confidence: 0.7, source: 'agent' },
+    ]); },
     setPreference: function () { return Promise.resolve({ ok: true }); },
     deletePreference: function () { return Promise.resolve({ ok: true }); },
 
     // ── Conversations, checkpoints, custom analytics, context, timesheets, startup ──
-    getConversations: function () { return Promise.resolve([{ id: 'demo', title: 'Focus session', created_at: Date.now(), updated_at: Date.now() }]); },
+    getConversations: function () { return Promise.resolve([
+      { id: 'demo', title: "I'm writing until 5, keep me off social", created_at: now - 3 * HOUR, updated_at: now - 2 * HOUR },
+      { id: 'demo2', title: 'Hide Shorts but keep subscriptions', created_at: now - 30 * HOUR, updated_at: now - 29 * HOUR },
+    ]); },
     createConversation: function (title) { return Promise.resolve({ id: 'demo-' + Date.now(), title: title || 'New chat', created_at: Date.now(), updated_at: Date.now() }); },
-    getConversationMessages: function () { return Promise.resolve([]); },
+    getConversationMessages: function (id) {
+      if (id === 'demo2') return Promise.resolve([
+        { id: 'n1', role: 'user', content: 'Hide YouTube Shorts but keep my subscriptions and tutorials.', ts: now - 30 * HOUR },
+        { id: 'n2', role: 'assistant', content: "Done. I've hidden the Shorts shelf, the player and /shorts/* on YouTube, but left your subscriptions, search and any video you open. You keep the tutorials, you lose the rabbit hole. 🛡️", ts: now - 30 * HOUR + 6000 },
+      ]);
+      return Promise.resolve([
+        { id: 'm1', role: 'user', content: "I'm writing until 5, keep me off social.", ts: now - 3 * HOUR },
+        { id: 'm2', role: 'assistant', content: "On it. I've muted Reddit, X, Instagram and TikTok until 5pm and I'll nudge you if you start drifting. Go write. 🛡️", ts: now - 3 * HOUR + 6000 },
+        { id: 'm3', role: 'user', content: "What's been eating my focus this week?", ts: now - 2 * HOUR },
+        { id: 'm4', role: 'assistant', content: "**Reddit** and **X** took the most off-task time this week — about 3h40m combined, mostly afternoon micro-breaks that turned into scrolls. Your strongest focus is mornings before noon (81% focus ratio). Want me to lock social after 2pm?", ts: now - 2 * HOUR + 6000 },
+      ]);
+    },
     renameConversation: function () { return Promise.resolve({ ok: true }); },
     deleteConversation: function () { return Promise.resolve({ ok: true }); },
-    getCheckpoints: function () { return Promise.resolve([]); },
-    restoreCheckpoint: function () { return Promise.resolve({ ok: true }); },
-    getUserContext: function () { return Promise.resolve([]); },
+    getCheckpoints: function (id) {
+      if (id === 'demo2') return Promise.resolve([{ id: 'cpB', message_id: 'n1', ts: now - 30 * HOUR, label: 'Hide YouTube Shorts but keep subscriptions' }]);
+      return Promise.resolve([
+        { id: 'cpA1', message_id: 'm1', ts: now - 3 * HOUR, label: "I'm writing until 5, keep me off social" },
+        { id: 'cpA2', message_id: 'm3', ts: now - 2 * HOUR, label: "What's been eating my focus this week?" },
+      ]);
+    },
+    restoreCheckpoint: function () { return Promise.resolve({ ok: true, label: 'this point' }); },
+    getUserContext: function () { return Promise.resolve([
+      { id: 'ctx1', text: "I'm a software engineer building a Rust API — coding is my main work.", ts: now - 2 * 24 * HOUR },
+      { id: 'ctx2', text: 'YouTube is often work for me: I watch conference talks and tutorials.', ts: now - 24 * HOUR },
+      { id: 'ctx3', text: 'Reddit r/rust and r/programming are research, not distraction.', ts: now - 5 * HOUR },
+    ]); },
     addUserContext: function (text) { return Promise.resolve({ ok: true, note: { id: 'ctx-' + Date.now(), text: text, ts: Date.now() } }); },
     deleteUserContext: function () { return Promise.resolve({ ok: true }); },
-    getCustomCards: function () { return Promise.resolve([]); },
+    getCustomCards: function () { return Promise.resolve([
+      { id: 'card1', title: 'Social media by weekday', description: 'Off-task social time, grouped by day', viz: 'bar', spec: { rangeDays: 7, groupBy: 'weekday', metric: 'time', distraction: 'only', limit: 7 }, createdAt: now - 2 * 24 * HOUR },
+      { id: 'card2', title: 'Focus ratio by hour', description: 'When you focus best across the day', viz: 'line', spec: { rangeDays: 7, groupBy: 'hour', metric: 'focus_ratio', distraction: 'all' }, createdAt: now - 24 * HOUR },
+      { id: 'card3', title: 'Top apps this week', description: 'Where your time goes', viz: 'table', spec: { rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 }, createdAt: now - 4 * HOUR },
+    ]); },
     deleteCustomCard: function () { return Promise.resolve({ ok: true }); },
     buildAnalyticsCard: function () { return Promise.resolve({ ok: true, summary: 'Built a card from your description.' }); },
-    getTimesheet: function () { try { return Promise.resolve({ rangeDays: 7, sessions: analytics().recentSessions || [] }); } catch (e) { return Promise.resolve({ rangeDays: 7, sessions: [] }); } },
+    getTimesheet: function () { try { return Promise.resolve({ rangeDays: 31, sessions: analytics().recentSessions || [] }); } catch (e) { return Promise.resolve({ rangeDays: 31, sessions: [] }); } },
     getStartupItems: function () { return Promise.resolve([
-      { id: 'hkcu:Spotify', name: 'Spotify', command: 'C:\\...\\Spotify.exe', location: 'hkcu' },
-      { id: 'hkcu:Discord', name: 'Discord', command: 'C:\\...\\Update.exe --processStart Discord.exe', location: 'hkcu' },
+      { id: 'hkcu:Spotify', name: 'Spotify', command: 'C:\\Users\\you\\AppData\\Roaming\\Spotify\\Spotify.exe', location: 'hkcu' },
+      { id: 'hkcu:Discord', name: 'Discord', command: 'C:\\Users\\you\\AppData\\Local\\Discord\\Update.exe --processStart Discord.exe', location: 'hkcu' },
+      { id: 'hkcu:Slack', name: 'Slack', command: 'C:\\Users\\you\\AppData\\Local\\slack\\slack.exe', location: 'hkcu' },
       { id: 'folder:Steam.lnk', name: 'Steam', command: 'Steam.lnk', location: 'folder' },
+      { id: 'folder:Epic Games Launcher.lnk', name: 'Epic Games Launcher', command: 'Epic Games Launcher.lnk', location: 'folder' },
     ]); },
     disableStartupItem: function () { return Promise.resolve({ ok: true }); },
     overlayReady: function () {}, overlayShown: function () {},
