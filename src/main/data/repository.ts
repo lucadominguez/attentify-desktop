@@ -407,9 +407,150 @@ export function getAgentMessages(limit = 40): DbAgentMessage[] {
   }))
 }
 
-export function clearAgentMessages(): void {
-  getDb().run('DELETE FROM agent_messages')
+export function getConversationMessages(conversationId: string, limit = 200): DbAgentMessage[] {
+  const rows = getDb().exec(
+    'SELECT id,role,content,tool_calls,tool_results,ts,session_id FROM agent_messages WHERE session_id = ? ORDER BY ts ASC LIMIT ?',
+    [conversationId, limit]
+  )
+  if (!rows[0]) return []
+  return rows[0].values.map((r) => ({
+    id: r[0] as string, role: r[1] as DbAgentMessage['role'], content: r[2] as string,
+    tool_calls: r[3] ? JSON.parse(r[3] as string) : undefined,
+    tool_results: r[4] ? JSON.parse(r[4] as string) : undefined,
+    ts: r[5] as number, session_id: r[6] as string | undefined,
+  }))
+}
+
+export function clearAgentMessages(conversationId?: string): void {
+  if (conversationId) getDb().run('DELETE FROM agent_messages WHERE session_id = ?', [conversationId])
+  else getDb().run('DELETE FROM agent_messages')
   markDirty()
+}
+
+// ── Checkpoints (Cursor-style state snapshots per message) ──────────────────────
+
+export interface DbCheckpoint {
+  id: string
+  conversation_id?: string
+  message_id?: string
+  ts: number
+  label?: string
+  snapshot: string
+}
+
+export function insertCheckpoint(c: Omit<DbCheckpoint, 'id'>): DbCheckpoint {
+  const id = randomUUID()
+  getDb().run(
+    'INSERT INTO checkpoints (id,conversation_id,message_id,ts,label,snapshot) VALUES (?,?,?,?,?,?)',
+    [id, c.conversation_id ?? null, c.message_id ?? null, c.ts, c.label ?? null, c.snapshot]
+  )
+  // Keep only the most recent 200 checkpoints overall.
+  getDb().run('DELETE FROM checkpoints WHERE id NOT IN (SELECT id FROM checkpoints ORDER BY ts DESC LIMIT 200)')
+  markDirty()
+  return { ...c, id }
+}
+
+export function listCheckpoints(conversationId?: string): { id: string; message_id?: string; ts: number; label?: string }[] {
+  const rows = conversationId
+    ? getDb().exec('SELECT id,message_id,ts,label FROM checkpoints WHERE conversation_id = ? ORDER BY ts ASC', [conversationId])
+    : getDb().exec('SELECT id,message_id,ts,label FROM checkpoints ORDER BY ts ASC')
+  if (!rows[0]) return []
+  return rows[0].values.map((r) => ({ id: r[0] as string, message_id: r[1] as string | undefined, ts: r[2] as number, label: r[3] as string | undefined }))
+}
+
+export function getCheckpoint(id: string): DbCheckpoint | null {
+  const rows = getDb().exec('SELECT id,conversation_id,message_id,ts,label,snapshot FROM checkpoints WHERE id = ?', [id])
+  const v = rows[0]?.values[0]
+  if (!v) return null
+  return { id: v[0] as string, conversation_id: v[1] as string | undefined, message_id: v[2] as string | undefined, ts: v[3] as number, label: v[4] as string | undefined, snapshot: v[5] as string }
+}
+
+// ── Conversations ──────────────────────────────────────────────────────────────
+
+export interface DbConversation {
+  id: string
+  title: string
+  created_at: number
+  updated_at: number
+  message_count?: number
+  last_message?: string
+}
+
+export function createConversation(title = 'New chat'): DbConversation {
+  const now = Date.now()
+  const id = randomUUID()
+  getDb().run('INSERT INTO conversations (id,title,created_at,updated_at) VALUES (?,?,?,?)', [id, title, now, now])
+  markDirty()
+  return { id, title, created_at: now, updated_at: now }
+}
+
+export function listConversations(): DbConversation[] {
+  const rows = getDb().exec(
+    `SELECT c.id, c.title, c.created_at, c.updated_at,
+            (SELECT COUNT(*) FROM agent_messages m WHERE m.session_id = c.id) AS cnt
+     FROM conversations c ORDER BY c.updated_at DESC LIMIT 100`
+  )
+  if (!rows[0]) return []
+  return rows[0].values.map((r) => ({
+    id: r[0] as string, title: r[1] as string, created_at: r[2] as number, updated_at: r[3] as number,
+    message_count: r[4] as number,
+  }))
+}
+
+export function touchConversation(id: string): void {
+  getDb().run('UPDATE conversations SET updated_at = ? WHERE id = ?', [Date.now(), id])
+  markDirty()
+}
+
+export function renameConversation(id: string, title: string): void {
+  getDb().run('UPDATE conversations SET title = ?, updated_at = updated_at WHERE id = ?', [title.slice(0, 80), id])
+  markDirty()
+}
+
+export function deleteConversation(id: string): void {
+  getDb().run('DELETE FROM agent_messages WHERE session_id = ?', [id])
+  getDb().run('DELETE FROM conversations WHERE id = ?', [id])
+  markDirty()
+}
+
+// One-time-ish maintenance: ensure a default conversation exists, adopt any legacy
+// messages that were stored without a conversation id, and scrub tool-call JSON that
+// leaked into stored assistant text before the sanitizer existed.
+export function ensureConversations(sanitize: (s: string) => string): string {
+  const db = getDb()
+
+  // Purge internal classifier prompts/replies that the browser extension used to proxy
+  // through the chat agent (they leaked into chat history). Matches the classifier's
+  // distinctive signature so real user messages are never touched.
+  db.run(
+    "DELETE FROM agent_messages WHERE content LIKE '%analyze browsing context%' OR content LIKE '%distractionProbability%' OR content LIKE '%goalAligned%'"
+  )
+
+  let existing = listConversations()
+  let defaultId: string
+  if (existing.length === 0) {
+    defaultId = createConversation('Chat').id
+    existing = listConversations()
+  } else {
+    defaultId = existing[0]!.id
+  }
+  // Adopt orphaned (null session_id) messages into the default conversation.
+  db.run('UPDATE agent_messages SET session_id = ? WHERE session_id IS NULL', [defaultId])
+
+  // Scrub stored assistant messages through the sanitizer; delete any that become empty.
+  const rows = db.exec("SELECT id, content FROM agent_messages WHERE role = 'assistant'")
+  for (const r of rows[0]?.values ?? []) {
+    const id = r[0] as string
+    const raw = (r[1] as string) ?? ''
+    const cleaned = sanitize(raw.startsWith('[proactive] ') ? '[proactive] ' + sanitize(raw.slice(12)) : raw)
+    if (cleaned.trim() === '' || cleaned.trim() === '[proactive]') {
+      db.run('DELETE FROM agent_messages WHERE id = ?', [id])
+    } else if (cleaned !== raw) {
+      db.run('UPDATE agent_messages SET content = ? WHERE id = ?', [cleaned, id])
+    }
+  }
+  markDirty()
+  return defaultId
 }
 
 export function purgeOldData(retentionMs = 90 * 24 * 3600000): void {

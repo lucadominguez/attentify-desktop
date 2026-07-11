@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import {
-  Home, Shield, Lock, Calendar, Zap,
+  Shield, Lock, Calendar, Zap, Clock, LayoutDashboard, BarChart2, Brain,
   MessageSquare, Activity, RefreshCw, ListChecks, Settings,
 } from 'lucide-react'
 import type { ViewName, FocusSession, ElevationStatus } from '@shared/types'
@@ -25,10 +25,14 @@ interface NavItem {
   desc: string   // plain-language tooltip so every menu item explains itself
 }
 
-// Primary features — the everyday surfaces of a focus app.
+// Primary features — the everyday surfaces of a focus app. Home is the chat-first
+// assistant (Attentify's core surface); the dashboard and analytics sit alongside it.
 const mainNav: NavItem[] = [
-  { id: 'home',         label: 'Home',       icon: <Home size={15} />,      desc: 'Your dashboard — today\'s focus at a glance' },
-  { id: 'insights',     label: 'Insights',   icon: <Activity size={15} />,  desc: 'Where your time went and the habits behind it' },
+  { id: 'home',         label: 'Assistant',  icon: <MessageSquare size={15} />, desc: 'Chat with Attentify — block sites, start focus, ask about your day' },
+  { id: 'dashboard',    label: 'Dashboard',  icon: <LayoutDashboard size={15} />, desc: 'Today\'s focus at a glance' },
+  { id: 'analytics',    label: 'Analytics',  icon: <BarChart2 size={15} />, desc: 'Charts, patterns, alerts — and describe any custom analytics you want' },
+  { id: 'logic',        label: 'Logic',      icon: <Brain size={15} />,     desc: 'How Attentify reasons about you — and add your own context' },
+  { id: 'timesheets',   label: 'Timesheets', icon: <Clock size={15} />,     desc: 'Time logged per app and category, day by day' },
   { id: 'focus-shield', label: 'Protection', icon: <Shield size={15} />,    desc: 'Blocklists, feed blocks, and the activity log' },
   { id: 'deep-focus',   label: 'Deep Focus', icon: <Lock size={15} />,      desc: 'Lock out distractions for a set time' },
   { id: 'actions',      label: 'Actions',    icon: <ListChecks size={15} />,desc: 'Review and approve flagged distractions' },
@@ -54,8 +58,8 @@ export default function Sidebar({
   const renderItem = (item: NavItem): React.ReactElement => {
     const isActive = currentView === item.id
     const badge =
-      item.id === 'insights' && alertCount > 0 ? { n: alertCount, color: '#ffaa00' } :
-      item.id === 'actions' && pendingActionCount > 0 ? { n: pendingActionCount, color: '#ffaa00' } :
+      item.id === 'analytics' && alertCount > 0 ? { n: alertCount, color: '#fbbf24' } :
+      item.id === 'actions' && pendingActionCount > 0 ? { n: pendingActionCount, color: '#fbbf24' } :
       null
     return (
       <button
@@ -66,7 +70,7 @@ export default function Sidebar({
       >
         <span
           className="flex-shrink-0"
-          style={{ color: isActive ? '#00c8ff' : '#4a6a86', transition: 'color 0.15s' }}
+          style={{ color: isActive ? '#6366f1' : '#4a6a86', transition: 'color 0.15s' }}
         >
           {item.icon}
         </span>
@@ -94,13 +98,13 @@ export default function Sidebar({
       style={{
         width: 220,
         background: 'linear-gradient(180deg, #020a16 0%, #030d1c 100%)',
-        borderRight: '1px solid rgba(0,200,255,0.1)',
+        borderRight: '1px solid rgba(99,102,241,0.1)',
       }}
     >
       {/* ── Logo ──────────────────────────────────────────────────────────── */}
       <div
         className="flex items-center gap-2.5 px-4 flex-shrink-0"
-        style={{ height: 56, borderBottom: '1px solid rgba(0,200,255,0.08)' }}
+        style={{ height: 56, borderBottom: '1px solid rgba(99,102,241,0.08)' }}
       >
         {/* Attentify shield mark */}
         <div className="flex-shrink-0 relative" style={{ width: 26, height: 26 }}>
@@ -120,14 +124,14 @@ export default function Sidebar({
         {elevation === 'full' && activeSession && (
           <div
             className="flex-shrink-0 w-1.5 h-1.5 rounded-full"
-            style={{ background: '#00e676', boxShadow: '0 0 6px #00e676' }}
+            style={{ background: '#34d399', boxShadow: '0 0 6px #34d399' }}
             title="Full protection active"
           />
         )}
         {(elevation === 'soft' || elevation === 'unknown') && (
           <div
             className="flex-shrink-0 w-1.5 h-1.5 rounded-full"
-            style={{ background: '#ffaa00', boxShadow: '0 0 6px #ffaa00' }}
+            style={{ background: '#fbbf24', boxShadow: '0 0 6px #fbbf24' }}
             title="Soft mode — limited protection"
           />
         )}
@@ -138,14 +142,14 @@ export default function Sidebar({
         <div
           className="mx-3 mt-2.5 flex-shrink-0 rounded-lg"
           style={{
-            background: 'rgba(255,170,0,0.06)',
-            border: '1px solid rgba(255,170,0,0.22)',
+            background: 'rgba(251,191,36,0.06)',
+            border: '1px solid rgba(251,191,36,0.22)',
             padding: '8px 10px',
           }}
         >
           <div className="flex items-center gap-1.5 mb-1">
-            <div className="w-1 h-1 rounded-full" style={{ background: '#ffaa00' }} />
-            <p className="text-[10px] font-semibold" style={{ color: '#ffaa00' }}>
+            <div className="w-1 h-1 rounded-full" style={{ background: '#fbbf24' }} />
+            <p className="text-[10px] font-semibold" style={{ color: '#fbbf24' }}>
               Blocking disabled
             </p>
           </div>
@@ -157,9 +161,9 @@ export default function Sidebar({
             disabled={relaunching}
             className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-md transition-all disabled:opacity-60"
             style={{
-              background: 'rgba(0,200,255,0.10)',
-              color: '#00c8ff',
-              border: '1px solid rgba(0,200,255,0.28)',
+              background: 'rgba(99,102,241,0.10)',
+              color: '#6366f1',
+              border: '1px solid rgba(99,102,241,0.28)',
             }}
           >
             {relaunching
@@ -178,23 +182,23 @@ export default function Sidebar({
         <div className="mt-4">
           <div className="px-4 mb-1.5 flex items-center gap-2">
             <span className="hud-label">Utilities</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.10)' }} />
+            <div className="flex-1 h-px" style={{ background: 'rgba(99,102,241,0.10)' }} />
           </div>
           {utilityNav.map(renderItem)}
         </div>
       </nav>
 
       {/* ── Assistant ─────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 p-3" style={{ borderTop: '1px solid rgba(0,200,255,0.08)' }}>
+      <div className="flex-shrink-0 p-3" style={{ borderTop: '1px solid rgba(99,102,241,0.08)' }}>
         <button
-          onClick={onChatOpen}
+          onClick={() => onNavigate('home')}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[12px] font-medium transition-all hover:brightness-110"
           style={{
-            background: 'rgba(0,200,255,0.08)',
-            border: '1px solid rgba(0,200,255,0.22)',
-            color: '#7fd6ff',
+            background: 'rgba(99,102,241,0.08)',
+            border: '1px solid rgba(99,102,241,0.22)',
+            color: '#a5b4fc',
           }}
-          title="Ask the Attentify assistant"
+          title="Open the Attentify assistant"
         >
           <MessageSquare size={13} />
           Ask Attentify

@@ -4,7 +4,15 @@ import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
 import type { ActivitySession, AppCategory } from '../../shared/types'
 
-const BROWSER_PROCESSES = new Set(['chrome', 'firefox', 'msedge', 'opera', 'brave', 'vivaldi', 'safari', 'arc', 'thorium', 'librewolf', 'waterfox', 'floorp'])
+// Top desktop browsers (process/executable names, lowercased, no .exe). Covers the
+// 15 most-used plus common forks so foreground-window tracking works everywhere —
+// independent of the browser extension. See COMPATIBILITY.md for the tracked list.
+const BROWSER_PROCESSES = new Set([
+  'chrome', 'msedge', 'firefox', 'brave', 'opera', 'operagx', 'vivaldi', 'safari',
+  'arc', 'tor', 'torbrowser', 'chromium', 'yandex', 'duckduckgo', 'maxthon',
+  'ucbrowser', 'palemoon', 'waterfox', 'librewolf', 'floorp', 'thorium', 'whale',
+  'epic', 'iron', 'slimjet', 'min', 'falkon', 'midori', 'basilisk', 'seamonkey',
+])
 const SOCIAL_PROCESSES = new Set(['discord', 'slack', 'telegram', 'whatsapp', 'messenger', 'signal', 'teams', 'skype', 'zoom', 'element', 'revolt'])
 const ENTERTAINMENT = new Set(['spotify', 'netflix', 'vlc', 'mpv', 'obs64', 'obs', 'mpc-hc64', 'mpc-hc', 'potplayer64', 'potplayer', 'foobar2000', 'winamp', 'itunes', 'amazonmusic'])
 const GAMING = new Set(['steam', 'epicgameslauncher', 'origin', 'battlenet', 'gog galaxy', 'playnite', 'heroiclauncher', 'leagueclient', 'riotclient', 'minecraft', 'javaw', 'overwatch', 'diablo'])
@@ -89,6 +97,18 @@ export class ActivityTracker extends EventEmitter {
   getSessions(sinceMs?: number): ActivitySession[] {
     const cutoff = sinceMs ?? 0
     return this.sessions.filter((s) => s.startTime >= cutoff)
+  }
+
+  // Merge historical/imported sessions (e.g. from the user's browser history) into the
+  // in-memory pool so analytics and timesheets have data from day one. Deduplicates by
+  // id, keeps the list time-ordered, and caps total size.
+  seedSessions(incoming: ActivitySession[]): number {
+    if (incoming.length === 0) return 0
+    const existing = new Set(this.sessions.map((s) => s.id))
+    const add = incoming.filter((s) => !existing.has(s.id))
+    if (add.length === 0) return 0
+    this.sessions = [...this.sessions, ...add].sort((a, b) => a.startTime - b.startTime).slice(-8000)
+    return add.length
   }
 
   flushSessions(): ActivitySession[] {

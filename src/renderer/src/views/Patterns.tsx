@@ -173,13 +173,13 @@ const PATTERN_TAXONOMY: PatternDef[] = [
 
 const SEVERITY_COLOR: Record<string, string> = {
   high: '#ff6b35',
-  medium: '#ffb800',
-  low: '#64b5f6',
+  medium: '#fbbf24',
+  low: '#818cf8',
 }
 
 const SEVERITY_BG: Record<string, string> = {
   high: 'rgba(255,107,53,0.1)',
-  medium: 'rgba(255,184,0,0.1)',
+  medium: 'rgba(251,191,36,0.1)',
   low: 'rgba(100,181,246,0.1)',
 }
 
@@ -251,7 +251,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
           <button
             onClick={handleAskAI}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105"
-            style={{ background: 'rgba(33,150,243,0.12)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.22)' }}
+            style={{ background: 'rgba(33,150,243,0.12)', color: '#818cf8', border: '1px solid rgba(33,150,243,0.22)' }}
           >
             <MessageSquare size={11} />
             Ask AI

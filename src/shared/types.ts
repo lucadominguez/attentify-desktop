@@ -212,6 +212,55 @@ export interface AppStore {
   // Feed-level blocks displayed in the Overview (enforced by the browser extension,
   // not the hosts file). Seeded with Reddit + Twitter/X on install.
   feedBlocks?: FeedBlock[]
+  // Custom analytics cards the user built by describing what they want to see. The
+  // AI assistant creates these via the create_analytics_card tool; the Analytics page
+  // renders each one and recomputes it live from tracked activity.
+  customAnalyticsCards?: CustomAnalyticsCard[]
+  // Free-text context the user added on the Logic page to inform the AI. Injected
+  // verbatim into the system prompt so it shapes the assistant's reasoning.
+  userContext?: UserContextNote[]
+}
+
+export interface UserContextNote {
+  id: string
+  text: string
+  ts: number
+}
+
+// A saved, user-described analytics view. `spec` is the query the card recomputes
+// from the activity log every time the Analytics page loads, so the card stays live.
+export interface AnalyticsQuerySpec {
+  rangeDays: number                                        // look-back window
+  groupBy: 'app' | 'category' | 'domain' | 'hour' | 'weekday'
+  metric: 'time' | 'sessions' | 'focus_ratio'
+  distraction: 'all' | 'only' | 'exclude'                  // filter by distraction flag
+  limit?: number
+}
+
+export interface StartupItem {
+  id: string
+  name: string
+  command: string
+  location: 'hkcu' | 'hklm' | 'folder'
+  path?: string
+  needsAdmin?: boolean
+}
+
+export interface Conversation {
+  id: string
+  title: string
+  created_at: number
+  updated_at: number
+  message_count?: number
+}
+
+export interface CustomAnalyticsCard {
+  id: string
+  title: string
+  description?: string
+  viz: 'bar' | 'number' | 'table' | 'line'
+  spec: AnalyticsQuerySpec
+  createdAt: number
 }
 
 export interface FeedBlock {
@@ -245,6 +294,9 @@ export interface ChangeEntry {
 
 export type ViewName =
   | 'home'
+  | 'dashboard'
+  | 'logic'
+  | 'timesheets'
   | 'focus-shield'
   | 'deep-clean'
   | 'insights'

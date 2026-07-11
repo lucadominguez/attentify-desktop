@@ -3,7 +3,8 @@ import type { MessageParam } from '@anthropic-ai/sdk/resources/messages'
 import { buildSystemPrompt } from './systemPrompt'
 import { TOOL_DEFINITIONS, executeTool, type ToolDeps } from './tools'
 import {
-  insertAgentMessage, getAgentMessages, getActiveGoals, getPreferences, getInferences, getRecentEvents,
+  insertAgentMessage, getAgentMessages, getConversationMessages, touchConversation,
+  getActiveGoals, getPreferences, getInferences, getRecentEvents, insertCheckpoint,
   type DbAgentMessage,
 } from '../data/repository'
 import { getStore } from '../store'
@@ -13,23 +14,11 @@ import type { ActivitySession } from '../../shared/types'
 // Sentinel error the renderer recognises to show the subscribe/upgrade prompt.
 export const PAYWALL_ERROR = 'PAYWALL'
 
-// Some models, when their tool-use is proxied through OpenRouter, occasionally emit
-// the tool invocation as raw text instead of a structured tool_use block — it shows
-// up in chat as "random code" (XML <invoke>/<function_calls> or a JSON call object).
-// Strip those artifacts so the user only sees prose. Conservative: only removes
-// blocks that clearly look like tool calls, never normal code the user asked for.
-export function sanitizeAssistantText(text: string): string {
-  let t = text
-  t = t.replace(/<function_calls>[\s\S]*?<\/function_calls>/gi, '')
-  t = t.replace(/<function_results>[\s\S]*?<\/function_results>/gi, '')
-  t = t.replace(/<invoke\b[\s\S]*?<\/invoke>/gi, '')
-  t = t.replace(/<\/?(?:antml:[a-z_]+|tool_call|tool_use|parameter)\b[^>]*>/gi, '')
-  // fenced blocks that are really a tool call (contain a name/recipient_name key)
-  t = t.replace(/```[a-z_]*\s*\{[\s\S]*?"(?:name|recipient_name|tool_name)"\s*:[\s\S]*?\}\s*```/gi, '')
-  // a bare JSON object that is explicitly a tool_use envelope
-  t = t.replace(/\{[\s\S]*?"type"\s*:\s*"tool_use"[\s\S]*?\}\s*$/gi, '')
-  return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
-}
+// Tool-call artifact scrubbing lives in shared/chatSanitize so the agent, the DB
+// history cleanup, and the chat UI all strip identically. Re-exported for existing
+// importers.
+export { sanitizeStreaming, sanitizeAssistantText } from '../../shared/chatSanitize'
+import { sanitizeStreaming, sanitizeAssistantText } from '../../shared/chatSanitize'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -102,7 +91,7 @@ export class AgentService {
 
   // ── Main chat ───────────────────────────────────────────────────────────────
 
-  async chat(userText: string, callbacks: ChatCallbacks): Promise<void> {
+  async chat(userText: string, callbacks: ChatCallbacks, images?: { media_type: string; data: string }[], conversationId?: string): Promise<void> {
     if (!this.client) {
       callbacks.onError('API key not set. Please configure your Anthropic API key in settings.')
       return
@@ -164,30 +153,113 @@ export class AgentService {
         recentUrls,
         recentSearches,
         extensionConnected: this.deps.contentRules?.isExtensionConnected() ?? false,
+        userContext: (store.userContext ?? []).map((c) => c.text),
       })
 
-      // Build message history (last 20 messages, oldest first)
-      const history = getAgentMessages(20).reverse()
+      // Build message history (last 20 messages, oldest first). Scope to the active
+      // conversation when one is supplied.
+      const history = conversationId ? getConversationMessages(conversationId, 20) : getAgentMessages(20)
+
+      // The current turn: attach any images as vision content blocks alongside the text.
+      const userContent: MessageParam['content'] = images && images.length > 0
+        ? [
+            ...images.map((img) => ({
+              type: 'image' as const,
+              source: { type: 'base64' as const, media_type: img.media_type as 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp', data: img.data },
+            })),
+            { type: 'text' as const, text: userText },
+          ]
+        : userText
+
       const messages: MessageParam[] = [
         ...history
           .filter((m) => m.role === 'user' || m.role === 'assistant')
           .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-        { role: 'user', content: userText },
+        { role: 'user', content: userContent },
       ]
 
-      // Persist user message
-      insertAgentMessage({ role: 'user', content: userText, ts: Date.now() })
+      // Persist user message (note the attachment; image bytes aren't stored)
+      const userMsg = insertAgentMessage({ role: 'user', content: images && images.length ? `${userText}\n[${images.length} image${images.length > 1 ? 's' : ''} attached]` : userText, ts: Date.now(), session_id: conversationId })
+
+      // Cursor-style checkpoint: snapshot the reversible state BEFORE the assistant
+      // acts, keyed to this user message, so the user can revert to this point later.
+      try {
+        const snap = getStore()
+        insertCheckpoint({
+          conversation_id: conversationId,
+          message_id: userMsg.id,
+          ts: userMsg.ts,
+          label: userText.slice(0, 60),
+          snapshot: JSON.stringify({
+            blocklist: snap.blocklist,
+            schedules: snap.schedules,
+            sessions: snap.sessions,
+            contentRules: snap.contentRules ?? [],
+            customAnalyticsCards: snap.customAnalyticsCards ?? [],
+            feedBlocks: snap.feedBlocks ?? [],
+          }),
+        })
+      } catch { /* checkpointing is best-effort */ }
 
       // Run the agentic loop
       const fullReply = await this.runLoop(systemPrompt, messages, callbacks)
 
       // Persist assistant reply (sanitized — strips any tool-call markup the model
-      // occasionally leaks as text when tool-use is proxied through OpenRouter)
-      const cleaned = sanitizeAssistantText(fullReply)
-      const msg = insertAgentMessage({ role: 'assistant', content: cleaned, ts: Date.now() })
+      // occasionally leaks as text when tool-use is proxied through OpenRouter). If the
+      // model returned ONLY a tool-call blob (nothing left after scrubbing), show a
+      // short confirmation instead of an empty bubble — the tool already ran.
+      const cleaned = sanitizeAssistantText(fullReply) || 'Done.'
+      const msg = insertAgentMessage({ role: 'assistant', content: cleaned, ts: Date.now(), session_id: conversationId })
+      if (conversationId) touchConversation(conversationId)
       callbacks.onDone(msg)
     } catch (err) {
       callbacks.onError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // Raw, single-shot completion — NOT persisted to any conversation and NO tools. Used
+  // to proxy the browser extension's internal calls (e.g. its URL-distraction classifier)
+  // so they never pollute the user's chat history.
+  async complete(system: string, userText: string, maxTokens = 400): Promise<string> {
+    if (!this.client) throw new Error('no_key')
+    if (!canUseAi()) throw new Error('PAYWALL')
+    const resp = await this.client.messages.create({
+      model: this.model,
+      max_tokens: maxTokens,
+      system: system || undefined,
+      messages: [{ role: 'user', content: userText }],
+    })
+    recordUsage(this.model, resp.usage?.input_tokens ?? 0, resp.usage?.output_tokens ?? 0)
+    return (resp.content.find((b) => b.type === 'text') as { type: 'text'; text: string } | undefined)?.text ?? ''
+  }
+
+  // ── One-shot: build a custom analytics card from a plain-language description ──
+  // Runs the tool loop headlessly (no chat UI, not persisted to any conversation) so
+  // the Analytics page's "describe your analytics" bar can submit directly. The tools
+  // (query_activity_data + create_analytics_card) do the real work.
+  async buildAnalyticsCard(description: string): Promise<{ ok: boolean; error?: string; summary?: string }> {
+    if (!this.client) return { ok: false, error: 'API key not set' }
+    if (!canUseAi()) return { ok: false, error: 'PAYWALL' }
+    try {
+      const store = getStore()
+      const systemPrompt = buildSystemPrompt({
+        goals: getActiveGoals(),
+        preferences: getPreferences(),
+        pendingInferences: [],
+        activeBlocks: { domains: store.blocklist.domains.map((d) => d.domain), processes: store.blocklist.processes.map((p) => p.name) },
+        activeSessionMode: null,
+        todayFocusedMs: 0,
+        todayDistractedMs: 0,
+        topDistractionApp: null,
+        recentSessions: [],
+      })
+      const meta = `The user typed this into the "build your own analytics" bar on their Analytics page: "${description}".\n\nBuild the most sensible custom analytics card for it. First call query_activity_data to compute the real numbers from their tracked activity, then call create_analytics_card to save a live card (pick a clear title, an appropriate viz — bar/number/table — and fitting group_by/metric/range/distraction). Do not ask any clarifying questions; make reasonable choices. Keep any text response to one short sentence.`
+      const messages: MessageParam[] = [{ role: 'user', content: meta }]
+      const noop = (): void => {}
+      const summary = await this.runLoop(systemPrompt, messages, { onChunk: noop, onToolUse: noop, onDone: noop, onError: noop })
+      return { ok: true, summary: sanitizeAssistantText(summary) }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
   }
 
@@ -199,7 +271,11 @@ export class AgentService {
     callbacks: ChatCallbacks
   ): Promise<string> {
     let rounds = 0
-    let fullReply = ''
+    // `raw` is the full, unsanitized assistant text across all tool rounds. On every
+    // delta we send the SANITIZED full string (not the delta), and the renderer
+    // replaces its content — so any tool-call JSON that leaks as text is scrubbed live
+    // and can never persist on screen.
+    let raw = ''
     let currentMessages = [...messages]
 
     while (rounds < MAX_TOOL_ROUNDS) {
@@ -214,14 +290,12 @@ export class AgentService {
         tools: TOOL_DEFINITIONS,
       })
 
-      let roundText = ''
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-          roundText += event.delta.text
-          callbacks.onChunk(event.delta.text)
+          raw += event.delta.text
+          callbacks.onChunk(sanitizeStreaming(raw))
         }
       }
-      fullReply += roundText
 
       const finalMsg = await stream.finalMessage()
       recordUsage(this.model, finalMsg.usage?.input_tokens ?? 0, finalMsg.usage?.output_tokens ?? 0)
@@ -250,7 +324,7 @@ export class AgentService {
       ]
     }
 
-    return fullReply
+    return raw
   }
 
   // ── Proactive intervention ──────────────────────────────────────────────────

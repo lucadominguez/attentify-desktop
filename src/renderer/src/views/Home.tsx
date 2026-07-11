@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
-  Shield, Lock, Activity, Zap, RefreshCw, Key, X, Eye, EyeOff,
-  MessageSquare, TrendingDown, AlertTriangle, ChevronRight, ScanLine,
+  Shield, Lock, Activity, RefreshCw, Key, X, Eye, EyeOff,
+  MessageSquare, AlertTriangle, ChevronRight, ScanLine, BarChart2, Clock,
 } from 'lucide-react'
 import type { AppStore, ScanResult, ViewName, HeuristicAlert } from '@shared/types'
 import { useTheme } from '../context/ThemeContext'
@@ -23,7 +23,7 @@ interface TodayStats {
   distractedTime: number
   blockEvents: number
   switchRate: number
-  topDistractor: string | null
+  topDrains: { app: string; ms: number }[]
 }
 
 // Below this much tracked time, a "focus score" is statistical noise — we show a
@@ -39,12 +39,26 @@ function fmtMs(ms: number): string {
   return '0m'
 }
 
-function greeting(): string {
-  const h = new Date().getHours()
-  if (h < 5) return 'Still up'
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
-  return 'Good evening'
+// ── Focus score ring ────────────────────────────────────────────────────────────
+function ScoreRing({ score, color, size = 96 }: { score: number; color: string; size?: number }): React.ReactElement {
+  const { colors } = useTheme()
+  const stroke = 8
+  const r = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const off = circ * (1 - score / 100)
+  return (
+    <svg width={size} height={size} style={{ flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={colors.border} strokeWidth={stroke} />
+      <circle
+        cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={off} strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: 'stroke-dashoffset 0.7s ease' }}
+      />
+      <text x="50%" y="48%" textAnchor="middle" dominantBaseline="middle" className="data-value" style={{ fontSize: 26, fontWeight: 700, fill: color }}>{score}</text>
+      <text x="50%" y="66%" textAnchor="middle" dominantBaseline="middle" style={{ fontSize: 9, fill: colors.textMuted, letterSpacing: '0.08em' }}>SCORE</text>
+    </svg>
+  )
 }
 
 export default function Home({ store, onNavigate, onScanComplete, onRefresh, latestAlert, onChatWith }: HomeProps): React.ReactElement {
@@ -69,19 +83,23 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
       const byApp = new Map<string, number>()
       for (const s of sessions.filter((s) => s.isDistraction))
         byApp.set(s.app, (byApp.get(s.app) ?? 0) + s.duration)
-      const top = [...byApp.entries()].sort((a, b) => b[1] - a[1])[0]
+      const topDrains = [...byApp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([app, ms]) => ({ app, ms }))
       setStats({
         focusScore: data.today.focusScore,
         focusedTime: data.today.focusedTime,
         distractedTime: data.today.distractedTime,
         blockEvents: data.today.blockEvents,
         switchRate: rate,
-        topDistractor: top?.[0] ?? null,
+        topDrains,
       })
     }).catch(() => {})
   }, [])
 
   useEffect(() => { loadStats() }, [loadStats])
+  useEffect(() => {
+    const off = api.onStoreRefresh?.(() => loadStats())
+    return () => { off?.() }
+  }, [loadStats])
   useEffect(() => {
     api.getApiKeyStatus().then(({ hasKey }) => setHasApiKey(hasKey)).catch(() => setHasApiKey(false))
   }, [])
@@ -89,34 +107,23 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
   const trackedMs = (stats?.focusedTime ?? 0) + (stats?.distractedTime ?? 0)
   const hasData = trackedMs >= MIN_TRACKED_MS
   const score = Math.round(stats?.focusScore ?? 0)
-  const scoreColor = score >= 70 ? '#4caf50' : score >= 40 ? '#ffb800' : '#ef5350'
+  const scoreColor = score >= 70 ? colors.positive : score >= 40 ? colors.warning : colors.negative
+  const focusedPct = trackedMs > 0 ? Math.round(((stats?.focusedTime ?? 0) / trackedMs) * 100) : 0
 
   const handleRescan = async (): Promise<void> => {
     setScanning(true)
-    try {
-      const results = await api.runScan()
-      onScanComplete(results)
-    } catch { /* ignore */ }
+    try { const results = await api.runScan(); onScanComplete(results) } catch { /* ignore */ }
     setScanning(false)
   }
 
-  // Calm status pill — icon + value + label in a rounded container. Reused as the
-  // dashboard's stat row (the component the onboarding "capability" chips inspired).
-  const StatPill = ({ icon, value, label, color, sub }: {
-    icon: React.ReactNode; value: string; label: string; color?: string; sub?: string
-  }): React.ReactElement => (
-    <div
-      className="flex flex-col gap-1.5 p-3.5 rounded-xl"
-      style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
-    >
-      <div className="flex items-center gap-1.5" style={{ color: colors.textMuted }}>
-        {icon}
-        <span className="text-[11px] font-medium">{label}</span>
-      </div>
-      <span className="text-[22px] font-semibold leading-none data-value truncate" title={value} style={{ color: color ?? colors.textPrimary }}>
-        {value}
-      </span>
-      {sub && <span className="text-[11px]" style={{ color: colors.textMuted }}>{sub}</span>}
+  const today = new Date().toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })
+
+  // ── KPI card ──────────────────────────────────────────────────────────────────
+  const Kpi = ({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }): React.ReactElement => (
+    <div className="rounded-xl p-3.5" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
+      <p className="text-[11px]" style={{ color: colors.textMuted }}>{label}</p>
+      <p className="text-[20px] font-semibold leading-tight mt-1 data-value truncate" title={value} style={{ color: color ?? colors.textPrimary }}>{value}</p>
+      {sub && <p className="text-[10px] mt-0.5" style={{ color: colors.textDim }}>{sub}</p>}
     </div>
   )
 
@@ -129,218 +136,189 @@ export default function Home({ store, onNavigate, onScanComplete, onRefresh, lat
         />
       )}
 
-      <div className="max-w-3xl mx-auto px-6 py-6 flex flex-col gap-5">
-
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <div className="flex items-start justify-between gap-4">
+      <div className="max-w-4xl mx-auto px-6 py-6 flex flex-col gap-5">
+        {/* Header */}
+        <div className="flex items-end justify-between gap-4">
           <div>
-            <h1 className="text-[22px] font-semibold" style={{ color: colors.textPrimary }}>
-              {greeting()}
-            </h1>
-            <p className="text-[13px] mt-1" style={{ color: colors.textMuted }}>
-              {activeSession
-                ? `You're in a ${activeSession.mode} focus session.`
-                : hasData
-                  ? "Here's how your attention is holding up today."
-                  : "Tracking your focus — insights build up as you work."}
-            </p>
+            <h1 className="text-[19px] font-semibold" style={{ color: colors.textPrimary }}>Dashboard</h1>
+            <p className="text-[12px] mt-0.5" style={{ color: colors.textMuted }}>{today}</p>
           </div>
-          {/* Passive protection status */}
-          <div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[12px] font-medium flex-shrink-0"
-            style={{
-              background: isProtected ? 'rgba(76,175,80,0.1)' : 'transparent',
-              border: `1px solid ${isProtected ? 'rgba(76,175,80,0.25)' : colors.border}`,
-              color: isProtected ? '#4caf50' : colors.textMuted,
-            }}
-            title={isProtected ? 'Full protection active' : 'Limited protection — admin rights needed'}
-          >
-            <Shield size={13} />
-            {isProtected ? 'Protected' : 'Limited'}
+          <div className="flex items-center gap-2">
+            <div
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium"
+              style={{
+                background: isProtected ? colors.positiveBg : 'transparent',
+                border: `1px solid ${isProtected ? 'rgba(52,211,153,0.3)' : colors.border}`,
+                color: isProtected ? colors.positive : colors.textMuted,
+              }}
+              title={isProtected ? 'Full protection active' : 'Limited — admin rights needed'}
+            >
+              <Shield size={12} /> {isProtected ? 'Protected' : 'Limited'}
+            </div>
+            <button onClick={loadStats} className="p-1.5 rounded-lg transition-colors" style={{ border: `1px solid ${colors.border}`, color: colors.textMuted }} title="Refresh">
+              <RefreshCw size={13} />
+            </button>
           </div>
         </div>
 
-        {/* ── Soft-mode banner ───────────────────────────────────────────── */}
+        {/* Soft-mode banner */}
         {(store.elevation === 'soft' || store.elevation === 'unknown') && (
-          <div
-            className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl"
-            style={{ background: 'rgba(255,184,0,0.06)', border: '1px solid rgba(255,184,0,0.2)' }}
-          >
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 rounded-xl" style={{ background: colors.warningBg, border: '1px solid rgba(251,191,36,0.25)' }}>
             <div className="flex items-center gap-2 min-w-0">
-              <Activity size={14} style={{ color: '#ffb800', flexShrink: 0 }} />
-              <span className="text-[12px]" style={{ color: colors.textSecondary }}>
-                Site blocking is off — it needs administrator rights.
-              </span>
+              <Activity size={14} style={{ color: colors.warning, flexShrink: 0 }} />
+              <span className="text-[12px]" style={{ color: colors.textSecondary }}>Site blocking is off — it needs administrator rights.</span>
             </div>
             <button
               onClick={async () => { setRelaunching(true); try { await api.relaunchAsAdmin() } catch { setRelaunching(false) } }}
               disabled={relaunching}
               className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-lg transition-all disabled:opacity-60"
-              style={{ background: colors.accentBg, color: colors.accent, border: `1px solid ${colors.border}` }}
+              style={{ background: colors.accentBg, color: colors.accent, border: `1px solid ${colors.borderMid}` }}
             >
               {relaunching ? <><RefreshCw size={12} className="animate-spin" /> Relaunching…</> : <><Shield size={12} /> Enable</>}
             </button>
           </div>
         )}
 
-        {/* ── Focal element: today's Focus Score ─────────────────────────── */}
-        <div
-          className="rounded-2xl p-6 flex items-center gap-6"
-          style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
-        >
+        {/* Focus panel */}
+        <div className="rounded-2xl p-5" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
           {hasData ? (
-            <>
-              <div className="flex flex-col items-center justify-center flex-shrink-0" style={{ minWidth: 120 }}>
-                <span className="text-[56px] font-bold leading-none data-value" style={{ color: scoreColor }}>{score}</span>
-                <span className="text-[12px] mt-1" style={{ color: colors.textMuted }}>Focus score</span>
-              </div>
+            <div className="flex items-center gap-6">
+              <ScoreRing score={score} color={scoreColor} />
               <div className="flex-1 min-w-0">
-                <p className="text-[14px] leading-relaxed" style={{ color: colors.textSecondary }}>
-                  {score >= 70
-                    ? `Strong focus today — ${fmtMs(stats!.focusedTime)} of deep work across ${fmtMs(trackedMs)} tracked.`
-                    : score >= 40
-                      ? `Mixed focus — ${fmtMs(stats!.focusedTime)} focused, but ${fmtMs(stats!.distractedTime)} lost to distractions.`
-                      : `Attention is fragmented — only ${fmtMs(stats!.focusedTime)} focused out of ${fmtMs(trackedMs)} tracked.`}
+                <p className="text-[13px] leading-relaxed mb-3" style={{ color: colors.textSecondary }}>
+                  {score >= 70 ? `Strong focus — ${fmtMs(stats!.focusedTime)} of deep work across ${fmtMs(trackedMs)} tracked today.`
+                    : score >= 40 ? `Mixed focus — ${fmtMs(stats!.focusedTime)} focused, ${fmtMs(stats!.distractedTime)} lost to distractions.`
+                    : `Fragmented — only ${fmtMs(stats!.focusedTime)} focused out of ${fmtMs(trackedMs)} tracked.`}
                 </p>
-                <div className="mt-3 h-2 rounded-full overflow-hidden" style={{ background: colors.border }}>
-                  <div className="h-full rounded-full" style={{ width: `${score}%`, background: scoreColor, transition: 'width 0.6s ease' }} />
+                {/* focused vs distracted split */}
+                <div className="h-2.5 rounded-full overflow-hidden flex" style={{ background: colors.negative }}>
+                  <div style={{ width: `${focusedPct}%`, background: colors.positive, transition: 'width 0.6s ease' }} />
+                </div>
+                <div className="flex items-center gap-4 mt-2">
+                  <span className="flex items-center gap-1.5 text-[11px]" style={{ color: colors.textMuted }}>
+                    <span className="w-2 h-2 rounded-sm" style={{ background: colors.positive }} /> Focused {fmtMs(stats!.focusedTime)}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px]" style={{ color: colors.textMuted }}>
+                    <span className="w-2 h-2 rounded-sm" style={{ background: colors.negative }} /> Distracted {fmtMs(stats!.distractedTime)}
+                  </span>
                 </div>
               </div>
-            </>
+            </div>
           ) : (
-            <div className="flex items-center gap-4 w-full">
-              <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0"
-                style={{ background: colors.accentBg, border: `1px solid ${colors.border}` }}
-              >
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: colors.accentBg, border: `1px solid ${colors.border}` }}>
                 <Activity size={24} style={{ color: colors.accent }} />
               </div>
               <div>
-                <p className="text-[15px] font-medium" style={{ color: colors.textPrimary }}>Not enough data yet</p>
-                <p className="text-[13px] mt-0.5" style={{ color: colors.textMuted }}>
-                  Keep working with Attentify running — your focus score appears after about 10 minutes of activity.
-                </p>
+                <p className="text-[15px] font-medium" style={{ color: colors.textPrimary }}>Building your picture</p>
+                <p className="text-[12px] mt-0.5" style={{ color: colors.textMuted }}>Your focus score appears after about 10 minutes of tracked activity.</p>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── Stat row ───────────────────────────────────────────────────── */}
+        {/* KPI row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatPill
-            icon={<Zap size={13} />}
-            label="Focused"
-            value={fmtMs(stats?.focusedTime ?? 0)}
-            color="#4caf50"
-            sub={hasData ? `of ${fmtMs(trackedMs)} tracked` : 'today'}
-          />
-          <StatPill
-            icon={<Activity size={13} />}
-            label="Switches"
-            value={hasData && stats ? `${stats.switchRate}/h` : '—'}
-            color={!hasData ? colors.textMuted : (stats!.switchRate < 20 ? '#4caf50' : stats!.switchRate < 60 ? '#ffb800' : '#ef5350')}
-            sub={hasData ? (stats!.switchRate < 20 ? 'steady' : 'fragmented') : 'today'}
-          />
-          <StatPill
-            icon={<Shield size={13} />}
-            label="Blocked"
-            value={`${stats?.blockEvents ?? store.blockEventCount ?? 0}`}
-            color={colors.accent}
-            sub="attempts today"
-          />
-          <StatPill
-            icon={<TrendingDown size={13} />}
-            label="Top drain"
-            value={stats?.topDistractor ?? '—'}
-            color={stats?.topDistractor ? '#ef5350' : colors.textMuted}
-            sub={stats?.topDistractor ? 'most time lost' : 'none detected'}
-          />
+          <Kpi label="Focused" value={fmtMs(stats?.focusedTime ?? 0)} sub={hasData ? `of ${fmtMs(trackedMs)}` : 'today'} color={colors.positive} />
+          <Kpi label="Distracted" value={fmtMs(stats?.distractedTime ?? 0)} sub="today" color={(stats?.distractedTime ?? 0) > 0 ? colors.negative : colors.textMuted} />
+          <Kpi label="Switches / hr" value={hasData && stats ? `${stats.switchRate}` : '—'} sub={hasData ? (stats!.switchRate < 20 ? 'steady' : 'fragmented') : 'today'} color={!hasData ? colors.textMuted : stats!.switchRate < 20 ? colors.positive : stats!.switchRate < 60 ? colors.warning : colors.negative} />
+          <Kpi label="Blocked" value={`${stats?.blockEvents ?? store.blockEventCount ?? 0}`} sub="attempts today" color={colors.accent} />
         </div>
 
-        {/* ── Latest attention alert ─────────────────────────────────────── */}
-        {latestAlert && !latestAlert.dismissed && (
-          <div
-            className="rounded-xl p-4 flex items-start gap-3"
-            style={{ background: 'rgba(255,184,0,0.06)', border: '1px solid rgba(255,184,0,0.2)' }}
-          >
-            <AlertTriangle size={16} style={{ color: '#ffb800', flexShrink: 0, marginTop: 2 }} />
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-medium" style={{ color: colors.textPrimary }}>{latestAlert.title}</p>
-              <p className="text-[12px] mt-0.5 leading-relaxed" style={{ color: colors.textMuted }}>{latestAlert.description}</p>
+        {/* Top drains + Latest alert */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
+            <p className="text-[11px] font-medium mb-2.5" style={{ color: colors.textMuted }}>Top distractions today</p>
+            {stats && stats.topDrains.length > 0 ? (
+              <div className="space-y-2">
+                {stats.topDrains.map((d) => {
+                  const max = stats.topDrains[0]!.ms || 1
+                  return (
+                    <div key={d.app} className="flex items-center gap-2.5">
+                      <span className="text-[12px] w-28 truncate" style={{ color: colors.textSecondary }}>{d.app}</span>
+                      <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: colors.border }}>
+                        <div className="h-full rounded-full" style={{ width: `${(d.ms / max) * 100}%`, background: colors.negative, opacity: 0.85 }} />
+                      </div>
+                      <span className="text-[11px] w-12 text-right data-value" style={{ color: colors.textPrimary }}>{fmtMs(d.ms)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-[12px]" style={{ color: colors.textDim }}>No distractions detected yet — nice.</p>
+            )}
+          </div>
+
+          {latestAlert && !latestAlert.dismissed ? (
+            <div className="rounded-xl p-4 flex flex-col" style={{ background: colors.warningBg, border: '1px solid rgba(251,191,36,0.25)' }}>
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle size={15} style={{ color: colors.warning, flexShrink: 0, marginTop: 1 }} />
+                <div className="min-w-0">
+                  <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>{latestAlert.title}</p>
+                  <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: colors.textMuted }}>{latestAlert.description}</p>
+                </div>
+              </div>
               {onChatWith && (
                 <button
                   onClick={() => onChatWith(`About the "${latestAlert.title}" pattern — ${latestAlert.description}. What should I do?`)}
-                  className="mt-2 flex items-center gap-1.5 text-[12px] font-medium transition-colors hover:opacity-80"
-                  style={{ color: colors.accent }}
+                  className="mt-auto pt-2 flex items-center gap-1.5 text-[11px] font-medium self-start" style={{ color: colors.accent }}
                 >
-                  <MessageSquare size={12} /> Ask Attentify about this
+                  <MessageSquare size={12} /> Ask Attentify
                 </button>
               )}
             </div>
-          </div>
-        )}
-
-        {/* ── Quick actions ──────────────────────────────────────────────── */}
-        <div>
-          <p className="text-[11px] font-medium mb-2" style={{ color: colors.textMuted }}>Quick actions</p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <ActionCard
-              icon={<Lock size={16} />}
-              title={activeSession ? 'Focus session running' : 'Enter Deep Focus'}
-              desc={activeSession ? 'Lock is active' : 'Block everything for a set time'}
-              accent={colors.accent}
-              onClick={() => onNavigate('deep-focus')}
-            />
-            <ActionCard
-              icon={<MessageSquare size={16} />}
-              title="Ask Attentify"
-              desc="Block a site, start a session, or ask about your focus"
-              accent={colors.accent}
-              onClick={() => onChatWith?.('')}
-            />
-            <ActionCard
-              icon={scanning ? <RefreshCw size={16} className="animate-spin" /> : <ScanLine size={16} />}
-              title={scanning ? 'Scanning…' : 'Run a scan'}
-              desc="Check this device for new attention leaks"
-              accent={colors.accent}
-              onClick={() => { if (!scanning) void handleRescan() }}
-            />
-          </div>
+          ) : (
+            <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
+              <p className="text-[11px] font-medium mb-2.5" style={{ color: colors.textMuted }}>Attention</p>
+              <p className="text-[12px]" style={{ color: colors.textDim }}>No attention alerts right now. Keep it up.</p>
+            </div>
+          )}
         </div>
 
-        {/* ── API key hint ───────────────────────────────────────────────── */}
-        {hasApiKey === false && (
+        {/* Quick actions */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <QuickAction icon={<Lock size={15} />} label={activeSession ? 'Session running' : 'Deep Focus'} onClick={() => onNavigate('deep-focus')} />
+          <QuickAction icon={<MessageSquare size={15} />} label="Ask Attentify" onClick={() => onNavigate('home')} />
+          <QuickAction icon={<BarChart2 size={15} />} label="Analytics" onClick={() => onNavigate('analytics')} />
+          <QuickAction icon={<Clock size={15} />} label="Timesheets" onClick={() => onNavigate('timesheets')} />
+        </div>
+
+        {/* Secondary: scan + API key */}
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={() => setShowApiKeyModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-left transition-colors hover:brightness-110"
-            style={{ background: colors.accentBg, border: `1px solid ${colors.border}` }}
+            onClick={() => { if (!scanning) void handleRescan() }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] rounded-lg transition-colors"
+            style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, color: colors.textSecondary }}
           >
-            <Key size={13} style={{ color: colors.accent, flexShrink: 0 }} />
-            <span className="text-[12px]" style={{ color: colors.textSecondary }}>
-              Using included free AI — add your own key for unlimited use
-            </span>
-            <ChevronRight size={13} style={{ color: colors.textMuted, marginLeft: 'auto' }} />
+            {scanning ? <><RefreshCw size={12} className="animate-spin" /> Scanning…</> : <><ScanLine size={12} /> Run a device scan</>}
           </button>
-        )}
+          {hasApiKey === false && (
+            <button
+              onClick={() => setShowApiKeyModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[12px] transition-colors"
+              style={{ background: colors.accentBg, border: `1px solid ${colors.border}`, color: colors.textSecondary }}
+            >
+              <Key size={12} style={{ color: colors.accent }} /> Add your own AI key
+              <ChevronRight size={12} style={{ color: colors.textMuted }} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Action card ───────────────────────────────────────────────────────────────
-function ActionCard({ icon, title, desc, accent, onClick }: {
-  icon: React.ReactNode; title: string; desc: string; accent: string; onClick: () => void
-}): React.ReactElement {
+// ── Quick action ────────────────────────────────────────────────────────────────
+function QuickAction({ icon, label, onClick }: { icon: React.ReactNode; label: string; onClick: () => void }): React.ReactElement {
   const { colors } = useTheme()
   return (
     <button
       onClick={onClick}
-      className="flex flex-col gap-2 p-4 rounded-xl text-left transition-all hover:brightness-110"
+      className="flex items-center gap-2.5 px-3.5 py-3 rounded-xl text-left transition-all hover:brightness-110"
       style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
     >
-      <span style={{ color: accent }}>{icon}</span>
-      <span className="text-[13px] font-medium" style={{ color: colors.textPrimary }}>{title}</span>
-      <span className="text-[11px] leading-snug" style={{ color: colors.textMuted }}>{desc}</span>
+      <span style={{ color: colors.accent }}>{icon}</span>
+      <span className="text-[12.5px] font-medium truncate" style={{ color: colors.textPrimary }}>{label}</span>
     </button>
   )
 }
@@ -402,7 +380,7 @@ function ApiKeyModal({ onSave, onClose }: { onSave: (key: string) => Promise<voi
             {show ? <EyeOff size={13} /> : <Eye size={13} />}
           </button>
         </div>
-        {error && <p className="text-[11px] mb-2" style={{ color: '#ef5350' }}>{error}</p>}
+        {error && <p className="text-[11px] mb-2" style={{ color: colors.negative }}>{error}</p>}
         <button
           onClick={handleSave}
           disabled={!key.trim() || saving}

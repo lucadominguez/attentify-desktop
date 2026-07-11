@@ -27,7 +27,7 @@ export default function Banner({ step, totalSteps, message, ctaLabel, onCta }: B
           <circle
             cx="26" cy="26" r="21"
             fill="none"
-            stroke="#2196f3"
+            stroke="#3b9eff"
             strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray={`${(pct / 100) * 132} 132`}

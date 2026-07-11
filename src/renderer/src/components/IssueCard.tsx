@@ -26,9 +26,9 @@ const FIX_LABELS: Record<string, string> = {
 }
 
 const SEV_COLORS: Record<string, string> = {
-  high: '#ef5350',
-  medium: '#ffb800',
-  low: '#66bb6a',
+  high: '#f87171',
+  medium: '#fbbf24',
+  low: '#34d399',
 }
 
 export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: IssueCardProps): React.ReactElement {
@@ -41,8 +41,8 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
     <div
       className="flex items-start gap-3 p-4 rounded-xl transition-all duration-200"
       style={{
-        background: fixed ? 'rgba(76,175,80,0.05)' : colors.cardBg,
-        border: fixed ? '1px solid rgba(76,175,80,0.2)' : `1px solid ${colors.border}`,
+        background: fixed ? 'rgba(52,211,153,0.05)' : colors.cardBg,
+        border: fixed ? '1px solid rgba(52,211,153,0.2)' : `1px solid ${colors.border}`,
         opacity: fixed ? 0.6 : 1,
       }}
     >
@@ -52,7 +52,7 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
           className="w-9 h-9 rounded-lg flex items-center justify-center"
           style={{ background: sevColor + '18', color: sevColor }}
         >
-          {fixed ? <CheckCircle2 size={18} style={{ color: '#66bb6a' }} /> : icon}
+          {fixed ? <CheckCircle2 size={18} style={{ color: '#34d399' }} /> : icon}
         </div>
       </div>
 
@@ -76,7 +76,7 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
                 onClick={() => onFix(issue)}
                 disabled={fixing}
                 className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg transition-all disabled:opacity-60"
-                style={{ background: 'rgba(33,150,243,0.15)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.25)' }}
+                style={{ background: 'rgba(33,150,243,0.15)', color: '#818cf8', border: '1px solid rgba(33,150,243,0.25)' }}
               >
                 {fixing ? (
                   <><Loader size={10} className="animate-spin" /> Fixing…</>
@@ -98,7 +98,7 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
         )}
 
         {fixed && (
-          <p className="text-[11px]" style={{ color: '#66bb6a' }}>Fixed — protection applied</p>
+          <p className="text-[11px]" style={{ color: '#34d399' }}>Fixed — protection applied</p>
         )}
       </div>
     </div>

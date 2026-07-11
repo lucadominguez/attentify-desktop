@@ -142,9 +142,9 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         <div
           className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 transition-all duration-500"
           style={{
-            background: isElevated ? 'rgba(76,175,80,0.12)' : 'rgba(255,184,0,0.1)',
-            border: `1px solid ${isElevated ? 'rgba(76,175,80,0.3)' : 'rgba(255,184,0,0.3)'}`,
-            boxShadow: isElevated ? '0 0 30px rgba(76,175,80,0.15)' : '0 0 30px rgba(255,184,0,0.1)',
+            background: isElevated ? 'rgba(52,211,153,0.12)' : 'rgba(251,191,36,0.1)',
+            border: `1px solid ${isElevated ? 'rgba(52,211,153,0.3)' : 'rgba(251,191,36,0.3)'}`,
+            boxShadow: isElevated ? '0 0 30px rgba(52,211,153,0.15)' : '0 0 30px rgba(251,191,36,0.1)',
           }}
         >
           {isElevated
@@ -177,7 +177,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
                 'Process killing enabled',
                 'Session enforcement ready',
               ].map((cap) => (
-                <div key={cap} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)' }}>
+                <div key={cap} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}>
                   <CheckCircle2 size={12} className="text-accent-green flex-shrink-0" />
                   <span className="text-accent-green text-[11px] font-medium">{cap}</span>
                 </div>
@@ -244,7 +244,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
           <button
             onClick={() => setStep('scanning')}
             className="flex items-center gap-2 text-white font-bold px-10 py-3.5 rounded-full transition-all hover:scale-105"
-            style={{ background: 'rgba(76,175,80,0.8)', boxShadow: '0 0 20px rgba(76,175,80,0.2)' }}
+            style={{ background: 'rgba(52,211,153,0.8)', boxShadow: '0 0 20px rgba(52,211,153,0.2)' }}
           >
             <ChevronRight size={16} /> Continue to scan
           </button>
@@ -271,7 +271,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         <div className="w-full max-w-xs rounded-full overflow-hidden mb-2" style={{ height: 3, background: colors.border }}>
           <div
             className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${scanProgress}%`, background: 'linear-gradient(90deg, #1565c0, #2196f3, #42a5f5)' }}
+            style={{ width: `${scanProgress}%`, background: 'linear-gradient(90deg, #1565c0, #3b9eff, #42a5f5)' }}
           />
         </div>
         <p className="text-xs tabular-nums" style={{ color: colors.textSecondary }}>{scanProgress}%</p>
@@ -282,7 +282,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
   // ── Results ────────────────────────────────────────────────────────────────
   if (step === 'results') {
     const severity = issueCount >= 8 ? 'critical' : issueCount >= 4 ? 'high' : 'moderate'
-    const sevColors = { critical: '#ef5350', high: '#ff6b35', moderate: '#ffb800' }
+    const sevColors = { critical: '#f87171', high: '#ff6b35', moderate: '#fbbf24' }
     const sevColor = sevColors[severity]
 
     return (

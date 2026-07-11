@@ -14,14 +14,14 @@ interface SettingsProps {
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }): React.ReactElement {
   return (
     <div className="flex items-center gap-2 mb-3">
-      <span style={{ color: 'rgba(0,200,255,0.6)' }}>{icon}</span>
+      <span style={{ color: 'rgba(99,102,241,0.6)' }}>{icon}</span>
       <span
         className="text-[9px] font-bold uppercase tracking-widest"
-        style={{ color: 'rgba(0,200,255,0.5)', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
+        style={{ color: 'rgba(99,102,241,0.5)', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
       >
         {label}
       </span>
-      <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.08)' }} />
+      <div className="flex-1 h-px" style={{ background: 'rgba(99,102,241,0.08)' }} />
     </div>
   )
 }
@@ -123,7 +123,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
       {/* Header */}
       <div
         className="flex-shrink-0 px-6 py-4"
-        style={{ borderBottom: '1px solid rgba(0,200,255,0.08)' }}
+        style={{ borderBottom: '1px solid rgba(99,102,241,0.08)' }}
       >
         <h1
           className="text-[13px] font-bold uppercase tracking-widest"
@@ -192,29 +192,29 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               onClick={() => void setMode('auto')}
               className="relative text-left p-4 transition-all duration-200 hover:scale-[1.01]"
               style={{
-                background: currentMode === 'auto' ? 'rgba(255,68,68,0.08)' : 'rgba(255,255,255,0.02)',
-                border: currentMode === 'auto' ? '1px solid rgba(255,68,68,0.4)' : '1px solid rgba(255,255,255,0.07)',
+                background: currentMode === 'auto' ? 'rgba(248,113,113,0.08)' : 'rgba(255,255,255,0.02)',
+                border: currentMode === 'auto' ? '1px solid rgba(248,113,113,0.4)' : '1px solid rgba(255,255,255,0.07)',
               }}
             >
               {currentMode === 'auto' && (
                 <div className="absolute top-2.5 right-2.5">
-                  <CheckCircle size={11} style={{ color: '#ff4444' }} />
+                  <CheckCircle size={11} style={{ color: '#f87171' }} />
                 </div>
               )}
               <div className="flex items-center gap-2 mb-2">
                 <div
                   className="w-6 h-6 flex items-center justify-center flex-shrink-0"
                   style={{
-                    background: currentMode === 'auto' ? 'rgba(255,68,68,0.15)' : 'rgba(255,255,255,0.04)',
-                    border: currentMode === 'auto' ? '1px solid rgba(255,68,68,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                    background: currentMode === 'auto' ? 'rgba(248,113,113,0.15)' : 'rgba(255,255,255,0.04)',
+                    border: currentMode === 'auto' ? '1px solid rgba(248,113,113,0.3)' : '1px solid rgba(255,255,255,0.08)',
                   }}
                 >
-                  <Zap size={11} style={{ color: currentMode === 'auto' ? '#ff4444' : colors.textMuted }} />
+                  <Zap size={11} style={{ color: currentMode === 'auto' ? '#f87171' : colors.textMuted }} />
                 </div>
                 <span
                   className="text-[11px] font-bold uppercase tracking-widest"
                   style={{
-                    color: currentMode === 'auto' ? '#ff6666' : colors.textSecondary,
+                    color: currentMode === 'auto' ? '#f87171' : colors.textSecondary,
                     fontFamily: '"Share Tech Mono", monospace',
                   }}
                 >
@@ -230,8 +230,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                     key={tag}
                     className="text-[8px] px-1.5 py-0.5 uppercase tracking-wide"
                     style={{
-                      background: 'rgba(255,68,68,0.08)',
-                      border: '1px solid rgba(255,68,68,0.2)',
+                      background: 'rgba(248,113,113,0.08)',
+                      border: '1px solid rgba(248,113,113,0.2)',
                       color: 'rgba(255,100,100,0.7)',
                       fontFamily: '"Share Tech Mono", monospace',
                     }}
@@ -258,29 +258,29 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               onClick={() => void setMode('ask')}
               className="relative text-left p-4 transition-all duration-200 hover:scale-[1.01]"
               style={{
-                background: currentMode === 'ask' ? 'rgba(0,200,255,0.06)' : 'rgba(255,255,255,0.02)',
-                border: currentMode === 'ask' ? '1px solid rgba(0,200,255,0.35)' : '1px solid rgba(255,255,255,0.07)',
+                background: currentMode === 'ask' ? 'rgba(99,102,241,0.06)' : 'rgba(255,255,255,0.02)',
+                border: currentMode === 'ask' ? '1px solid rgba(99,102,241,0.35)' : '1px solid rgba(255,255,255,0.07)',
               }}
             >
               {currentMode === 'ask' && (
                 <div className="absolute top-2.5 right-2.5">
-                  <CheckCircle size={11} style={{ color: '#00c8ff' }} />
+                  <CheckCircle size={11} style={{ color: '#6366f1' }} />
                 </div>
               )}
               <div className="flex items-center gap-2 mb-2">
                 <div
                   className="w-6 h-6 flex items-center justify-center flex-shrink-0"
                   style={{
-                    background: currentMode === 'ask' ? 'rgba(0,200,255,0.1)' : 'rgba(255,255,255,0.04)',
-                    border: currentMode === 'ask' ? '1px solid rgba(0,200,255,0.3)' : '1px solid rgba(255,255,255,0.08)',
+                    background: currentMode === 'ask' ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.04)',
+                    border: currentMode === 'ask' ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(255,255,255,0.08)',
                   }}
                 >
-                  <Bell size={11} style={{ color: currentMode === 'ask' ? '#00c8ff' : colors.textMuted }} />
+                  <Bell size={11} style={{ color: currentMode === 'ask' ? '#6366f1' : colors.textMuted }} />
                 </div>
                 <span
                   className="text-[11px] font-bold uppercase tracking-widest"
                   style={{
-                    color: currentMode === 'ask' ? '#00c8ff' : colors.textSecondary,
+                    color: currentMode === 'ask' ? '#6366f1' : colors.textSecondary,
                     fontFamily: '"Share Tech Mono", monospace',
                   }}
                 >
@@ -294,9 +294,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                 <span
                   className="text-[8px] px-1.5 py-0.5 uppercase tracking-wide"
                   style={{
-                    background: 'rgba(0,200,255,0.06)',
-                    border: '1px solid rgba(0,200,255,0.18)',
-                    color: 'rgba(0,200,255,0.6)',
+                    background: 'rgba(99,102,241,0.06)',
+                    border: '1px solid rgba(99,102,241,0.18)',
+                    color: 'rgba(99,102,241,0.6)',
                     fontFamily: '"Share Tech Mono", monospace',
                   }}
                 >
@@ -308,9 +308,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
 
           <div
             className="mt-3 px-3 py-2.5 flex items-center gap-2"
-            style={{ background: 'rgba(0,200,255,0.03)', border: '1px solid rgba(0,200,255,0.07)' }}
+            style={{ background: 'rgba(99,102,241,0.03)', border: '1px solid rgba(99,102,241,0.07)' }}
           >
-            <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: 'rgba(0,200,255,0.4)' }} />
+            <div className="w-1 h-1 rounded-full flex-shrink-0" style={{ background: 'rgba(99,102,241,0.4)' }} />
             <p className="text-[9px] leading-relaxed" style={{ color: colors.textMuted }}>
               {currentMode === 'auto'
                 ? 'High-confidence threats (adult, gambling, dating ≥85%) are blocked instantly. Lower-confidence items are still queued in Actions for review.'
@@ -329,7 +329,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
             {cloud?.active ? (
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-bold" style={{ color: '#4caf50' }}>Cloud active — unlimited AI</p>
+                  <p className="text-[11px] font-bold" style={{ color: '#34d399' }}>Cloud active — unlimited AI</p>
                   <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted }}>
                     {cloud.email ? `Subscribed as ${cloud.email}` : 'Subscription active'} · $5/mo
                   </p>
@@ -337,7 +337,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                 <button
                   onClick={() => void clearLicense()}
                   className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest"
-                  style={{ background: 'rgba(255,68,68,0.08)', border: '1px solid rgba(255,68,68,0.25)', color: 'rgba(255,68,68,0.7)', fontFamily: '"Share Tech Mono", monospace' }}
+                  style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', color: 'rgba(248,113,113,0.7)', fontFamily: '"Share Tech Mono", monospace' }}
                 >
                   Unlink
                 </button>
@@ -350,7 +350,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-semibold" style={{ color: colors.textPrimary }}>Free AI credit</span>
-                  <span className="text-[10px] tabular-nums" style={{ color: usage?.exhausted ? '#ff6666' : '#4caf50' }}>
+                  <span className="text-[10px] tabular-nums" style={{ color: usage?.exhausted ? '#f87171' : '#34d399' }}>
                     ${(usage?.usedUsd ?? 0).toFixed(2)} / ${(usage?.limitUsd ?? 1).toFixed(2)} used
                   </span>
                 </div>
@@ -359,7 +359,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                     className="h-full rounded-full transition-all"
                     style={{
                       width: `${Math.min(100, Math.round(((usage?.usedUsd ?? 0) / (usage?.limitUsd || 1)) * 100))}%`,
-                      background: usage?.exhausted ? '#ff5252' : '#4caf50',
+                      background: usage?.exhausted ? '#ff5252' : '#34d399',
                     }}
                   />
                 </div>
@@ -373,7 +373,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                     onClick={() => void subscribe()}
                     disabled={checkingOut}
                     className="flex-1 py-2 text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
-                    style={{ background: 'rgba(76,175,80,0.12)', border: '1px solid rgba(76,175,80,0.3)', color: '#4caf50', fontFamily: '"Share Tech Mono", monospace' }}
+                    style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontFamily: '"Share Tech Mono", monospace' }}
                   >
                     {checkingOut ? 'Opening…' : 'Subscribe $5/mo'}
                   </button>
@@ -392,7 +392,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                     onClick={() => void saveLicense()}
                     disabled={!licenseInput.trim() || licenseBusy}
                     className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest disabled:opacity-40"
-                    style={{ background: 'rgba(0,200,255,0.08)', border: '1px solid rgba(0,200,255,0.25)', color: '#00c8ff', fontFamily: '"Share Tech Mono", monospace' }}
+                    style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', color: '#6366f1', fontFamily: '"Share Tech Mono", monospace' }}
                   >
                     {licenseBusy ? '…' : 'Link'}
                   </button>
@@ -415,9 +415,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
             <div className="flex items-center gap-2 mb-3">
               <div
                 className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ background: hasKey ? '#4caf50' : '#ffaa00', boxShadow: hasKey ? '0 0 6px #4caf50' : '0 0 6px #ffaa00' }}
+                style={{ background: hasKey ? '#34d399' : '#fbbf24', boxShadow: hasKey ? '0 0 6px #34d399' : '0 0 6px #fbbf24' }}
               />
-              <span className="text-[10px]" style={{ color: hasKey ? '#4caf50' : '#00c8ff' }}>
+              <span className="text-[10px]" style={{ color: hasKey ? '#34d399' : '#6366f1' }}>
                 {hasKey === null ? 'Checking...' : hasKey ? 'Your own API key configured' : 'Optional — AI already works via included free credit'}
               </span>
             </div>
@@ -434,9 +434,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                   onClick={() => void deleteApiKey()}
                   className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest transition-all hover:scale-105"
                   style={{
-                    background: 'rgba(255,68,68,0.08)',
-                    border: '1px solid rgba(255,68,68,0.25)',
-                    color: 'rgba(255,68,68,0.7)',
+                    background: 'rgba(248,113,113,0.08)',
+                    border: '1px solid rgba(248,113,113,0.25)',
+                    color: 'rgba(248,113,113,0.7)',
                     fontFamily: '"Share Tech Mono", monospace',
                   }}
                 >
@@ -459,9 +459,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                   disabled={!apiInput.trim()}
                   className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest transition-all hover:scale-105 disabled:opacity-40"
                   style={{
-                    background: 'rgba(0,200,255,0.08)',
-                    border: '1px solid rgba(0,200,255,0.25)',
-                    color: '#00c8ff',
+                    background: 'rgba(99,102,241,0.08)',
+                    border: '1px solid rgba(99,102,241,0.25)',
+                    color: '#6366f1',
                     fontFamily: '"Share Tech Mono", monospace',
                   }}
                 >
@@ -494,9 +494,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <div
                 className="flex-shrink-0 px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest"
                 style={{
-                  background: store.elevation === 'full' ? 'rgba(0,230,118,0.08)' : 'rgba(255,170,0,0.08)',
-                  border: `1px solid ${store.elevation === 'full' ? 'rgba(0,230,118,0.25)' : 'rgba(255,170,0,0.25)'}`,
-                  color: store.elevation === 'full' ? '#00e676' : '#ffaa00',
+                  background: store.elevation === 'full' ? 'rgba(52,211,153,0.08)' : 'rgba(251,191,36,0.08)',
+                  border: `1px solid ${store.elevation === 'full' ? 'rgba(52,211,153,0.25)' : 'rgba(251,191,36,0.25)'}`,
+                  color: store.elevation === 'full' ? '#34d399' : '#fbbf24',
                   fontFamily: '"Share Tech Mono", monospace',
                 }}
               >
@@ -504,7 +504,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               </div>
             </div>
             {store.elevation !== 'full' && (
-              <p className="text-[9px] mt-3" style={{ color: 'rgba(255,170,0,0.6)' }}>
+              <p className="text-[9px] mt-3" style={{ color: 'rgba(251,191,36,0.6)' }}>
                 Run the app as Administrator once — it will register a Task Scheduler entry so future launches are automatically elevated without a UAC prompt.
               </p>
             )}
@@ -519,7 +519,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
             style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
           >
             <div className="flex items-start gap-3">
-              <Shield size={16} style={{ color: '#00c8ff', marginTop: 2, flexShrink: 0 }} />
+              <Shield size={16} style={{ color: '#6366f1', marginTop: 2, flexShrink: 0 }} />
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Restore my system</p>
                 <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: colors.textMuted }}>
@@ -538,13 +538,13 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <div
                 className="mt-3 p-3 rounded-md"
                 style={{
-                  background: revertResult.ok ? 'rgba(0,230,118,0.06)' : 'rgba(255,170,0,0.06)',
-                  border: `1px solid ${revertResult.ok ? 'rgba(0,230,118,0.25)' : 'rgba(255,170,0,0.25)'}`,
+                  background: revertResult.ok ? 'rgba(52,211,153,0.06)' : 'rgba(251,191,36,0.06)',
+                  border: `1px solid ${revertResult.ok ? 'rgba(52,211,153,0.25)' : 'rgba(251,191,36,0.25)'}`,
                 }}
               >
                 <div className="flex items-center gap-1.5 mb-1">
-                  <CheckCircle size={11} style={{ color: revertResult.ok ? '#00e676' : '#ffaa00' }} />
-                  <p className="text-[10px] font-semibold" style={{ color: revertResult.ok ? '#00e676' : '#ffaa00' }}>
+                  <CheckCircle size={11} style={{ color: revertResult.ok ? '#34d399' : '#fbbf24' }} />
+                  <p className="text-[10px] font-semibold" style={{ color: revertResult.ok ? '#34d399' : '#fbbf24' }}>
                     {revertResult.ok ? 'System restored' : 'Restored with warnings'}
                   </p>
                 </div>
@@ -552,7 +552,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                   <p key={i} className="text-[9px]" style={{ color: colors.textMuted }}>· {u}</p>
                 ))}
                 {revertResult.errors.map((e, i) => (
-                  <p key={`e${i}`} className="text-[9px]" style={{ color: '#ffaa00' }}>! {e}</p>
+                  <p key={`e${i}`} className="text-[9px]" style={{ color: '#fbbf24' }}>! {e}</p>
                 ))}
               </div>
             )}
@@ -590,7 +590,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <button
                 onClick={toggleLog}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium transition-all hover:brightness-110 ml-auto"
-                style={{ background: 'rgba(0,200,255,0.06)', border: '1px solid rgba(0,200,255,0.18)', color: '#7fd6ff' }}
+                style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.18)', color: '#a5b4fc' }}
               >
                 <History size={12} /> {changelog ? 'Hide change log' : 'View change log'}
               </button>
@@ -613,7 +613,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                     >
                       <span
                         className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded"
-                        style={{ background: 'rgba(0,200,255,0.08)', color: '#7fd6ff', fontFamily: '"Share Tech Mono", monospace', flexShrink: 0, minWidth: 54, textAlign: 'center' }}
+                        style={{ background: 'rgba(99,102,241,0.08)', color: '#a5b4fc', fontFamily: '"Share Tech Mono", monospace', flexShrink: 0, minWidth: 54, textAlign: 'center' }}
                       >
                         {c.category}
                       </span>

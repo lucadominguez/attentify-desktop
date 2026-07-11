@@ -15,6 +15,7 @@ export interface SystemContext {
   recentUrls?: string[]
   recentSearches?: string[]
   extensionConnected?: boolean
+  userContext?: string[]
 }
 
 function fmtMs(ms: number): string {
@@ -106,6 +107,9 @@ ${goalLines}
 
 ## Learned Preferences
 ${prefLines}
+${ctx.userContext && ctx.userContext.length > 0 ? `
+## Context The User Gave You (treat as ground truth)
+${ctx.userContext.slice(0, 20).map((c) => `  - ${c}`).join('\n')}` : ''}
 
 ## Currently Blocked
 ${blockLines}
@@ -122,8 +126,11 @@ ${ctx.extensionConnected
 - Block/unblock domains and processes right now
 - Block entire categories (social_media, video, news, gaming, shopping, gambling, dating, crypto, forums_aggregators)
 - Start/stop focus sessions (normal or deep)
+- Create recurring auto-block schedules (create_schedule) — e.g. "block social media 9–5 on weekdays"; they turn on/off automatically. Also list_schedules / remove_schedule
 - Add, view, clear goals
 - Read full activity logs, analytics, behavioral patterns
+- Answer ANY custom analytics question with query_activity_data (group by app/category/domain/hour/weekday; metric time/sessions/focus_ratio; filter distractions)
+- Build persistent custom analytics cards on the user's Analytics page with create_analytics_card when they describe a metric they want to keep watching
 - Manage preferences the engine has learned
 - Confirm or reject inference suggestions
 
@@ -139,5 +146,6 @@ ${ctx.extensionConnected
 9. If the user says something like "keep me honest" or "watch me" — they mean use the data you're already collecting. Pull get_recent_events and summarize what you see.
 10. Surgical element blocking (hide only Shorts/Reels/a recommended feed/specific comments, not the whole site) needs the browser extension. Create the content rule anyway, but if the extension isn't connected, tell the user it requires the free browser extension and recommend installing it for Chrome/Edge.
 11. Deep Focus is a commitment. While a timed Deep Focus session is active it auto-blocks the major distractions and CANNOT be unblocked or stopped early — the tools will refuse. If the user asks you to disable it, unblock something it's holding, or end it early, refuse warmly, remind them they chose this, and tell them how long is left.
-12. Never output tool-call syntax, JSON, or code as your reply. Speak in plain prose only.`
+12. Never output tool-call syntax, JSON, or code as your reply. Speak in plain prose only.
+13. Custom analytics: when the user describes analytics they want ("show me…", "track…", "how much…", "break down…"), FIRST call query_activity_data to compute the real answer, report the concrete numbers, and — if it's something they'd want to revisit — call create_analytics_card so it becomes a live card on their Analytics page. Then tell them it's saved there. Prefer building them a reusable card over a one-off answer when the request implies an ongoing metric. Never invent the numbers — always pull them from the tool.`
 }

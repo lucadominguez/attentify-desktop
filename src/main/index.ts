@@ -5,9 +5,11 @@ import { execSync } from 'child_process'
 import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTracking, getMonitor, getInferenceEngine, getBlockingEngine, getAgentSvc, getContentRuleEngine } from './ipc'
 import { startDebugServer, setDebugMainWindow } from './debug/DebugServer'
 import { notificationQueue } from './overlay/NotificationQueue'
+import { importBrowserHistory } from './tracking/BrowserHistoryImporter'
 import { getStore, patchStore } from './store'
 import { openDatabase, closeDatabase } from './data/db'
-import { migrateFromStateJson, purgeOldData } from './data/repository'
+import { migrateFromStateJson, purgeOldData, ensureConversations } from './data/repository'
+import { sanitizeAssistantText } from '../shared/chatSanitize'
 
 // GPU shader + HTTP disk cache cause "Access is denied" / "Unable to move the cache"
 // errors when the process switches between elevated and non-elevated integrity levels,
@@ -67,6 +69,45 @@ function getIconPath(): string {
 let mainWin: BrowserWindow | null = null
 let interstitialWin: BrowserWindow | null = null
 let tray: Tray | null = null
+
+// Domains/processes currently blocked BY the scheduler (so we only lift what we added,
+// never the user's own permanent blocks).
+const scheduleApplied = { domains: new Set<string>(), processes: new Set<string>() }
+
+function enforceSchedules(): void {
+  const engine = getBlockingEngine()
+  if (!engine) return
+  const store = getStore()
+  const schedules = store.schedules ?? []
+  const now = new Date()
+  const day = now.getDay()
+  const hm = now.getHours() * 60 + now.getMinutes()
+
+  const desiredDomains = new Set<string>()
+  const desiredProcesses = new Set<string>()
+  for (const rule of schedules) {
+    if (!rule.active || !rule.days.includes(day)) continue
+    const [sh, sm] = rule.startTime.split(':').map(Number)
+    const [eh, em] = rule.endTime.split(':').map(Number)
+    const start = (sh ?? 0) * 60 + (sm ?? 0)
+    const end = (eh ?? 0) * 60 + (em ?? 0)
+    // Same-day window, or an overnight window (end earlier than start).
+    const inWindow = start <= end ? (hm >= start && hm < end) : (hm >= start || hm < end)
+    if (!inWindow) continue
+    for (const d of rule.domains) desiredDomains.add(d)
+    for (const p of rule.processes) desiredProcesses.add(p)
+  }
+
+  // Apply newly-active blocks.
+  for (const d of desiredDomains) if (!scheduleApplied.domains.has(d)) { try { engine.addDomain(d) } catch { /* soft mode */ } scheduleApplied.domains.add(d) }
+  for (const p of desiredProcesses) if (!scheduleApplied.processes.has(p)) { try { engine.addProcess(p) } catch { /* soft mode */ } scheduleApplied.processes.add(p) }
+
+  // Lift blocks whose window ended — but never touch the user's own blocklist entries.
+  const userDomains = new Set(store.blocklist.domains.map((d) => d.domain))
+  const userProcesses = new Set(store.blocklist.processes.map((p) => p.name))
+  for (const d of [...scheduleApplied.domains]) if (!desiredDomains.has(d)) { if (!userDomains.has(d)) { try { engine.removeDomain(d) } catch { /* ignore */ } } scheduleApplied.domains.delete(d) }
+  for (const p of [...scheduleApplied.processes]) if (!desiredProcesses.has(p)) { if (!userProcesses.has(p)) { try { engine.removeProcess(p) } catch { /* ignore */ } } scheduleApplied.processes.delete(p) }
+}
 
 // Bring the existing window to the foreground. Used both by the tray and when a
 // second launch attempt is handed off to us via the single-instance lock.
@@ -218,6 +259,9 @@ app.whenReady().then(async () => {
     }
     // Purge events and messages older than 90 days to keep DB lean
     purgeOldData()
+    // Ensure a default conversation exists, adopt legacy messages into it, and scrub
+    // any tool-call JSON that leaked into stored assistant text before the sanitizer.
+    ensureConversations(sanitizeAssistantText)
   } catch (e) {
     console.error('[main] DB open failed:', e)
   }
@@ -228,6 +272,32 @@ app.whenReady().then(async () => {
   createInterstitialWindow()
   createTray()
   startTracking()
+
+  // Enforce recurring schedules: every minute, apply blocks for any schedule whose
+  // window is currently active and lift the ones it applied when the window ends. This
+  // is what makes the Scheduler actually do something (it used to just store rules).
+  enforceSchedules()
+  setInterval(enforceSchedules, 60_000)
+
+  // Bootstrap analytics with the user's real browsing history so there's meaningful
+  // data from day one, not just what we observe post-install. Best-effort and
+  // non-blocking — reads the current user's own browser profiles (no OS permission
+  // needed); silently does nothing if none are found.
+  setTimeout(() => {
+    try {
+      const tracker = getMonitor()?.getTracker()
+      if (!tracker) return
+      const seeded = tracker.seedSessions(importBrowserHistory(30))
+      if (seeded > 0) {
+        console.log(`[history] seeded ${seeded} sessions from browser history`)
+        // Nudge open views (dashboard / analytics / timesheets) to reload now that
+        // historical data is available.
+        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('store:refresh')
+      }
+    } catch (e) {
+      console.error('[history] import failed:', e)
+    }
+  }, 3000)
 
   // Debug server — always on so agents can probe dev and prod builds
   startDebugServer({

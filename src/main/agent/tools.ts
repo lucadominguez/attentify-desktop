@@ -12,6 +12,8 @@ import {
   type DbPreference,
 } from '../data/repository'
 import { getStore, patchStore } from '../store'
+import { runAnalyticsQuery } from '../../shared/analyticsQuery'
+import type { AnalyticsQuerySpec, CustomAnalyticsCard, ScheduleRule } from '../../shared/types'
 import { randomUUID } from 'crypto'
 
 // ── Category domain taxonomy (~200 domains) ────────────────────────────────────
@@ -357,6 +359,84 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
         enabled: { type: 'boolean', description: 'true to enable, false to disable' },
       },
       required: ['rule_id', 'enabled'],
+    },
+  },
+  {
+    name: 'query_activity_data',
+    description: `Run a flexible aggregation over the user's tracked activity to answer ANY custom analytics question ("how much time on social media per weekday", "top 5 domains I visit in the evening", "my focus ratio by hour"). This is your analytics workhorse — call it to explore before answering data questions, and to power custom cards. Returns grouped rows with a value per group.`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        range_days: { type: 'number', description: 'Look-back window in days (1-31). Default 7.' },
+        group_by: { type: 'string', enum: ['app', 'category', 'domain', 'hour', 'weekday'], description: 'Dimension to group rows by.' },
+        metric: { type: 'string', enum: ['time', 'sessions', 'focus_ratio'], description: '"time" = total ms, "sessions" = count, "focus_ratio" = % of time that was focused (0-100).' },
+        distraction: { type: 'string', enum: ['all', 'only', 'exclude'], description: 'Filter: all activity, only distractions, or exclude distractions. Default all.' },
+        limit: { type: 'number', description: 'Max rows (ignored for hour/weekday). Default 10.' },
+      },
+      required: ['group_by', 'metric'],
+    },
+  },
+  {
+    name: 'create_analytics_card',
+    description: `Save a custom analytics card to the user's Analytics page, built from a description of what they want to see. The card is recomputed live from tracked activity every time they open Analytics, so it stays current. Use this when the user describes an ongoing metric they want to keep an eye on. Pick the same query params as query_activity_data, and a viz: "bar" (ranked rows — best for app/category/domain), "line" (a trend graph — best for group_by hour or weekday), "table" (detailed rows with values), or "number" (a single headline total). Confirm to the user what you saved.`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: { type: 'string', description: 'Short card title, e.g. "Social media by weekday".' },
+        description: { type: 'string', description: 'One-line explanation of what the card shows.' },
+        viz: { type: 'string', enum: ['bar', 'line', 'table', 'number'], description: 'How to render it. Use "line" for hour/weekday trends, "table" for detailed rows.' },
+        range_days: { type: 'number', description: 'Look-back window in days (1-31). Default 7.' },
+        group_by: { type: 'string', enum: ['app', 'category', 'domain', 'hour', 'weekday'] },
+        metric: { type: 'string', enum: ['time', 'sessions', 'focus_ratio'] },
+        distraction: { type: 'string', enum: ['all', 'only', 'exclude'] },
+        limit: { type: 'number' },
+      },
+      required: ['title', 'viz', 'group_by', 'metric'],
+    },
+  },
+  {
+    name: 'list_analytics_cards',
+    description: 'List the custom analytics cards the user has saved on their Analytics page.',
+    input_schema: { type: 'object' as const, properties: {} },
+  },
+  {
+    name: 'delete_analytics_card',
+    description: 'Delete a saved custom analytics card by its id.',
+    input_schema: {
+      type: 'object' as const,
+      properties: { card_id: { type: 'string', description: 'The card id to delete.' } },
+      required: ['card_id'],
+    },
+  },
+  {
+    name: 'create_schedule',
+    description: `Create a recurring auto-block schedule so distractions are blocked automatically during set hours on set days (e.g. "block social media 9am–5pm on weekdays"). The block turns on and off on its own. Give days as an array of weekday numbers (0=Sunday … 6=Saturday). You can target specific domains, whole categories (${Object.keys(CATEGORY_DOMAINS).join(', ')}), and/or processes.`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        name: { type: 'string', description: 'Short name, e.g. "Work hours focus".' },
+        days: { type: 'array', items: { type: 'number' }, description: 'Weekday numbers 0-6 (0=Sun). Weekdays = [1,2,3,4,5]. Daily = [0,1,2,3,4,5,6].' },
+        start_time: { type: 'string', description: '24h "HH:MM", e.g. "09:00".' },
+        end_time: { type: 'string', description: '24h "HH:MM", e.g. "17:00". May be earlier than start for an overnight window.' },
+        domains: { type: 'array', items: { type: 'string' }, description: 'Specific domains to block during the window.' },
+        categories: { type: 'array', items: { type: 'string', enum: Object.keys(CATEGORY_DOMAINS) }, description: 'Whole categories to block (expanded to their domains).' },
+        processes: { type: 'array', items: { type: 'string' }, description: 'App/process names to block during the window.' },
+      },
+      required: ['name', 'days', 'start_time', 'end_time'],
+    },
+  },
+  {
+    name: 'list_schedules',
+    description: 'List the user\'s recurring auto-block schedules.',
+    input_schema: { type: 'object' as const, properties: {} },
+  },
+  {
+    name: 'remove_schedule',
+    description: 'Delete a recurring schedule by its id (get ids from list_schedules).',
+    input_schema: {
+      type: 'object' as const,
+      properties: { schedule_id: { type: 'string', description: 'The schedule id to remove.' } },
+      required: ['schedule_id'],
     },
   },
   {
@@ -713,7 +793,110 @@ export async function executeTool(
       }
     }
 
+    case 'query_activity_data': {
+      const spec = specFromInput(input)
+      const sessions = deps.tracker.getSessions(Date.now() - spec.rangeDays * 24 * 3600000)
+      const res = runAnalyticsQuery(sessions, spec)
+      return {
+        group_by: spec.groupBy,
+        metric: spec.metric,
+        unit: res.unit,
+        matched_sessions: res.matched,
+        total: res.total,
+        rows: res.rows.map((r) => ({ label: r.label, value: r.value, detail: r.detail })),
+      }
+    }
+
+    case 'create_analytics_card': {
+      const spec = specFromInput(input)
+      const card: CustomAnalyticsCard = {
+        id: randomUUID().slice(0, 8),
+        title: (input['title'] as string) || 'Custom analytics',
+        description: input['description'] as string | undefined,
+        viz: (['number', 'table', 'line', 'bar'].includes(input['viz'] as string) ? input['viz'] : 'bar') as CustomAnalyticsCard['viz'],
+        spec,
+        createdAt: Date.now(),
+      }
+      const s = getStore()
+      patchStore({ customAnalyticsCards: [card, ...(s.customAnalyticsCards ?? [])].slice(0, 24) })
+      // Give the model an immediate snapshot so it can describe what the card shows.
+      const sessions = deps.tracker.getSessions(Date.now() - spec.rangeDays * 24 * 3600000)
+      const res = runAnalyticsQuery(sessions, spec)
+      return {
+        ok: true, card_id: card.id, title: card.title,
+        preview: { total: res.total, unit: res.unit, top_rows: res.rows.slice(0, 5).map((r) => ({ label: r.label, value: r.value })) },
+        note: 'Saved to the Analytics page. It recomputes live whenever the user opens Analytics.',
+      }
+    }
+
+    case 'list_analytics_cards': {
+      const cards = getStore().customAnalyticsCards ?? []
+      return { cards: cards.map((c) => ({ id: c.id, title: c.title, viz: c.viz, group_by: c.spec.groupBy, metric: c.spec.metric })) }
+    }
+
+    case 'delete_analytics_card': {
+      const id = input['card_id'] as string
+      const s = getStore()
+      const before = (s.customAnalyticsCards ?? []).length
+      patchStore({ customAnalyticsCards: (s.customAnalyticsCards ?? []).filter((c) => c.id !== id) })
+      return { ok: (s.customAnalyticsCards ?? []).length !== before, card_id: id }
+    }
+
+    case 'create_schedule': {
+      const cats = (input['categories'] as string[] | undefined) ?? []
+      const catDomains = cats.flatMap((c) => CATEGORY_DOMAINS[c] ?? [])
+      const domains = [...new Set([...(input['domains'] as string[] | undefined ?? []), ...catDomains])]
+      const days = ((input['days'] as number[] | undefined) ?? []).filter((d) => d >= 0 && d <= 6)
+      const rule: ScheduleRule = {
+        id: randomUUID(),
+        name: (input['name'] as string) || 'Schedule',
+        days: days.length ? days : [1, 2, 3, 4, 5],
+        startTime: (input['start_time'] as string) || '09:00',
+        endTime: (input['end_time'] as string) || '17:00',
+        domains,
+        processes: (input['processes'] as string[] | undefined) ?? [],
+        active: true,
+      }
+      if (rule.domains.length === 0 && rule.processes.length === 0) {
+        return { ok: false, error: 'A schedule needs at least one domain, category, or process to block.' }
+      }
+      const s = getStore()
+      patchStore({ schedules: [...s.schedules, rule] })
+      return { ok: true, schedule_id: rule.id, name: rule.name, days: rule.days, window: `${rule.startTime}–${rule.endTime}`, domains: rule.domains.length, processes: rule.processes.length }
+    }
+
+    case 'list_schedules': {
+      return {
+        schedules: getStore().schedules.map((r) => ({
+          id: r.id, name: r.name, days: r.days, start: r.startTime, end: r.endTime,
+          domains: r.domains, processes: r.processes, active: r.active,
+        })),
+      }
+    }
+
+    case 'remove_schedule': {
+      const id = input['schedule_id'] as string
+      const s = getStore()
+      const before = s.schedules.length
+      patchStore({ schedules: s.schedules.filter((r) => r.id !== id) })
+      return { ok: getStore().schedules.length !== before, schedule_id: id }
+    }
+
     default:
       return { error: `Unknown tool: ${name}` }
   }
+}
+
+// Normalize loose tool input into a validated AnalyticsQuerySpec.
+function specFromInput(input: Record<string, unknown>): AnalyticsQuerySpec {
+  const groupBy = ['app', 'category', 'domain', 'hour', 'weekday'].includes(input['group_by'] as string)
+    ? (input['group_by'] as AnalyticsQuerySpec['groupBy']) : 'app'
+  const metric = ['time', 'sessions', 'focus_ratio'].includes(input['metric'] as string)
+    ? (input['metric'] as AnalyticsQuerySpec['metric']) : 'time'
+  const distraction = ['all', 'only', 'exclude'].includes(input['distraction'] as string)
+    ? (input['distraction'] as AnalyticsQuerySpec['distraction']) : 'all'
+  const rangeDays = Math.max(1, Math.min(Number(input['range_days']) || 7, 31))
+  const limitRaw = Number(input['limit'])
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 50) : 10
+  return { rangeDays, groupBy, metric, distraction, limit }
 }

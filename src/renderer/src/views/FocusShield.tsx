@@ -75,7 +75,7 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
         <button
           onClick={toggleShield}
           className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-colors"
-          style={{ background: shieldActive ? 'rgba(76,175,80,0.15)' : colors.cardBg, border: `1px solid ${shieldActive ? 'rgba(76,175,80,0.3)' : colors.border}`, color: shieldActive ? '#4caf50' : colors.textSecondary }}
+          style={{ background: shieldActive ? 'rgba(52,211,153,0.15)' : colors.cardBg, border: `1px solid ${shieldActive ? 'rgba(52,211,153,0.3)' : colors.border}`, color: shieldActive ? '#34d399' : colors.textSecondary }}
         >
           {shieldActive ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
           {shieldActive ? 'Shield ON' : 'Shield OFF'}
@@ -180,10 +180,10 @@ export default function FocusShield({ store, onRefresh }: FocusShieldProps): Rea
       </div>
 
       {store.elevation === 'soft' && (
-        <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(255,184,0,0.08)', border: '1px solid rgba(255,184,0,0.2)' }}>
-          <span className="text-xl" style={{ color: '#ffb800' }}>⚠</span>
+        <div className="p-4 rounded-xl flex items-start gap-3" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+          <span className="text-xl" style={{ color: '#fbbf24' }}>⚠</span>
           <div>
-            <p className="font-semibold text-sm" style={{ color: '#ffb800' }}>Soft mode active</p>
+            <p className="font-semibold text-sm" style={{ color: '#fbbf24' }}>Soft mode active</p>
             <p className="text-xs mt-0.5" style={{ color: colors.textSecondary }}>
               Hosts file editing is disabled. Blocks are tracked but not enforced. Grant admin access from the onboarding screen to enable full protection.
             </p>

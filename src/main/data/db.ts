@@ -45,6 +45,13 @@ export function getDb(): Database {
   return _db
 }
 
+// Expose the initialized sql.js runtime so other modules (e.g. the browser-history
+// importer) can open external SQLite files without re-initializing the wasm.
+export function getSqlJs(): SqlJsStatic {
+  if (!_SQL) throw new Error('sql.js not initialized — call openDatabase() first')
+  return _SQL
+}
+
 export function markDirty(): void {
   _dirty = true
 }
@@ -190,6 +197,27 @@ CREATE TABLE IF NOT EXISTS inferences (
 );
 CREATE INDEX IF NOT EXISTS idx_inferences_status ON inferences(status);
 CREATE INDEX IF NOT EXISTS idx_inferences_value  ON inferences(value);
+`,
+  '002_conversations.sql': `
+CREATE TABLE IF NOT EXISTS conversations (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT 'New chat',
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agent_messages_session ON agent_messages(session_id);
+`,
+  '003_checkpoints.sql': `
+CREATE TABLE IF NOT EXISTS checkpoints (
+  id              TEXT PRIMARY KEY,
+  conversation_id TEXT,
+  message_id      TEXT,
+  ts              INTEGER NOT NULL,
+  label           TEXT,
+  snapshot        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_conv ON checkpoints(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_msg  ON checkpoints(message_id);
 `,
 }
 

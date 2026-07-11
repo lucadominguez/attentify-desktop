@@ -25,7 +25,7 @@ interface PlanStep {
   skipped: boolean
 }
 
-const SEV_COLOR: Record<string, string> = { high: '#ef5350', medium: '#ffb800', low: '#66bb6a' }
+const SEV_COLOR: Record<string, string> = { high: '#f87171', medium: '#fbbf24', low: '#34d399' }
 const CAT_ICON: Record<string, React.ReactNode> = {
   apps: <Shield size={13} />,
   feeds: <Rss size={13} />,
@@ -51,7 +51,7 @@ function buildPlan(results: ScanResult): PlanStep[] {
       label: `Block ${sites.length} distraction site${sites.length !== 1 ? 's' : ''} from browsing history`,
       description: sites.join(', '),
       tag: 'Sites',
-      tagColor: '#2196f3',
+      tagColor: '#3b9eff',
       execute: async () => { for (const d of sites) await api.addDomain(d) },
       applied: false,
       skipped: false,
@@ -64,7 +64,7 @@ function buildPlan(results: ScanResult): PlanStep[] {
       label: `Kill & block ${results.runningDistractors.length} distraction app${results.runningDistractors.length !== 1 ? 's' : ''} currently running`,
       description: results.runningDistractors.join(', '),
       tag: 'Running',
-      tagColor: '#ef5350',
+      tagColor: '#f87171',
       execute: async () => { for (const p of results.runningDistractors) await api.addProcess(p) },
       applied: false,
       skipped: false,
@@ -78,7 +78,7 @@ function buildPlan(results: ScanResult): PlanStep[] {
       label: `Block ${apps.length} distracting installed app${apps.length !== 1 ? 's' : ''}`,
       description: apps.join(', '),
       tag: 'Apps',
-      tagColor: '#ffb800',
+      tagColor: '#fbbf24',
       execute: async () => { for (const p of apps) await api.addProcess(p) },
       applied: false,
       skipped: false,
@@ -105,7 +105,7 @@ function buildPlan(results: ScanResult): PlanStep[] {
       label: 'Enable Feed Guard — block all algorithmic feeds',
       description: FEED_GUARD.join(', '),
       tag: 'Feeds',
-      tagColor: '#ef5350',
+      tagColor: '#f87171',
       execute: async () => { for (const d of FEED_GUARD) await api.addDomain(d) },
       applied: false,
       skipped: false,
@@ -117,7 +117,7 @@ function buildPlan(results: ScanResult): PlanStep[] {
     label: 'Start a 2-hour focus session to lock in the changes',
     description: 'Activates your blocklist and blocks new distractions from loading.',
     tag: 'Session',
-    tagColor: '#4caf50',
+    tagColor: '#34d399',
     execute: async () => { await api.startSession('normal', 2 * 60 * 60 * 1000) },
     applied: false,
     skipped: false,
@@ -265,7 +265,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
           onClick={runScan}
           disabled={scanning}
           className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50 hover:scale-105"
-          style={{ background: 'rgba(33,150,243,0.12)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.25)' }}
+          style={{ background: 'rgba(33,150,243,0.12)', color: '#818cf8', border: '1px solid rgba(33,150,243,0.25)' }}
         >
           {scanning ? <><Loader size={12} className="animate-spin" /> Scanning…</> : <><ScanLine size={12} /> {results ? 'Re-scan' : 'Run Scan'}</>}
         </button>
@@ -334,9 +334,9 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
             {/* Stats chips */}
             <div className="flex items-center gap-2 ml-auto flex-wrap">
               {[
-                { label: 'Sites', value: results.recentDistractingSites.length, color: '#2196f3' },
-                { label: 'Running', value: results.runningDistractors.length, color: '#ef5350' },
-                { label: 'Installed', value: results.installedDistractors.length, color: '#ffb800' },
+                { label: 'Sites', value: results.recentDistractingSites.length, color: '#3b9eff' },
+                { label: 'Running', value: results.runningDistractors.length, color: '#f87171' },
+                { label: 'Installed', value: results.installedDistractors.length, color: '#fbbf24' },
                 { label: 'Extensions', value: results.browserExtensionsFound, color: '#546e7a' },
               ].map((chip) => chip.value > 0 && (
                 <div
@@ -394,7 +394,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                       onClick={applyAll}
                       disabled={applyingAll}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all hover:scale-105 disabled:opacity-60"
-                      style={{ background: 'rgba(76,175,80,0.15)', color: '#66bb6a', border: '1px solid rgba(76,175,80,0.25)' }}
+                      style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}
                     >
                       {applyingAll
                         ? <><Loader size={10} className="animate-spin" /> Applying…</>
@@ -425,12 +425,12 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                       className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-bold"
                       style={{
                         background: step.applied
-                          ? 'rgba(76,175,80,0.2)'
+                          ? 'rgba(52,211,153,0.2)'
                           : step.skipped
                           ? colors.accentBg
                           : 'rgba(129,140,248,0.2)',
-                        color: step.applied ? '#66bb6a' : step.skipped ? colors.textMuted : '#a5b4fc',
-                        border: `1px solid ${step.applied ? 'rgba(76,175,80,0.3)' : step.skipped ? colors.border : 'rgba(129,140,248,0.3)'}`,
+                        color: step.applied ? '#34d399' : step.skipped ? colors.textMuted : '#a5b4fc',
+                        border: `1px solid ${step.applied ? 'rgba(52,211,153,0.3)' : step.skipped ? colors.border : 'rgba(129,140,248,0.3)'}`,
                       }}
                     >
                       {step.applied ? '✓' : i + 1}
@@ -464,7 +464,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                           onClick={() => applyStep(step.id)}
                           disabled={!!applying || applyingAll}
                           className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:scale-105 disabled:opacity-50"
-                          style={{ background: 'rgba(76,175,80,0.15)', color: '#66bb6a', border: '1px solid rgba(76,175,80,0.25)' }}
+                          style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}
                         >
                           {applying === step.id
                             ? <><Loader size={9} className="animate-spin" /> Applying…</>
@@ -509,7 +509,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                     <div
                       key={issue.id}
                       style={{
-                        background: isFixed ? 'rgba(76,175,80,0.04)' : i % 2 === 0 ? colors.rowEven : colors.rowOdd,
+                        background: isFixed ? 'rgba(52,211,153,0.04)' : i % 2 === 0 ? colors.rowEven : colors.rowOdd,
                         borderBottom: i < results.issues.length - 1 ? `1px solid ${colors.border}` : 'none',
                         opacity: isFixed ? 0.6 : 1,
                       }}
@@ -521,9 +521,9 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                         {/* Icon */}
                         <div
                           className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                          style={{ background: sevColor + '18', color: isFixed ? '#66bb6a' : sevColor }}
+                          style={{ background: sevColor + '18', color: isFixed ? '#34d399' : sevColor }}
                         >
-                          {isFixed ? <CheckCircle2 size={13} style={{ color: '#66bb6a' }} /> : CAT_ICON[issue.category]}
+                          {isFixed ? <CheckCircle2 size={13} style={{ color: '#34d399' }} /> : CAT_ICON[issue.category]}
                         </div>
 
                         {/* Title */}
@@ -544,7 +544,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                           <button
                             onClick={async (e) => { e.stopPropagation(); await fixIssue(issue) }}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-semibold transition-all hover:scale-105 flex-shrink-0"
-                            style={{ background: 'rgba(33,150,243,0.12)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.2)' }}
+                            style={{ background: 'rgba(33,150,243,0.12)', color: '#818cf8', border: '1px solid rgba(33,150,243,0.2)' }}
                           >
                             <Shield size={9} /> {FIX_LABEL[issue.fixAction ?? ''] ?? 'Fix'}
                           </button>
@@ -583,6 +583,75 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
             </div>
           )}
         </>
+      )}
+
+      {/* Advanced: stop apps from launching at startup */}
+      <StartupPanel />
+    </div>
+  )
+}
+
+// ── Startup manager: list auto-run apps and stop them launching at login ─────────
+function StartupPanel(): React.ReactElement {
+  const { colors } = useTheme()
+  const [items, setItems] = useState<import('@shared/types').StartupItem[] | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [note, setNote] = useState<{ id: string; text: string } | null>(null)
+
+  const load = React.useCallback(() => {
+    api.getStartupItems().then(setItems).catch(() => setItems([]))
+  }, [])
+  React.useEffect(() => { load() }, [load])
+
+  const disable = async (item: import('@shared/types').StartupItem): Promise<void> => {
+    setBusy(item.id); setNote(null)
+    try {
+      const res = await api.disableStartupItem(item)
+      if (res.ok) setItems((prev) => (prev ?? []).filter((i) => i.id !== item.id))
+      else setNote({ id: item.id, text: res.error || 'Could not disable this one.' })
+    } catch { setNote({ id: item.id, text: 'Could not disable this one.' }) }
+    setBusy(null)
+  }
+
+  return (
+    <div className="rounded-xl p-4 mt-1" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <Cpu size={15} style={{ color: colors.accent }} />
+          <div>
+            <p className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>Startup apps</p>
+            <p className="text-[10px]" style={{ color: colors.textMuted }}>Stop apps from launching automatically at login — a faster, calmer boot.</p>
+          </div>
+        </div>
+        <button onClick={load} className="text-[10px] px-2 py-1 rounded-lg" style={{ border: `1px solid ${colors.border}`, color: colors.textMuted }}>Refresh</button>
+      </div>
+
+      {items === null ? (
+        <p className="text-[11px] py-3 text-center" style={{ color: colors.textMuted }}>Scanning startup entries…</p>
+      ) : items.length === 0 ? (
+        <p className="text-[11px] py-3 text-center" style={{ color: colors.textMuted }}>No auto-start apps found (or not supported on this OS).</p>
+      ) : (
+        <div className="space-y-1 mt-2">
+          {items.map((item) => (
+            <div key={item.id}>
+              <div className="flex items-center gap-2 py-1.5">
+                <span className="text-[12px] flex-1 truncate" style={{ color: colors.textSecondary }} title={item.command}>{item.name}</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: colors.accentBg, color: colors.textMuted }}>
+                  {item.location === 'folder' ? 'Startup folder' : item.location.toUpperCase()}
+                </span>
+                <button
+                  onClick={() => void disable(item)}
+                  disabled={busy === item.id}
+                  className="text-[10px] px-2.5 py-1 rounded-lg font-medium flex-shrink-0 transition-all disabled:opacity-50"
+                  style={{ background: colors.negativeBg, color: colors.negative, border: `1px solid rgba(248,113,113,0.3)` }}
+                >
+                  {busy === item.id ? 'Working…' : 'Stop auto-start'}
+                </button>
+              </div>
+              {note?.id === item.id && <p className="text-[10px] pb-1" style={{ color: colors.warning }}>{note.text}</p>}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )

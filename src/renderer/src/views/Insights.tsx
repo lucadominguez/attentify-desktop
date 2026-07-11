@@ -49,7 +49,7 @@ export default function Insights({ heuristicAlerts, onChatWith }: InsightsProps)
               {t.icon}
               {t.label}
               {alerts && (
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#ffaa00' }} />
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#fbbf24' }} />
               )}
             </button>
           )

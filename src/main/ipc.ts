@@ -9,6 +9,7 @@ import {
 import { BlockingEngine } from './blocking/BlockingEngine'
 import { processMessage } from './chat/ChatEngine'
 import { runFocusScan } from './scanner/FocusScan'
+import { listStartupItems, disableStartupItem } from './scanner/StartupManager'
 import { checkElevation, verifyHostsWritable } from './blocking/hostsFileEditor'
 import { registerStartupDaemon, unregisterStartupDaemon, isStartupDaemonRegistered, getPlatformLabel } from './daemonManager'
 import { revertAllChanges } from './safety/systemRestore'
@@ -27,6 +28,8 @@ import {
   getPreferences, upsertPreference, deletePreference,
   getInferences, resolveInference,
   getAgentMessages, insertAgentMessage, clearAgentMessages, getDomains,
+  getConversationMessages, listConversations, createConversation, renameConversation, deleteConversation,
+  listCheckpoints, getCheckpoint,
 } from './data/repository'
 import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory, AppSettings } from '../shared/types'
 
@@ -545,6 +548,19 @@ export function initIpc(): void {
 
   // ── Overlay notification actions ──────────────────────────────────────────
 
+  // The overlay renderer signals it has mounted and registered its listeners. Only
+  // then does the queue flush a pending notification — showing earlier races the
+  // window blank (the old "stuck empty window in the corner" bug).
+  ipcMain.on('overlay:ready', () => {
+    notificationQueue.markReady()
+  })
+
+  // The renderer has painted the notification — safe to reveal the window now. This is
+  // what keeps the corner window from ever flashing blank.
+  ipcMain.on('overlay:shown', (_e, id: string) => {
+    notificationQueue.handleShown(id)
+  })
+
   ipcMain.on('overlay:dismiss', (_e, id: string) => {
     notificationQueue.onDismiss(id)
   })
@@ -597,7 +613,7 @@ export function initIpc(): void {
 
   // ── Chat (streaming agent) ────────────────────────────────────────────────
 
-  ipcMain.on('chat:start', async (event, text: string) => {
+  ipcMain.on('chat:start', async (event, text: string, images?: { media_type: string; data: string }[], conversationId?: string) => {
     const sender = event.sender
     if (!agentService) {
       sender.send('chat:error', 'Agent not initialized')
@@ -613,8 +629,8 @@ export function initIpc(): void {
       }
       const response = processMessage(text, store, trackingData)
       const now = Date.now()
-      insertAgentMessage({ role: 'user', content: text, ts: now })
-      const saved = insertAgentMessage({ role: 'assistant', content: response.reply, ts: now + 1 })
+      insertAgentMessage({ role: 'user', content: text, ts: now, session_id: conversationId })
+      const saved = insertAgentMessage({ role: 'assistant', content: response.reply, ts: now + 1, session_id: conversationId })
       sender.send('chat:chunk', response.reply)
       sender.send('chat:done', { id: saved.id, content: saved.content, timestamp: saved.ts })
       return
@@ -630,7 +646,7 @@ export function initIpc(): void {
         }
       },
       onError: (err) => { if (!sender.isDestroyed()) sender.send('chat:error', err) },
-    })
+    }, images)
   })
 
   // Legacy handle kept for backwards compat
@@ -740,9 +756,87 @@ export function initIpc(): void {
 
   ipcMain.handle('agent:get-history', (_e, limit = 40) => getAgentMessages(limit))
 
-  ipcMain.handle('agent:clear-history', () => {
-    clearAgentMessages()
+  ipcMain.handle('agent:clear-history', (_e, conversationId?: string) => {
+    clearAgentMessages(conversationId)
     return { ok: true }
+  })
+
+  // ── Checkpoints (revert to a point in the conversation) ────────────────────
+  ipcMain.handle('checkpoints:list', (_e, conversationId?: string) => listCheckpoints(conversationId))
+
+  ipcMain.handle('checkpoints:restore', (_e, id: string) => {
+    const cp = getCheckpoint(id)
+    if (!cp) return { ok: false, error: 'Checkpoint not found' }
+    let snap: {
+      blocklist?: { domains: { domain: string }[]; processes: { name: string }[] }
+      schedules?: unknown[]; sessions?: { active?: boolean; mode?: string; endsAt?: number }[]
+      contentRules?: unknown[]; customAnalyticsCards?: unknown[]; feedBlocks?: unknown[]
+    }
+    try { snap = JSON.parse(cp.snapshot) } catch { return { ok: false, error: 'Corrupt checkpoint' } }
+
+    const store = getStore()
+    // Respect the Deep Focus lock — never let a revert bypass an active locked session.
+    const lockedDeep = store.sessions.find((s) => s.active && s.mode === 'deep' && s.endsAt && Date.now() < s.endsAt)
+    if (lockedDeep) return { ok: false, error: "Can't revert while a Deep Focus session is locked." }
+
+    // Reconcile domains/processes with the blocking engine to match the snapshot.
+    const targetDomains = new Set((snap.blocklist?.domains ?? []).map((d) => d.domain))
+    const currentDomains = new Set(store.blocklist.domains.map((d) => d.domain))
+    for (const d of currentDomains) if (!targetDomains.has(d)) { try { engine?.removeDomain(d) } catch { /* soft */ } }
+    for (const d of targetDomains) if (!currentDomains.has(d)) { try { engine?.addDomain(d) } catch { /* soft */ } }
+    const targetProcs = new Set((snap.blocklist?.processes ?? []).map((p) => p.name))
+    const currentProcs = new Set(store.blocklist.processes.map((p) => p.name))
+    for (const p of currentProcs) if (!targetProcs.has(p)) { try { engine?.removeProcess(p) } catch { /* soft */ } }
+    for (const p of targetProcs) if (!currentProcs.has(p)) { try { engine?.addProcess(p) } catch { /* soft */ } }
+
+    patchStore({
+      blocklist: (snap.blocklist as typeof store.blocklist) ?? store.blocklist,
+      schedules: (snap.schedules as typeof store.schedules) ?? store.schedules,
+      sessions: (snap.sessions as typeof store.sessions) ?? store.sessions,
+      contentRules: (snap.contentRules as typeof store.contentRules) ?? store.contentRules,
+      customAnalyticsCards: (snap.customAnalyticsCards as typeof store.customAnalyticsCards) ?? store.customAnalyticsCards,
+      feedBlocks: (snap.feedBlocks as typeof store.feedBlocks) ?? store.feedBlocks,
+    })
+    sendMain('store:refresh')
+    return { ok: true, label: cp.label }
+  })
+
+  // ── Logic page: user-provided context (preferences:get is registered above) ──
+  ipcMain.handle('context:list', () => getStore().userContext ?? [])
+
+  ipcMain.handle('context:add', (_e, text: string) => {
+    const t = (text || '').trim()
+    if (!t) return { ok: false, error: 'empty' }
+    const s = getStore()
+    const note = { id: 'ctx-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), text: t.slice(0, 400), ts: Date.now() }
+    patchStore({ userContext: [note, ...(s.userContext ?? [])].slice(0, 100) })
+    return { ok: true, note }
+  })
+
+  ipcMain.handle('context:delete', (_e, id: string) => {
+    const s = getStore()
+    patchStore({ userContext: (s.userContext ?? []).filter((c) => c.id !== id) })
+    return { ok: true }
+  })
+
+  // ── Startup (auto-run) management ──────────────────────────────────────────
+  ipcMain.handle('startup:list', () => listStartupItems())
+  ipcMain.handle('startup:disable', (_e, item: Parameters<typeof disableStartupItem>[0]) => disableStartupItem(item))
+
+  // ── Conversations ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('conversations:list', () => listConversations())
+  ipcMain.handle('conversations:create', (_e, title?: string) => createConversation(title || 'New chat'))
+  ipcMain.handle('conversations:messages', (_e, id: string, limit = 200) => getConversationMessages(id, limit))
+  ipcMain.handle('conversations:rename', (_e, id: string, title: string) => { renameConversation(id, title); return { ok: true } })
+  ipcMain.handle('conversations:delete', (_e, id: string) => { deleteConversation(id); return { ok: true } })
+
+  // ── Build a custom analytics card directly (no chat UI) ────────────────────
+  ipcMain.handle('analytics:build-card', async (_e, description: string) => {
+    if (!agentService) return { ok: false, error: 'Agent not initialized' }
+    const res = await agentService.buildAnalyticsCard(description)
+    if (res.ok) sendMain('store:refresh')
+    return res
   })
 
   // ── Proactive intervention dismiss ────────────────────────────────────────
@@ -801,6 +895,28 @@ export function initIpc(): void {
     }
   })
 
+  // ── Timesheets (RescueTime-style) ─────────────────────────────────────────
+  // Returns the full (uncapped) set of tracked sessions for the range so the client
+  // can build a day-by-day / category grid. Range is clamped to a sane window.
+  ipcMain.handle('timesheet:get', (_e, days?: number) => {
+    const tracker = monitor?.getTracker()
+    const win = Math.max(1, Math.min(days ?? 7, 31))
+    const since = Date.now() - win * 24 * 60 * 60 * 1000
+    const sessions = tracker?.getSessions(since) ?? []
+    return { rangeDays: win, sessions }
+  })
+
+  // ── Custom analytics cards (built via the AI "describe your analytics" tool) ──
+  ipcMain.handle('analytics:get-cards', () => {
+    return getStore().customAnalyticsCards ?? []
+  })
+
+  ipcMain.handle('analytics:delete-card', (_e, id: string) => {
+    const s = getStore()
+    patchStore({ customAnalyticsCards: (s.customAnalyticsCards ?? []).filter((c) => c.id !== id) })
+    return { ok: true }
+  })
+
   ipcMain.handle('heuristics:dismiss', (_e, id: string) => {
     monitor?.getHeuristics().dismissAlert(id)
     const s = getStore()
@@ -841,8 +957,8 @@ export function initIpc(): void {
 
     const appRows = topApps.map((a) => {
       const pct = Math.round((a.duration / totalTracked) * 100)
-      const bar = `<div style="height:6px;border-radius:3px;background:#e8f0fe;margin-top:3px"><div style="height:6px;border-radius:3px;background:${a.isDistraction ? '#ef5350' : '#4caf50'};width:${Math.min(pct, 100)}%"></div></div>`
-      return `<tr><td>${a.app}</td><td style="text-transform:capitalize">${a.category}</td><td>${fmt(a.duration)}</td><td>${pct}%${bar}</td><td style="color:${a.isDistraction ? '#ef5350' : '#4caf50'}">${a.isDistraction ? 'Distraction' : 'Productive'}</td></tr>`
+      const bar = `<div style="height:6px;border-radius:3px;background:#e8f0fe;margin-top:3px"><div style="height:6px;border-radius:3px;background:${a.isDistraction ? '#f87171' : '#34d399'};width:${Math.min(pct, 100)}%"></div></div>`
+      return `<tr><td>${a.app}</td><td style="text-transform:capitalize">${a.category}</td><td>${fmt(a.duration)}</td><td>${pct}%${bar}</td><td style="color:${a.isDistraction ? '#f87171' : '#34d399'}">${a.isDistraction ? 'Distraction' : 'Productive'}</td></tr>`
     }).join('')
 
     const weeklyApps = Object.entries(weekly.timePerApp).sort((a, b) => b[1] - a[1]).slice(0, 5)

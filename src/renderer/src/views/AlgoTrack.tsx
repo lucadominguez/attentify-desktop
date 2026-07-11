@@ -100,9 +100,9 @@ const TECHNIQUE_GLOSSARY: { term: string; explanation: string }[] = [
 ]
 
 const RISK_COLOR: Record<string, string> = {
-  extreme: '#ef5350',
-  high: '#ffb800',
-  medium: '#66bb6a',
+  extreme: '#f87171',
+  high: '#fbbf24',
+  medium: '#34d399',
   low: '#546e7a',
 }
 
@@ -195,7 +195,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
             <button
               onClick={handleAskDaemon}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-colors"
-              style={{ background: 'rgba(33,150,243,0.1)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.2)' }}
+              style={{ background: 'rgba(33,150,243,0.1)', color: '#818cf8', border: '1px solid rgba(33,150,243,0.2)' }}
             >
               <MessageSquare size={11} /> Ask AI
             </button>
@@ -203,7 +203,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
           <button
             onClick={load}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-            style={{ background: 'rgba(255,184,0,0.08)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.18)' }}
+            style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.18)' }}
           >
             <RefreshCw size={10} /> Refresh
           </button>
@@ -213,10 +213,10 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
       {/* Summary chips */}
       <div className="grid grid-cols-4 gap-2">
         {[
-          { label: 'Extreme Risk', value: extremeCount.toString(), color: '#ef5350', sub: 'platforms', tooltip: `${extremeCount} platforms rated extreme manipulation risk` },
-          { label: 'High Risk', value: PLATFORMS.filter((p) => p.risk === 'high').length.toString(), color: '#ffb800', sub: 'platforms', tooltip: `${PLATFORMS.filter((p) => p.risk === 'high').length} platforms rated high manipulation risk` },
-          { label: 'Blocked', value: blockedCount.toString(), color: '#4caf50', sub: `of ${PLATFORMS.length}`, tooltip: `${blockedCount} of ${PLATFORMS.length} tracked platforms are currently blocked` },
-          { label: 'Techniques', value: '8', color: '#2196f3', sub: 'documented', tooltip: 'Eight documented manipulation techniques' },
+          { label: 'Extreme Risk', value: extremeCount.toString(), color: '#f87171', sub: 'platforms', tooltip: `${extremeCount} platforms rated extreme manipulation risk` },
+          { label: 'High Risk', value: PLATFORMS.filter((p) => p.risk === 'high').length.toString(), color: '#fbbf24', sub: 'platforms', tooltip: `${PLATFORMS.filter((p) => p.risk === 'high').length} platforms rated high manipulation risk` },
+          { label: 'Blocked', value: blockedCount.toString(), color: '#34d399', sub: `of ${PLATFORMS.length}`, tooltip: `${blockedCount} of ${PLATFORMS.length} tracked platforms are currently blocked` },
+          { label: 'Techniques', value: '8', color: '#3b9eff', sub: 'documented', tooltip: 'Eight documented manipulation techniques' },
         ].map((chip) => (
           <div
             key={chip.label}
@@ -234,7 +234,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
       {/* Warning banner */}
       <div
         className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl"
-        style={{ background: 'rgba(255,184,0,0.06)', border: '1px solid rgba(255,184,0,0.18)' }}
+        style={{ background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.18)' }}
       >
         <AlertTriangle size={13} className="text-accent-amber flex-shrink-0 mt-0.5" />
         <p className="text-[10px] leading-relaxed" style={{ color: colors.textSecondary }}>
@@ -282,7 +282,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
                     className="cursor-pointer transition-colors"
                     style={{
                       background: isBlocked
-                        ? 'rgba(76,175,80,0.04)'
+                        ? 'rgba(52,211,153,0.04)'
                         : i % 2 === 0 ? colors.rowEven : colors.rowOdd,
                       borderBottom: `1px solid ${colors.border}`,
                     }}
@@ -341,7 +341,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
                       <td className="px-2 py-2">
                         <span
                           className="text-[10px] font-mono tabular-nums font-semibold"
-                          style={{ color: exposure > 3600000 ? '#ef5350' : exposure > 0 ? '#ffb800' : colors.textMuted }}
+                          style={{ color: exposure > 3600000 ? '#f87171' : exposure > 0 ? '#fbbf24' : colors.textMuted }}
                         >
                           {fmtExp(exposure)}
                         </span>
@@ -358,7 +358,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
                           onClick={() => unblockDomain(platform.domain)}
                           disabled={!!applying}
                           className="text-[10px] px-2 py-1 rounded-lg font-semibold transition-all disabled:opacity-50"
-                          style={{ background: 'rgba(76,175,80,0.12)', color: '#66bb6a', border: '1px solid rgba(76,175,80,0.2)' }}
+                          style={{ background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.2)' }}
                         >
                           {isApplying ? '…' : '✓ Blocked'}
                         </button>
@@ -386,7 +386,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
                             <span
                               key={t}
                               className="text-[9px] px-2 py-0.5 rounded-full"
-                              style={{ background: colors.cardBg, color: '#64b5f6', border: `1px solid rgba(33,150,243,0.15)` }}
+                              style={{ background: colors.cardBg, color: '#818cf8', border: `1px solid rgba(33,150,243,0.15)` }}
                             >
                               {t}
                             </span>

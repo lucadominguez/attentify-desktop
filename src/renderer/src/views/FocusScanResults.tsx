@@ -182,7 +182,7 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
                   </div>
                   <div
                     className="h-0.5 w-full rounded-full"
-                    style={{ background: allFixed ? '#4caf50' : hasIssues ? '#ff6b35' : colors.border }}
+                    style={{ background: allFixed ? '#34d399' : hasIssues ? '#ff6b35' : colors.border }}
                   />
                   <span
                     className={`text-[10px] ${allFixed ? 'text-accent-green' : hasIssues ? 'text-accent-orange' : ''}`}

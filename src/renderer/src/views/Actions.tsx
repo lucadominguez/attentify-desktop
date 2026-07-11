@@ -45,7 +45,7 @@ function timeAgo(ts: number): string {
 
 function ConfidenceBar({ value }: { value: number }): React.ReactElement {
   const pct = Math.round(value * 100)
-  const color = pct >= 85 ? '#ff4444' : pct >= 65 ? '#ffaa00' : '#00c8ff'
+  const color = pct >= 85 ? '#f87171' : pct >= 65 ? '#fbbf24' : '#6366f1'
   return (
     <div className="flex items-center gap-1.5">
       <div className="flex-1 h-1" style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 1 }}>
@@ -61,10 +61,10 @@ function ConfidenceBar({ value }: { value: number }): React.ReactElement {
 function SourceBadge({ source }: { source?: string }): React.ReactElement | null {
   if (!source) return null
   const map: Record<string, { label: string; color: string }> = {
-    url_visit: { label: 'URL', color: '#00c8ff' },
-    search_prediction: { label: 'SEARCH', color: '#ffaa00' },
-    ai_url: { label: 'AI', color: '#b388ff' },
-    sweep: { label: 'SWEEP', color: '#64b5f6' },
+    url_visit: { label: 'URL', color: '#6366f1' },
+    search_prediction: { label: 'SEARCH', color: '#fbbf24' },
+    ai_url: { label: 'AI', color: '#a78bfa' },
+    sweep: { label: 'SWEEP', color: '#818cf8' },
     session: { label: 'SESSION', color: '#81c784' },
   }
   const m = Object.entries(map).find(([k]) => source.includes(k))
@@ -129,7 +129,7 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
       {/* Header */}
       <div
         className="flex-shrink-0 flex items-center justify-between px-6 py-4"
-        style={{ borderBottom: '1px solid rgba(0,200,255,0.08)' }}
+        style={{ borderBottom: '1px solid rgba(99,102,241,0.08)' }}
       >
         <div>
           <h1
@@ -146,9 +146,9 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
           onClick={() => void load()}
           className="flex items-center gap-1.5 px-3 py-1.5 transition-all hover:scale-105"
           style={{
-            background: 'rgba(0,200,255,0.06)',
-            border: '1px solid rgba(0,200,255,0.18)',
-            color: 'rgba(0,200,255,0.7)',
+            background: 'rgba(99,102,241,0.06)',
+            border: '1px solid rgba(99,102,241,0.18)',
+            color: 'rgba(99,102,241,0.7)',
             fontSize: 9,
             fontFamily: '"Share Tech Mono", monospace',
             letterSpacing: '0.15em',
@@ -164,30 +164,30 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
         {/* ── Pending Review ────────────────────────────────────────────── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle size={11} style={{ color: '#ffaa00' }} />
-            <span className="hud-label" style={{ color: '#ffaa00' }}>Pending Review</span>
+            <AlertTriangle size={11} style={{ color: '#fbbf24' }} />
+            <span className="hud-label" style={{ color: '#fbbf24' }}>Pending Review</span>
             {pending.length > 0 && (
               <span
                 className="text-[8px] font-bold px-1.5 py-0.5"
                 style={{
-                  background: 'rgba(255,170,0,0.15)',
-                  border: '1px solid rgba(255,170,0,0.4)',
-                  color: '#ffaa00',
+                  background: 'rgba(251,191,36,0.15)',
+                  border: '1px solid rgba(251,191,36,0.4)',
+                  color: '#fbbf24',
                   fontFamily: '"Share Tech Mono", monospace',
                 }}
               >
                 {pending.length}
               </span>
             )}
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,170,0,0.12)' }} />
+            <div className="flex-1 h-px" style={{ background: 'rgba(251,191,36,0.12)' }} />
           </div>
 
           {pending.length === 0 ? (
             <div
               className="flex items-center gap-3 px-4 py-3"
-              style={{ background: 'rgba(255,170,0,0.03)', border: '1px solid rgba(255,170,0,0.08)' }}
+              style={{ background: 'rgba(251,191,36,0.03)', border: '1px solid rgba(251,191,36,0.08)' }}
             >
-              <CheckCircle size={13} style={{ color: 'rgba(255,170,0,0.3)' }} />
+              <CheckCircle size={13} style={{ color: 'rgba(251,191,36,0.3)' }} />
               <p className="text-[10px]" style={{ color: colors.textMuted }}>No pending suggestions — AI hasn't flagged anything new.</p>
             </div>
           ) : (
@@ -196,16 +196,16 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                 <div
                   key={inf.id}
                   className="hud-panel"
-                  style={{ padding: '12px 14px', borderColor: 'rgba(255,170,0,0.2)' }}
+                  style={{ padding: '12px 14px', borderColor: 'rgba(251,191,36,0.2)' }}
                 >
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 flex-shrink-0"
                         style={{
-                          background: 'rgba(255,170,0,0.12)',
-                          border: '1px solid rgba(255,170,0,0.3)',
-                          color: '#ffaa00',
+                          background: 'rgba(251,191,36,0.12)',
+                          border: '1px solid rgba(251,191,36,0.3)',
+                          color: '#fbbf24',
                           fontFamily: '"Share Tech Mono", monospace',
                         }}
                       >
@@ -250,9 +250,9 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                       disabled={resolving === inf.id}
                       className="flex items-center gap-1 px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest transition-all hover:scale-105 disabled:opacity-50"
                       style={{
-                        background: 'rgba(255,68,68,0.1)',
-                        border: '1px solid rgba(255,68,68,0.3)',
-                        color: '#ff4444',
+                        background: 'rgba(248,113,113,0.1)',
+                        border: '1px solid rgba(248,113,113,0.3)',
+                        color: '#f87171',
                         fontFamily: '"Share Tech Mono", monospace',
                       }}
                     >
@@ -269,30 +269,30 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
         {/* ── Auto-Blocked by AI ─────────────────────────────────────────── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <Zap size={11} style={{ color: '#ff4444' }} />
-            <span className="hud-label" style={{ color: '#ff4444' }}>Auto-Blocked by AI</span>
+            <Zap size={11} style={{ color: '#f87171' }} />
+            <span className="hud-label" style={{ color: '#f87171' }}>Auto-Blocked by AI</span>
             {autoBlocked.length > 0 && (
               <span
                 className="text-[8px] font-bold px-1.5 py-0.5"
                 style={{
-                  background: 'rgba(255,68,68,0.15)',
-                  border: '1px solid rgba(255,68,68,0.4)',
-                  color: '#ff4444',
+                  background: 'rgba(248,113,113,0.15)',
+                  border: '1px solid rgba(248,113,113,0.4)',
+                  color: '#f87171',
                   fontFamily: '"Share Tech Mono", monospace',
                 }}
               >
                 {autoBlocked.length}
               </span>
             )}
-            <div className="flex-1 h-px" style={{ background: 'rgba(255,68,68,0.12)' }} />
+            <div className="flex-1 h-px" style={{ background: 'rgba(248,113,113,0.12)' }} />
           </div>
 
           {autoBlocked.length === 0 && liveAutoBlocks.length === 0 ? (
             <div
               className="flex items-center gap-3 px-4 py-3"
-              style={{ background: 'rgba(255,68,68,0.03)', border: '1px solid rgba(255,68,68,0.08)' }}
+              style={{ background: 'rgba(248,113,113,0.03)', border: '1px solid rgba(248,113,113,0.08)' }}
             >
-              <Shield size={13} style={{ color: 'rgba(255,68,68,0.3)' }} />
+              <Shield size={13} style={{ color: 'rgba(248,113,113,0.3)' }} />
               <p className="text-[10px]" style={{ color: colors.textMuted }}>No auto-blocks yet. Inference engine is monitoring.</p>
             </div>
           ) : (
@@ -302,18 +302,18 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                 <div
                   key={`live-${evt.ts}`}
                   className="hud-panel"
-                  style={{ padding: '10px 14px', borderColor: 'rgba(255,68,68,0.3)', background: 'rgba(255,68,68,0.04)' }}
+                  style={{ padding: '10px 14px', borderColor: 'rgba(248,113,113,0.3)', background: 'rgba(248,113,113,0.04)' }}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#ff4444' }} />
-                      <span className="text-[11px] font-bold" style={{ color: '#ff6666' }}>{evt.domain}</span>
-                      <span className="text-[8px] font-bold px-1 py-0.5" style={{ background: 'rgba(255,68,68,0.15)', color: '#ff4444', border: '1px solid rgba(255,68,68,0.3)', fontFamily: 'monospace' }}>
+                      <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#f87171' }} />
+                      <span className="text-[11px] font-bold" style={{ color: '#f87171' }}>{evt.domain}</span>
+                      <span className="text-[8px] font-bold px-1 py-0.5" style={{ background: 'rgba(248,113,113,0.15)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)', fontFamily: 'monospace' }}>
                         LIVE
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-bold" style={{ color: '#ff4444', fontFamily: '"Share Tech Mono", monospace' }}>
+                      <span className="text-[9px] font-bold" style={{ color: '#f87171', fontFamily: '"Share Tech Mono", monospace' }}>
                         {Math.round(evt.confidence * 100)}%
                       </span>
                       <span className="text-[9px]" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
@@ -328,18 +328,18 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                 <div
                   key={inf.id}
                   className="hud-panel"
-                  style={{ padding: '10px 14px', borderColor: 'rgba(255,68,68,0.15)' }}
+                  style={{ padding: '10px 14px', borderColor: 'rgba(248,113,113,0.15)' }}
                 >
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Shield size={11} style={{ color: '#ff4444', flexShrink: 0 }} />
+                      <Shield size={11} style={{ color: '#f87171', flexShrink: 0 }} />
                       <span className="text-[12px] font-bold truncate" style={{ color: colors.textPrimary }}>{inf.value}</span>
                       <span
                         className="text-[8px] font-bold px-1.5 py-0.5 flex-shrink-0"
                         style={{
-                          background: 'rgba(255,68,68,0.1)',
-                          border: '1px solid rgba(255,68,68,0.25)',
-                          color: '#ff4444',
+                          background: 'rgba(248,113,113,0.1)',
+                          border: '1px solid rgba(248,113,113,0.25)',
+                          color: '#f87171',
                           fontFamily: '"Share Tech Mono", monospace',
                         }}
                       >
@@ -363,7 +363,7 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                     <button
                       onClick={() => onChatWith(`Why was ${inf.value} auto-blocked by the AI?`)}
                       className="mt-2 text-[9px] uppercase tracking-widest transition-colors hover:text-white"
-                      style={{ color: 'rgba(0,200,255,0.5)', fontFamily: '"Share Tech Mono", monospace' }}
+                      style={{ color: 'rgba(99,102,241,0.5)', fontFamily: '"Share Tech Mono", monospace' }}
                     >
                       Ask AI why →
                     </button>
@@ -377,21 +377,21 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
         {/* ── How Inference Works ───────────────────────────────────────── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
-            <Eye size={11} style={{ color: 'rgba(0,200,255,0.5)' }} />
+            <Eye size={11} style={{ color: 'rgba(99,102,241,0.5)' }} />
             <span className="hud-label">What AI Monitors</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.08)' }} />
+            <div className="flex-1 h-px" style={{ background: 'rgba(99,102,241,0.08)' }} />
           </div>
           <div
             className="hud-panel grid grid-cols-2 gap-px"
-            style={{ padding: 0, overflow: 'hidden', borderColor: 'rgba(0,200,255,0.1)' }}
+            style={{ padding: 0, overflow: 'hidden', borderColor: 'rgba(99,102,241,0.1)' }}
           >
             {[
-              { icon: <Search size={10} />, label: 'Search queries', desc: 'Predicts destination sites from what you search', color: '#ffaa00' },
-              { icon: <Eye size={10} />, label: 'URL visits', desc: 'Instant match against 200+ distraction domains', color: '#00c8ff' },
-              { icon: <Zap size={10} />, label: 'AI reasoning', desc: 'Haiku evaluates unknown sites against your goals', color: '#b388ff' },
-              { icon: <Clock size={10} />, label: 'Usage sweeps', desc: 'Periodic scan of 7-day browsing history', color: '#64b5f6' },
+              { icon: <Search size={10} />, label: 'Search queries', desc: 'Predicts destination sites from what you search', color: '#fbbf24' },
+              { icon: <Eye size={10} />, label: 'URL visits', desc: 'Instant match against 200+ distraction domains', color: '#6366f1' },
+              { icon: <Zap size={10} />, label: 'AI reasoning', desc: 'Haiku evaluates unknown sites against your goals', color: '#a78bfa' },
+              { icon: <Clock size={10} />, label: 'Usage sweeps', desc: 'Periodic scan of 7-day browsing history', color: '#818cf8' },
             ].map((item) => (
-              <div key={item.label} className="p-3" style={{ borderRight: '1px solid rgba(0,200,255,0.06)', borderBottom: '1px solid rgba(0,200,255,0.06)' }}>
+              <div key={item.label} className="p-3" style={{ borderRight: '1px solid rgba(99,102,241,0.06)', borderBottom: '1px solid rgba(99,102,241,0.06)' }}>
                 <div className="flex items-center gap-1.5 mb-1">
                   <span style={{ color: item.color }}>{item.icon}</span>
                   <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: item.color, fontFamily: '"Share Tech Mono", monospace' }}>{item.label}</span>
@@ -414,7 +414,7 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
               <span className="text-[9px]" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
                 ({history.length})
               </span>
-              <div className="flex-1 h-px" style={{ background: 'rgba(0,200,255,0.08)' }} />
+              <div className="flex-1 h-px" style={{ background: 'rgba(99,102,241,0.08)' }} />
               {historyOpen ? <ChevronUp size={10} style={{ color: colors.textMuted }} /> : <ChevronDown size={10} style={{ color: colors.textMuted }} />}
             </button>
 
@@ -427,7 +427,7 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                     style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}
                   >
                     {inf.status === 'confirmed'
-                      ? <CheckCircle size={11} style={{ color: '#4caf50', flexShrink: 0 }} />
+                      ? <CheckCircle size={11} style={{ color: '#34d399', flexShrink: 0 }} />
                       : <XCircle size={11} style={{ color: colors.textMuted, flexShrink: 0 }} />
                     }
                     <span className="flex-1 text-[10px] truncate" style={{ color: inf.status === 'confirmed' ? colors.textPrimary : colors.textMuted }}>
@@ -436,9 +436,9 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
                     <span
                       className="text-[8px] font-bold uppercase px-1.5 py-0.5 flex-shrink-0"
                       style={{
-                        background: inf.status === 'confirmed' ? 'rgba(76,175,80,0.1)' : 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${inf.status === 'confirmed' ? 'rgba(76,175,80,0.25)' : 'rgba(255,255,255,0.08)'}`,
-                        color: inf.status === 'confirmed' ? '#4caf50' : colors.textMuted,
+                        background: inf.status === 'confirmed' ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.05)',
+                        border: `1px solid ${inf.status === 'confirmed' ? 'rgba(52,211,153,0.25)' : 'rgba(255,255,255,0.08)'}`,
+                        color: inf.status === 'confirmed' ? '#34d399' : colors.textMuted,
                         fontFamily: '"Share Tech Mono", monospace',
                       }}
                     >

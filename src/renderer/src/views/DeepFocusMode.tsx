@@ -58,10 +58,10 @@ export default function DeepFocusMode({ store, onRefresh }: DeepFocusModeProps):
       {activeSession ? (
         <div
           className="card flex flex-col items-center py-10 text-center"
-          style={{ border: '1px solid rgba(76,175,80,0.3)', background: 'rgba(76,175,80,0.05)' }}
+          style={{ border: '1px solid rgba(52,211,153,0.3)', background: 'rgba(52,211,153,0.05)' }}
         >
           <div className="w-16 h-16 rounded-full bg-accent-green/10 border border-accent-green/30 flex items-center justify-center mb-4"
-               style={{ boxShadow: '0 0 30px rgba(76,175,80,0.15)' }}>
+               style={{ boxShadow: '0 0 30px rgba(52,211,153,0.15)' }}>
             <Lock size={28} className="text-accent-green" />
           </div>
           <p className="text-accent-green font-bold text-xl mb-1">Deep Focus Active</p>
@@ -73,7 +73,7 @@ export default function DeepFocusMode({ store, onRefresh }: DeepFocusModeProps):
           {activeSession.endsAt && Date.now() < activeSession.endsAt ? (
             <div
               className="flex items-center gap-2 text-sm font-semibold px-6 py-2.5 rounded-full"
-              style={{ background: 'rgba(255,184,0,0.08)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.25)' }}
+              style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.25)' }}
             >
               <Lock size={14} /> Locked until it ends
             </div>

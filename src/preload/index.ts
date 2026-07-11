@@ -31,7 +31,8 @@ const api = {
   stopSession: (id: string): Promise<void> => ipcRenderer.invoke('session:stop', id),
 
   // ── Streaming chat (new) ─────────────────────────────────────────────────
-  chatStart: (text: string): void => ipcRenderer.send('chat:start', text),
+  chatStart: (text: string, images?: { media_type: string; data: string }[], conversationId?: string): void =>
+    ipcRenderer.send('chat:start', text, images, conversationId),
   onChatChunk: (cb: (chunk: string) => void): (() => void) => {
     const handler = (_e: unknown, chunk: string): void => cb(chunk)
     ipcRenderer.on('chat:chunk', handler)
@@ -91,7 +92,31 @@ const api = {
 
   // ── Agent history & proactive ─────────────────────────────────────────────
   getAgentHistory: (limit?: number) => ipcRenderer.invoke('agent:get-history', limit),
-  clearChatHistory: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:clear-history'),
+  clearChatHistory: (conversationId?: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:clear-history', conversationId),
+
+  // Conversations
+  getConversations: (): Promise<import('../shared/types').Conversation[]> => ipcRenderer.invoke('conversations:list'),
+  createConversation: (title?: string): Promise<import('../shared/types').Conversation> => ipcRenderer.invoke('conversations:create', title),
+  getConversationMessages: (id: string, limit?: number): Promise<{ id: string; role: string; content: string; ts: number }[]> => ipcRenderer.invoke('conversations:messages', id, limit),
+  renameConversation: (id: string, title: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('conversations:rename', id, title),
+  deleteConversation: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('conversations:delete', id),
+
+  // Build a custom analytics card directly from a description (no chat UI)
+  buildAnalyticsCard: (description: string): Promise<{ ok: boolean; error?: string; summary?: string }> => ipcRenderer.invoke('analytics:build-card', description),
+
+  // Logic page — preferences + user-provided context
+  getPreferences: (): Promise<{ key: string; value: string; scope: string; confidence: number; source: string }[]> => ipcRenderer.invoke('preferences:get'),
+  getUserContext: (): Promise<import('../shared/types').UserContextNote[]> => ipcRenderer.invoke('context:list'),
+  addUserContext: (text: string): Promise<{ ok: boolean; error?: string; note?: import('../shared/types').UserContextNote }> => ipcRenderer.invoke('context:add', text),
+  deleteUserContext: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('context:delete', id),
+
+  // Checkpoints (revert conversation state)
+  getCheckpoints: (conversationId?: string): Promise<{ id: string; message_id?: string; ts: number; label?: string }[]> => ipcRenderer.invoke('checkpoints:list', conversationId),
+  restoreCheckpoint: (id: string): Promise<{ ok: boolean; error?: string; label?: string }> => ipcRenderer.invoke('checkpoints:restore', id),
+
+  // Startup (auto-run) management
+  getStartupItems: (): Promise<import('../shared/types').StartupItem[]> => ipcRenderer.invoke('startup:list'),
+  disableStartupItem: (item: import('../shared/types').StartupItem): Promise<{ ok: boolean; error?: string; needsAdmin?: boolean }> => ipcRenderer.invoke('startup:disable', item),
   dismissProactive: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:dismiss-proactive'),
 
   onAgentProactive: (cb: (evt: AgentProactiveEvent) => void): (() => void) => {
@@ -132,6 +157,14 @@ const api = {
     recentSessions: ActivitySession[]
     domains: { domain: string; category: string; classification: string; confidence: number; total_ms: number; last_seen: number }[]
   }> => ipcRenderer.invoke('analytics:get'),
+
+  getTimesheet: (days?: number): Promise<{ rangeDays: number; sessions: ActivitySession[] }> =>
+    ipcRenderer.invoke('timesheet:get', days),
+
+  getCustomCards: (): Promise<import('../shared/types').CustomAnalyticsCard[]> =>
+    ipcRenderer.invoke('analytics:get-cards'),
+  deleteCustomCard: (id: string): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('analytics:delete-card', id),
 
   dismissHeuristicAlert: (id: string): Promise<void> => ipcRenderer.invoke('heuristics:dismiss', id),
 
@@ -180,6 +213,10 @@ const api = {
     ipcRenderer.send('overlay:action', id, action),
   overlayDismiss: (id: string): void =>
     ipcRenderer.send('overlay:dismiss', id),
+  overlayReady: (): void =>
+    ipcRenderer.send('overlay:ready'),
+  overlayShown: (id: string): void =>
+    ipcRenderer.send('overlay:shown', id),
   onOverlayOpenChat: (cb: (msg: string) => void): (() => void) => {
     const handler = (_e: unknown, msg: string): void => cb(msg)
     ipcRenderer.on('overlay:open-chat', handler)

@@ -50,9 +50,9 @@ const DOMAIN_SUGGESTIONS = ['twitter.com', 'instagram.com', 'reddit.com', 'youtu
 const PROCESS_SUGGESTIONS = ['Discord', 'Steam', 'Spotify', 'Slack', 'Telegram']
 
 const CAT_COLOR: Record<AppCategory, string> = {
-  browser: '#2196f3', social: '#ef5350', entertainment: '#ef5350',
-  gaming: '#ff6b35', productivity: '#4caf50', communication: '#ffb800',
-  development: '#66bb6a', system: '#546e7a', other: '#455a64',
+  browser: '#3b9eff', social: '#f87171', entertainment: '#f87171',
+  gaming: '#ff6b35', productivity: '#34d399', communication: '#fbbf24',
+  development: '#34d399', system: '#546e7a', other: '#455a64',
 }
 
 function categoryLabel(cat: AppCategory): string {
@@ -180,9 +180,9 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
             className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium"
             title={isShieldOn ? 'Protection layers active' : 'No active session or blocklist yet'}
             style={{
-              background: isShieldOn ? 'rgba(76,175,80,0.1)' : 'transparent',
-              border: `1px solid ${isShieldOn ? 'rgba(76,175,80,0.25)' : colors.border}`,
-              color: isShieldOn ? '#4caf50' : colors.textMuted,
+              background: isShieldOn ? 'rgba(52,211,153,0.1)' : 'transparent',
+              border: `1px solid ${isShieldOn ? 'rgba(52,211,153,0.25)' : colors.border}`,
+              color: isShieldOn ? '#34d399' : colors.textMuted,
             }}
           >
             <div className={`w-1.5 h-1.5 rounded-full ${isShieldOn ? 'bg-accent-green' : ''}`} style={!isShieldOn ? { background: colors.textDim } : undefined} />
@@ -210,7 +210,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
           {
             label: 'Sites Blocked',
             value: store.blocklist.domains.length.toString(),
-            color: store.blocklist.domains.length > 0 ? '#4caf50' : colors.textMuted,
+            color: store.blocklist.domains.length > 0 ? '#34d399' : colors.textMuted,
             sub: 'domains',
             icon: <Globe size={12} />,
             tooltip: store.blocklist.domains.length > 0
@@ -220,7 +220,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
           {
             label: 'Apps Blocked',
             value: store.blocklist.processes.length.toString(),
-            color: store.blocklist.processes.length > 0 ? '#4caf50' : colors.textMuted,
+            color: store.blocklist.processes.length > 0 ? '#34d399' : colors.textMuted,
             sub: 'processes',
             icon: <Cpu size={12} />,
             tooltip: store.blocklist.processes.length > 0
@@ -230,7 +230,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
           {
             label: 'Block Events',
             value: (todayStats?.blockEvents ?? store.blockEventCount ?? 0).toString(),
-            color: '#2196f3',
+            color: '#3b9eff',
             sub: 'today',
             icon: <Zap size={12} />,
             tooltip: `${todayStats?.blockEvents ?? store.blockEventCount ?? 0} attempts blocked today`,
@@ -240,7 +240,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
             value: activeSession
               ? (sessionRemaining !== null ? formatMs(sessionRemaining) : '∞')
               : `${Math.round(todayStats?.focusScore ?? 0)}%`,
-            color: activeSession ? '#4caf50' : (todayStats?.focusScore ?? 0) >= 60 ? '#4caf50' : '#ffb800',
+            color: activeSession ? '#34d399' : (todayStats?.focusScore ?? 0) >= 60 ? '#34d399' : '#fbbf24',
             sub: activeSession ? `${activeSession.mode} mode` : 'today',
             icon: <BarChart2 size={12} />,
             tooltip: activeSession
@@ -265,7 +265,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
       {activeSession && (
         <div
           className="flex items-center justify-between px-3 py-2 rounded-lg"
-          style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.2)' }}
+          style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.2)' }}
         >
           <div className="flex items-center gap-2 text-xs">
             <div className="w-2 h-2 rounded-full bg-accent-green animate-pulse" />
@@ -357,7 +357,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
               onClick={handleAddDomain}
               disabled={!newDomain.trim() || adding === 'domain'}
               className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-              style={{ background: 'rgba(33,150,243,0.15)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.2)' }}
+              style={{ background: 'rgba(33,150,243,0.15)', color: '#818cf8', border: '1px solid rgba(33,150,243,0.2)' }}
             >
               <Plus size={10} /> Add
             </button>
@@ -408,7 +408,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
                   key={s}
                   onClick={async () => { await api.addProcess(s); onRefresh() }}
                   className="text-[10px] px-2 py-0.5 rounded-full transition-colors hover:brightness-125"
-                  style={{ background: 'rgba(255,184,0,0.1)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.2)' }}
+                  style={{ background: 'rgba(251,191,36,0.1)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)' }}
                 >
                   + {s}
                 </button>
@@ -423,14 +423,14 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
               onKeyDown={(e) => e.key === 'Enter' && handleAddProcess()}
               className="flex-1 text-[11px] px-2 py-1.5 rounded-lg outline-none transition-colors"
               style={{ background: colors.inputBg, border: `1px solid ${colors.border}`, color: colors.textPrimary }}
-              onFocus={(e) => { e.target.style.borderColor = 'rgba(255,184,0,0.3)' }}
+              onFocus={(e) => { e.target.style.borderColor = 'rgba(251,191,36,0.3)' }}
               onBlur={(e) => { e.target.style.borderColor = colors.border }}
             />
             <button
               onClick={handleAddProcess}
               disabled={!newProcess.trim() || adding === 'process'}
               className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-              style={{ background: 'rgba(255,184,0,0.12)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.2)' }}
+              style={{ background: 'rgba(251,191,36,0.12)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.2)' }}
             >
               <Plus size={10} /> Add
             </button>
@@ -442,7 +442,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
       {(store.feedBlocks?.length ?? 0) > 0 && (
         <div className="rounded-xl p-3" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center gap-1.5 mb-2">
-            <Shield size={12} style={{ color: '#4caf50' }} />
+            <Shield size={12} style={{ color: '#34d399' }} />
             <p className="text-[11px] font-semibold" style={{ color: colors.textPrimary }}>Feed Blocks</p>
             <span className="ml-auto text-[9px]" style={{ color: colors.textSecondary }}>via browser extension</span>
           </div>
@@ -454,11 +454,11 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
                 key={f.domain}
                 className="flex items-center gap-1.5 px-2 py-1 rounded-lg"
                 title={`${f.displayName} is hidden by the Attentify browser extension`}
-                style={{ background: 'rgba(76,175,80,0.08)', border: '1px solid rgba(76,175,80,0.22)' }}
+                style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.22)' }}
               >
-                <Shield size={10} style={{ color: '#4caf50' }} />
+                <Shield size={10} style={{ color: '#34d399' }} />
                 <span className="text-[10px] font-medium" style={{ color: colors.textPrimary }}>{f.displayName}</span>
-                <span className="text-[8.5px] px-1 py-0.5 rounded" style={{ background: 'rgba(76,175,80,0.15)', color: '#4caf50' }}>hidden</span>
+                <span className="text-[8.5px] px-1 py-0.5 rounded" style={{ background: 'rgba(52,211,153,0.15)', color: '#34d399' }}>hidden</span>
               </div>
             ))}
           </div>
@@ -530,7 +530,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
                       >
                         <div
                           className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                          style={{ background: s.isDistraction ? '#ef5350' : catColor }}
+                          style={{ background: s.isDistraction ? '#f87171' : catColor }}
                         />
                         <span className="text-[11px] font-medium flex-shrink-0 w-24 truncate" style={{ color: colors.textPrimary }}>{s.app}</span>
                         <span className="text-[10px] flex-1 truncate min-w-0" style={{ color: colors.textSecondary }}>{title !== s.app ? title : ''}</span>

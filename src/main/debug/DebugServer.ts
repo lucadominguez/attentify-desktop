@@ -160,6 +160,23 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
   if (method === 'POST') {
     const body = await readBody(req) as Record<string, unknown>
 
+    // Raw AI proxy for the browser extension (URL classifier, etc.). Does a single-shot
+    // completion WITHOUT persisting to the chat history or running tools — so the
+    // extension's internal prompts never leak into the user's conversation.
+    if (path === '/ai/json' || path === '/ai/chat') {
+      const svc = deps.agent()
+      if (!svc || !svc.isReady()) return json(res, { error: 'no_key' }, 503)
+      const system = (body.system as string) ?? ''
+      const input = (body.input as string) ?? (body.message as string) ?? ''
+      if (!input) return json(res, { error: 'input required' }, 400)
+      try {
+        const text = await svc.complete(system, input, (body.max_tokens as number) ?? 400)
+        return json(res, { text, content: text })
+      } catch (e) {
+        return json(res, { error: e instanceof Error ? e.message : String(e) }, 500)
+      }
+    }
+
     if (path === '/inject/url') {
       const rawUrl = (body.url as string) ?? ''
       const title = (body.title as string) ?? ''

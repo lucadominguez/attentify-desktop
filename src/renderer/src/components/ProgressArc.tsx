@@ -11,7 +11,7 @@ interface ProgressArcProps {
 
 export default function ProgressArc({
   percentage,
-  color = '#4caf50',
+  color = '#34d399',
   trackColor = '#1e3a5f',
   size = 160,
   strokeWidth = 10,

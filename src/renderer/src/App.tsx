@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useTheme } from './context/ThemeContext'
 import Sidebar from './components/Sidebar'
+import BrandMark from './components/BrandMark'
 import Home from './views/Home'
 import Overview from './views/Overview'
 import DeepClean from './views/DeepClean'
@@ -8,15 +9,16 @@ import DeepFocusMode from './views/DeepFocusMode'
 import ScheduleManager from './views/ScheduleManager'
 import AlgoTrack from './views/AlgoTrack'
 import Analytics from './views/Analytics'
-import Insights from './views/Insights'
 import FocusScanResults from './views/FocusScanResults'
 import Patterns from './views/Patterns'
 import Actions from './views/Actions'
 import SettingsView from './views/Settings'
 import Onboarding from './views/Onboarding'
+import Timesheets from './views/Timesheets'
+import Logic from './views/Logic'
 import ChatPanel from './chat/ChatPanel'
 import type { ViewName, AppStore, ScanResult, HeuristicAlert } from '@shared/types'
-import { Minus, Square, X, Coffee } from 'lucide-react'
+import { Minus, Square, X, Coffee, Sun, Moon } from 'lucide-react'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -33,7 +35,7 @@ export default function App(): React.ReactElement {
   const [alwaysOn, setAlwaysOn] = useState(false)
   const [platform, setPlatform] = useState<'windows' | 'mac' | 'linux'>('windows')
 
-  const { colors } = useTheme()
+  const { colors, theme, toggle: toggleTheme } = useTheme()
 
   const handleNavigate = useCallback((v: ViewName) => {
     setView(v)
@@ -140,10 +142,15 @@ export default function App(): React.ReactElement {
 
   const renderView = (): React.ReactElement => {
     switch (view) {
-      case 'home': return <Home store={store} onNavigate={handleNavigate} onScanComplete={handleScanComplete} onRefresh={refreshStore} latestAlert={latestAlert} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
+      case 'home': return <ChatPanel key="home-chat" variant="full" onRefresh={refreshStore} initialMessage={chatPreFill} />
+      case 'dashboard': return <Home store={store} onNavigate={handleNavigate} onScanComplete={handleScanComplete} onRefresh={refreshStore} latestAlert={latestAlert} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
+      case 'timesheets': return <Timesheets onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
+      case 'logic': return <Logic />
+
       case 'focus-shield': return <Overview store={store} onRefresh={refreshStore} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'deep-clean': return <DeepClean store={store} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
-      case 'insights': return <Insights heuristicAlerts={heuristicAlerts} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
+      // Insights was merged into Analytics — keep the route working for old links.
+      case 'insights':
       case 'analytics': return <Analytics onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'deep-focus': return <DeepFocusMode store={store} onRefresh={refreshStore} />
       case 'schedule-manager': return <ScheduleManager store={store} onRefresh={refreshStore} />
@@ -152,7 +159,7 @@ export default function App(): React.ReactElement {
       case 'actions': return <Actions onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} liveAutoBlocks={liveAutoBlocks} />
       case 'settings': return <SettingsView store={store} onRefresh={refreshStore} onNavigate={handleNavigate} />
       case 'focus-scan-results': return <FocusScanResults results={scanResults} store={store} onNavigate={handleNavigate} onRefresh={refreshStore} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
-      default: return <Home store={store} onNavigate={handleNavigate} onScanComplete={handleScanComplete} onRefresh={refreshStore} />
+      default: return <ChatPanel key="home-chat" variant="full" onRefresh={refreshStore} initialMessage={chatPreFill} />
     }
   }
 
@@ -164,7 +171,7 @@ export default function App(): React.ReactElement {
         style={{
           height: 32,
           background: 'rgba(2,9,18,0.98)',
-          borderBottom: '1px solid rgba(0,200,255,0.1)',
+          borderBottom: '1px solid rgba(99,102,241,0.1)',
         }}
       >
         {/* Left: macOS traffic lights (macOS only — Windows uses the right-side
@@ -190,7 +197,7 @@ export default function App(): React.ReactElement {
                   title="Zoom"
                 />
               </div>
-              <div className="w-px h-3" style={{ background: 'rgba(0,200,255,0.15)' }} />
+              <div className="w-px h-3" style={{ background: 'rgba(99,102,241,0.15)' }} />
             </>
           )}
           <button
@@ -201,39 +208,35 @@ export default function App(): React.ReactElement {
               : 'Turn on Always-On: protection stays active at all times like an antivirus, even when the app is closed, and starts automatically at login.'}
             style={{
               padding: '2px 8px',
-              border: `1px solid ${alwaysOn ? 'rgba(0,230,118,0.45)' : 'rgba(0,200,255,0.15)'}`,
-              background: alwaysOn ? 'rgba(0,230,118,0.10)' : 'transparent',
+              border: `1px solid ${alwaysOn ? 'rgba(52,211,153,0.45)' : 'rgba(99,102,241,0.15)'}`,
+              background: alwaysOn ? 'rgba(52,211,153,0.10)' : 'transparent',
             }}
           >
             <span
               className="rounded-full"
               style={{
                 width: 6, height: 6,
-                background: alwaysOn ? '#00e676' : 'rgba(0,200,255,0.3)',
-                boxShadow: alwaysOn ? '0 0 6px #00e676' : 'none',
+                background: alwaysOn ? '#34d399' : 'rgba(99,102,241,0.3)',
+                boxShadow: alwaysOn ? '0 0 6px #34d399' : 'none',
               }}
             />
-            <span style={{ fontFamily: '"Share Tech Mono", monospace', fontSize: 9, letterSpacing: '0.15em', color: alwaysOn ? '#00e676' : 'rgba(0,200,255,0.4)' }}>
+            <span style={{ fontFamily: '"Share Tech Mono", monospace', fontSize: 9, letterSpacing: '0.15em', color: alwaysOn ? '#34d399' : 'rgba(99,102,241,0.4)' }}>
               ALWAYS&nbsp;ON
             </span>
           </button>
         </div>
 
-        {/* Center: monospace title */}
+        {/* Center: logo mark + quick theme toggle */}
         <div className="flex items-center gap-2">
-          <div className="w-1 h-1 rounded-full" style={{ background: 'rgba(0,200,255,0.5)' }} />
-          <span
-            style={{
-              fontFamily: '"Share Tech Mono", monospace',
-              fontSize: 10,
-              letterSpacing: '0.25em',
-              color: 'rgba(0,200,255,0.55)',
-              textTransform: 'uppercase',
-            }}
+          <BrandMark size={18} style={{ opacity: 0.9 }} />
+          <button
+            onClick={toggleTheme}
+            className="titlebar-nodrag flex items-center justify-center rounded transition-colors hover:bg-white/5"
+            style={{ width: 22, height: 22, color: colors.textMuted }}
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           >
-            Attentify
-          </span>
-          <div className="w-1 h-1 rounded-full" style={{ background: 'rgba(0,200,255,0.5)' }} />
+            {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+          </button>
         </div>
 
         {/* Right: Windows / Linux window controls (hidden on macOS, which uses the
@@ -243,21 +246,21 @@ export default function App(): React.ReactElement {
             <button
               onClick={() => api.minimizeWindow()}
               className="flex items-center justify-center transition-colors hover:bg-white/5"
-              style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.5)' }}
+              style={{ width: 32, height: 32, color: 'rgba(99,102,241,0.5)' }}
             >
               <Minus size={11} />
             </button>
             <button
               onClick={() => api.maximizeWindow()}
               className="flex items-center justify-center transition-colors hover:bg-white/5"
-              style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.5)' }}
+              style={{ width: 32, height: 32, color: 'rgba(99,102,241,0.5)' }}
             >
               <Square size={10} />
             </button>
             <button
               onClick={() => api.closeWindow()}
               className="flex items-center justify-center transition-colors hover:bg-[#e81123]"
-              style={{ width: 32, height: 32, color: 'rgba(0,200,255,0.5)' }}
+              style={{ width: 32, height: 32, color: 'rgba(99,102,241,0.5)' }}
             >
               <X size={11} />
             </button>
@@ -285,13 +288,13 @@ export default function App(): React.ReactElement {
           {breakMode && Date.now() < breakMode.endsAt && (
             <div
               className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
-              style={{ background: 'rgba(255,170,0,0.05)', borderBottom: '1px solid rgba(255,170,0,0.18)' }}
+              style={{ background: 'rgba(251,191,36,0.05)', borderBottom: '1px solid rgba(251,191,36,0.18)' }}
             >
               <div className="flex items-center gap-2.5">
-                <Coffee size={12} style={{ color: '#ffaa00' }} />
+                <Coffee size={12} style={{ color: '#fbbf24' }} />
                 <span
                   className="text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: '#ffaa00', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
+                  style={{ color: '#fbbf24', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
                 >
                   Break Mode Active
                 </span>
@@ -313,18 +316,18 @@ export default function App(): React.ReactElement {
             <div
               className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
               style={{
-                background: 'rgba(0,230,118,0.04)',
-                borderBottom: '1px solid rgba(0,230,118,0.15)',
+                background: 'rgba(52,211,153,0.04)',
+                borderBottom: '1px solid rgba(52,211,153,0.15)',
               }}
             >
               <div className="flex items-center gap-2.5">
                 <div
                   className="w-1.5 h-1.5 rounded-full animate-pulse"
-                  style={{ background: '#00e676', boxShadow: '0 0 6px #00e676' }}
+                  style={{ background: '#34d399', boxShadow: '0 0 6px #34d399' }}
                 />
                 <span
                   className="text-[10px] font-bold uppercase tracking-widest"
-                  style={{ color: '#00e676', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
+                  style={{ color: '#34d399', fontFamily: '"Share Tech Mono", monospace', letterSpacing: '0.2em' }}
                 >
                   Focus Session Active
                 </span>
@@ -337,7 +340,7 @@ export default function App(): React.ReactElement {
               {activeSession.mode === 'deep' && activeSession.endsAt && Date.now() < activeSession.endsAt ? (
                 <span
                   className="text-[10px] uppercase tracking-widest"
-                  style={{ color: '#ffaa00', fontFamily: '"Share Tech Mono", monospace' }}
+                  style={{ color: '#fbbf24', fontFamily: '"Share Tech Mono", monospace' }}
                   title="Deep Focus is locked until its timer ends."
                 >
                   Locked
@@ -355,7 +358,7 @@ export default function App(): React.ReactElement {
           )}
           {/* key={view} remounts on navigation so each screen fades in — gives a calm,
               consistent sense of moving from one screen to the next. */}
-          <div key={view} className={`flex-1 min-h-0 animate-fade-in ${view === 'home' || view === 'insights' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <div key={view} className={`flex-1 min-h-0 animate-fade-in ${view === 'home' || view === 'logic' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             {renderView()}
           </div>
         </main>
@@ -400,6 +403,11 @@ declare global {
         heuristicAlerts: import('@shared/types').HeuristicAlert[]
         recentSessions: import('@shared/types').ActivitySession[]
       }>
+      getTimesheet: (days?: number) => Promise<{ rangeDays: number; sessions: import('@shared/types').ActivitySession[] }>
+      getCustomCards: () => Promise<import('@shared/types').CustomAnalyticsCard[]>
+      deleteCustomCard: (id: string) => Promise<{ ok: boolean }>
+      overlayReady?: () => void
+      overlayShown?: (id: string) => void
       dismissHeuristicAlert: (id: string) => Promise<void>
       exportPdf: () => Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }>
       hideInterstitial: () => Promise<void>
@@ -416,13 +424,27 @@ declare global {
       onInferenceSuggest: (cb: (inf: unknown) => void) => (() => void)
       getInferences: (status?: string) => Promise<unknown[]>
       resolveInference: (id: string, status: 'confirmed' | 'rejected') => Promise<{ ok: boolean }>
-      chatStart: (text: string) => void
+      chatStart: (text: string, images?: { media_type: string; data: string }[], conversationId?: string) => void
+      getConversations: () => Promise<import('@shared/types').Conversation[]>
+      createConversation: (title?: string) => Promise<import('@shared/types').Conversation>
+      getConversationMessages: (id: string, limit?: number) => Promise<{ id: string; role: string; content: string; ts: number }[]>
+      renameConversation: (id: string, title: string) => Promise<{ ok: boolean }>
+      deleteConversation: (id: string) => Promise<{ ok: boolean }>
+      buildAnalyticsCard: (description: string) => Promise<{ ok: boolean; error?: string; summary?: string }>
+      getPreferences: () => Promise<{ key: string; value: string; scope: string; confidence: number; source: string }[]>
+      getUserContext: () => Promise<import('@shared/types').UserContextNote[]>
+      addUserContext: (text: string) => Promise<{ ok: boolean; error?: string; note?: import('@shared/types').UserContextNote }>
+      deleteUserContext: (id: string) => Promise<{ ok: boolean }>
+      getCheckpoints: (conversationId?: string) => Promise<{ id: string; message_id?: string; ts: number; label?: string }[]>
+      restoreCheckpoint: (id: string) => Promise<{ ok: boolean; error?: string; label?: string }>
+      getStartupItems: () => Promise<import('@shared/types').StartupItem[]>
+      disableStartupItem: (item: import('@shared/types').StartupItem) => Promise<{ ok: boolean; error?: string; needsAdmin?: boolean }>
       onChatChunk: (cb: (chunk: string) => void) => (() => void)
       onChatTool: (cb: (toolName: string) => void) => (() => void)
       onChatDone: (cb: (event: import('@shared/types').AgentDoneEvent) => void) => (() => void)
       onChatError: (cb: (err: string) => void) => (() => void)
       getAgentHistory: (limit?: number) => Promise<unknown[]>
-      clearChatHistory: () => Promise<{ ok: boolean }>
+      clearChatHistory: (conversationId?: string) => Promise<{ ok: boolean }>
       dismissProactive: () => Promise<{ ok: boolean }>
       onAgentProactive: (cb: (evt: import('@shared/types').AgentProactiveEvent) => void) => (() => void)
       onStoreRefresh: (cb: () => void) => (() => void)

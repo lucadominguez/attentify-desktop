@@ -86,7 +86,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
   const maxBar = Math.max(...dailyData.map((d) => d.focused + d.distracted), 1)
 
   const label = focusRatio >= 70 ? 'Strong focus week' : focusRatio >= 40 ? 'Average focus week' : 'High distraction week'
-  const labelColor = focusRatio >= 70 ? '#4caf50' : focusRatio >= 40 ? '#ffb800' : '#ef5350'
+  const labelColor = focusRatio >= 70 ? '#34d399' : focusRatio >= 40 ? '#fbbf24' : '#f87171'
 
   const handleAskDaemon = (): void => {
     if (!onChatWith) return
@@ -116,7 +116,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
               onClick={handleAskDaemon}
               title="Get AI analysis of your weekly habits and attention patterns"
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-[11px] font-medium transition-colors"
-              style={{ background: 'rgba(33,150,243,0.1)', color: '#64b5f6', border: '1px solid rgba(33,150,243,0.2)' }}
+              style={{ background: 'rgba(33,150,243,0.1)', color: '#818cf8', border: '1px solid rgba(33,150,243,0.2)' }}
             >
               <MessageSquare size={11} /> Ask AI
             </button>
@@ -125,7 +125,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
             onClick={load}
             title="Refresh weekly statistics"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-            style={{ background: 'rgba(255,184,0,0.08)', color: '#ffb800', border: '1px solid rgba(255,184,0,0.18)' }}
+            style={{ background: 'rgba(251,191,36,0.08)', color: '#fbbf24', border: '1px solid rgba(251,191,36,0.18)' }}
           >
             <RefreshCw size={10} /> Refresh
           </button>
@@ -138,25 +138,25 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
           {
             label: 'Focus Ratio',
             value: `${Math.round(focusRatio)}%`,
-            color: focusRatio >= 70 ? '#4caf50' : focusRatio >= 40 ? '#ffb800' : '#ef5350',
+            color: focusRatio >= 70 ? '#34d399' : focusRatio >= 40 ? '#fbbf24' : '#f87171',
             tooltip: `${Math.round(focusRatio)}% of tracked time this week was focused. 70%+ = strong, 40–70% = average, below 40% = high distraction.`,
           },
           {
             label: 'Focused',
             value: totalTracked > 0 ? fmt(weekly.focusedTime) : '—',
-            color: '#4caf50',
+            color: '#34d399',
             tooltip: `${fmt(weekly.focusedTime)} spent on productive apps this week`,
           },
           {
             label: 'Distracted',
             value: totalTracked > 0 ? fmt(weekly.distractedTime) : '—',
-            color: weekly.distractedTime > 3600000 ? '#ef5350' : '#ffb800',
+            color: weekly.distractedTime > 3600000 ? '#f87171' : '#fbbf24',
             tooltip: `${fmt(weekly.distractedTime)} spent on distracting apps this week${weekly.distractedTime > 3600000 ? ' — over 1 hour' : ''}`,
           },
           {
             label: 'Block Events',
             value: weekly.blockEvents.toString(),
-            color: '#2196f3',
+            color: '#3b9eff',
             tooltip: `${weekly.blockEvents} access attempts blocked this week by Attentify`,
           },
         ].map((chip) => (
@@ -189,7 +189,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
             <>
               <div
                 className="h-full float-left rounded-l-full"
-                style={{ width: `${focusRatio}%`, background: 'linear-gradient(90deg,#1b5e20,#4caf50)' }}
+                style={{ width: `${focusRatio}%`, background: 'linear-gradient(90deg,#1b5e20,#34d399)' }}
               />
             </>
           ) : (
@@ -219,7 +219,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
                   <div className="w-full rounded-sm overflow-hidden flex flex-col-reverse" style={{ height: h }}>
                     {total > 0 ? (
                       <>
-                        <div style={{ flex: focPct, background: 'rgba(76,175,80,0.6)', minHeight: 1 }} />
+                        <div style={{ flex: focPct, background: 'rgba(52,211,153,0.6)', minHeight: 1 }} />
                         <div style={{ flex: 100 - focPct, background: 'rgba(255,107,53,0.5)', minHeight: day.distracted > 0 ? 1 : 0 }} />
                       </>
                     ) : (
@@ -234,7 +234,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
         )}
         <div className="flex items-center gap-4 mt-2">
           <span className="flex items-center gap-1 text-[9px]" style={{ color: colors.textMuted }}>
-            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(76,175,80,0.6)' }} />focused
+            <span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(52,211,153,0.6)' }} />focused
           </span>
           <span className="flex items-center gap-1 text-[9px]" style={{ color: colors.textMuted }}>
             <span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(255,107,53,0.5)' }} />distracted

@@ -38,8 +38,20 @@ class NotificationQueue {
   private model = ANTHROPIC_MODEL
   private rendererUrl: string | null = null
   private overlayFile = ''
+  // windowReady is set ONLY by markReady(), which fires from the 'overlay:ready' IPC —
+  // i.e. only once the React overlay has actually mounted and subscribed. We never mark
+  // ready off 'did-finish-load', so we never show the window when React isn't alive to
+  // paint into it (that was the blank-window bug).
   private windowReady = false
   private pendingShow: OverlayNotification | null = null
+  // The window is revealed only after the renderer confirms it painted the notification
+  // ('overlay:shown' ack), or via a short fallback once we know React is alive. This
+  // guarantees the small corner window is never shown blank.
+  private showTimer: ReturnType<typeof setTimeout> | null = null
+  // Belt-and-suspenders against a stuck overlay: force-hide after this long even if the
+  // renderer never dismisses it.
+  private safetyTimer: ReturnType<typeof setTimeout> | null = null
+  private static readonly SAFETY_HIDE_MS = 16_000
 
   init(rendererUrl: string | null, outDir: string): void {
     this.rendererUrl = rendererUrl
@@ -93,19 +105,52 @@ class NotificationQueue {
       void this.win.loadFile(this.overlayFile)
     }
 
-    this.win.webContents.once('did-finish-load', () => {
-      this.windowReady = true
-      if (this.pendingShow) {
-        this.sendToWindow('overlay:show', this.pendingShow)
-        this.win?.show()
-        this.pendingShow = null
-      }
-    })
-
     this.win.on('closed', () => {
       this.win = null
       this.windowReady = false
+      if (this.safetyTimer) { clearTimeout(this.safetyTimer); this.safetyTimer = null }
+      if (this.showTimer) { clearTimeout(this.showTimer); this.showTimer = null }
     })
+  }
+
+  // Called from the 'overlay:ready' IPC once the React overlay has mounted and
+  // subscribed. Only now is it safe to flush a queued notification — and only now do we
+  // know the renderer is alive to actually paint one.
+  markReady(): void {
+    if (this.windowReady) return
+    this.windowReady = true
+    if (this.pendingShow) {
+      const n = this.pendingShow
+      this.pendingShow = null
+      this.showNotification(n)
+    }
+  }
+
+  // Send the content, then reveal only after the renderer paints it. We do NOT show the
+  // window here — reveal() is called by the 'overlay:shown' ack, or by a short fallback
+  // (safe because windowReady means React is mounted and painting).
+  private showNotification(n: OverlayNotification): void {
+    this.sendToWindow('overlay:show', n)
+    if (this.showTimer) clearTimeout(this.showTimer)
+    this.showTimer = setTimeout(() => this.reveal(n.id), 800)
+    if (this.safetyTimer) clearTimeout(this.safetyTimer)
+    this.safetyTimer = setTimeout(() => {
+      if (this.current?.id === n.id) this.onDismiss(n.id)
+      else { this.win?.hide(); this.safetyTimer = null }
+    }, NotificationQueue.SAFETY_HIDE_MS)
+  }
+
+  // Actually make the window visible — content is guaranteed painted by now.
+  private reveal(id: string): void {
+    if (this.showTimer) { clearTimeout(this.showTimer); this.showTimer = null }
+    if (this.current?.id !== id) return
+    if (!this.win || this.win.isDestroyed()) return
+    if (!this.win.isVisible()) this.win.show()
+  }
+
+  // Renderer ack: it has rendered the notification, so it's safe to reveal immediately.
+  handleShown(id: string): void {
+    this.reveal(id)
   }
 
   push(notification: OverlayNotification): void {
@@ -123,12 +168,12 @@ class NotificationQueue {
     if (!next) return
     this.current = next
 
-    if (!this.win || this.win.isDestroyed()) this.createWindow()
+    if (!this.win || this.win.isDestroyed()) { this.windowReady = false; this.createWindow() }
 
     if (this.windowReady) {
-      this.sendToWindow('overlay:show', next)
-      this.win?.show()
+      this.showNotification(next)
     } else {
+      // Wait for the renderer's ready signal (or the did-finish-load fallback).
       this.pendingShow = next
     }
 
@@ -143,6 +188,8 @@ class NotificationQueue {
   onDismiss(id: string): void {
     if (this.current?.id === id) {
       this.current = null
+      if (this.safetyTimer) { clearTimeout(this.safetyTimer); this.safetyTimer = null }
+      if (this.showTimer) { clearTimeout(this.showTimer); this.showTimer = null }
       this.win?.hide()
       setTimeout(() => this.tryShow(), 350)
     }

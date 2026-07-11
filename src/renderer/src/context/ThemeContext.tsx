@@ -19,6 +19,15 @@ export interface ThemeColors {
   accent: string
   accentBg: string
   accentGlow: string
+  // Semantic palette — harmonized "Slate & Violet" set. Use these instead of raw
+  // hex so good/bad cues stay consistent app-wide and adapt to light/dark.
+  brand: string        // logo blue — links, brand touches
+  positive: string     // focused / good
+  positiveBg: string
+  warning: string      // caution / mixed
+  warningBg: string
+  negative: string     // distraction / bad
+  negativeBg: string
   border: string
   borderMid: string
   borderHi: string
@@ -44,19 +53,26 @@ const DARK: ThemeColors = {
   textSecondary:   '#9a9a9a',
   textMuted:       '#6a6a6a',
   textDim:         '#4a4a4a',
-  accent:          '#00c8ff',
-  accentBg:        'rgba(0,200,255,0.06)',
-  accentGlow:      'rgba(0,200,255,0.4)',
-  border:          'rgba(0,200,255,0.16)',
-  borderMid:       'rgba(0,200,255,0.35)',
-  borderHi:        'rgba(0,200,255,0.65)',
+  accent:          '#6366f1',
+  accentBg:        'rgba(99,102,241,0.06)',
+  accentGlow:      'rgba(99,102,241,0.4)',
+  brand:           '#3b9eff',
+  positive:        '#34d399',
+  positiveBg:      'rgba(52,211,153,0.10)',
+  warning:         '#fbbf24',
+  warningBg:       'rgba(251,191,36,0.10)',
+  negative:        '#f87171',
+  negativeBg:      'rgba(248,113,113,0.10)',
+  border:          'rgba(99,102,241,0.16)',
+  borderMid:       'rgba(99,102,241,0.35)',
+  borderHi:        'rgba(99,102,241,0.65)',
   label:           '#8a8a8a',
   labelDim:        '#5a5a5a',
   userBubbleBg:    'rgba(0,144,180,0.12)',
-  userBubbleBorder:'rgba(0,200,255,0.28)',
+  userBubbleBorder:'rgba(99,102,241,0.28)',
   userBubbleText:  '#e8e8e8',
   aiBubbleBg:      'rgba(4,11,22,0.97)',
-  aiBubbleBorder:  'rgba(0,200,255,0.16)',
+  aiBubbleBorder:  'rgba(99,102,241,0.16)',
   aiBubbleText:    '#d0d0d0',
 }
 
@@ -72,9 +88,16 @@ const LIGHT: ThemeColors = {
   textSecondary:   '#555555',
   textMuted:       '#888888',
   textDim:         '#aaaaaa',
-  accent:          '#0077bb',
-  accentBg:        'rgba(0,100,180,0.06)',
-  accentGlow:      'rgba(0,100,180,0.3)',
+  accent:          '#4f46e5',
+  accentBg:        'rgba(79,70,229,0.06)',
+  accentGlow:      'rgba(79,70,229,0.3)',
+  brand:           '#2563eb',
+  positive:        '#059669',
+  positiveBg:      'rgba(5,150,105,0.10)',
+  warning:         '#d97706',
+  warningBg:       'rgba(217,119,6,0.10)',
+  negative:        '#dc2626',
+  negativeBg:      'rgba(220,38,38,0.10)',
   border:          'rgba(0,0,0,0.1)',
   borderMid:       'rgba(0,0,0,0.2)',
   borderHi:        'rgba(0,0,0,0.35)',
@@ -105,6 +128,13 @@ function applyCssVars(c: ThemeColors): void {
   el.style.setProperty('--accent',            c.accent)
   el.style.setProperty('--accent-bg',         c.accentBg)
   el.style.setProperty('--accent-glow',       c.accentGlow)
+  el.style.setProperty('--brand',             c.brand)
+  el.style.setProperty('--positive',          c.positive)
+  el.style.setProperty('--positive-bg',       c.positiveBg)
+  el.style.setProperty('--warning',           c.warning)
+  el.style.setProperty('--warning-bg',        c.warningBg)
+  el.style.setProperty('--negative',          c.negative)
+  el.style.setProperty('--negative-bg',       c.negativeBg)
   el.style.setProperty('--border',            c.border)
   el.style.setProperty('--border-mid',        c.borderMid)
   el.style.setProperty('--border-hi',         c.borderHi)
@@ -127,9 +157,12 @@ const ThemeContext = createContext<ThemeCtx>({
 })
 
 export function ThemeProvider({ children }: { children: React.ReactNode }): React.ReactElement {
-  const [theme, setTheme] = useState<ThemeMode>(
-    () => (localStorage.getItem('pd-theme') as ThemeMode | null) ?? 'dark'
-  )
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    const stored = localStorage.getItem('pd-theme') as ThemeMode | null
+    if (stored === 'dark' || stored === 'light') return stored
+    // First run: follow the OS preference.
+    try { return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' } catch { return 'dark' }
+  })
 
   useEffect(() => {
     const colors = theme === 'dark' ? DARK : LIGHT
