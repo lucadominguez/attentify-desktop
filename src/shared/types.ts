@@ -294,7 +294,6 @@ export interface ChangeEntry {
 
 export type ViewName =
   | 'home'
-  | 'dashboard'
   | 'logic'
   | 'timesheets'
   | 'focus-shield'

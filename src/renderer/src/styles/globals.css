@@ -151,23 +151,23 @@ html.light .bg-grid {
   @apply text-navy-400 hover:text-white text-sm transition-colors duration-200 underline underline-offset-2;
 }
 
-/* ── Sidebar items — always dark (sidebar stays dark in both themes) ─────────── */
+/* ── Sidebar items — theme-aware (adapt to light + dark) ─────────────────────── */
 .sidebar-item {
   @apply flex items-center gap-3 px-4 py-2 rounded-none cursor-pointer transition-all duration-150 font-medium;
   font-size: 13px;
-  color: #6a89a6;
+  color: var(--text-secondary);
   letter-spacing: 0.01em;
   position: relative;
 }
 
 .sidebar-item:hover {
-  background: rgba(99, 102, 241, 0.05);
-  color: #a0cce8;
+  background: var(--accent-bg);
+  color: var(--text-primary);
 }
 
 .sidebar-item.active {
-  background: rgba(99, 102, 241, 0.07);
-  color: #e8f4ff;
+  background: var(--accent-bg);
+  color: var(--text-primary);
 }
 
 /* Glowing left bar on active */
@@ -176,8 +176,8 @@ html.light .bg-grid {
   position: absolute;
   left: 0; top: 4px; bottom: 4px;
   width: 2px;
-  background: #6366f1;
-  box-shadow: 0 0 8px #6366f1, 0 0 2px #6366f1;
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow), 0 0 2px var(--accent);
   border-radius: 0 1px 1px 0;
 }
 

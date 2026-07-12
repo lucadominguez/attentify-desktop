@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useTheme } from './context/ThemeContext'
 import Sidebar from './components/Sidebar'
 import BrandMark from './components/BrandMark'
-import Home from './views/Home'
 import Overview from './views/Overview'
 import DeepClean from './views/DeepClean'
 import DeepFocusMode from './views/DeepFocusMode'
@@ -143,7 +142,6 @@ export default function App(): React.ReactElement {
   const renderView = (): React.ReactElement => {
     switch (view) {
       case 'home': return <ChatPanel key="home-chat" variant="full" onRefresh={refreshStore} initialMessage={chatPreFill} />
-      case 'dashboard': return <Home store={store} onNavigate={handleNavigate} onScanComplete={handleScanComplete} onRefresh={refreshStore} latestAlert={latestAlert} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'timesheets': return <Timesheets onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'logic': return <Logic />
 
@@ -170,8 +168,9 @@ export default function App(): React.ReactElement {
         className="titlebar-drag flex items-center justify-between px-4 flex-shrink-0"
         style={{
           height: 32,
-          background: 'rgba(2,9,18,0.98)',
-          borderBottom: '1px solid rgba(99,102,241,0.1)',
+          background: colors.panelBg,
+          borderBottom: `1px solid ${colors.border}`,
+          transition: 'background 0.2s ease',
         }}
       >
         {/* Left: macOS traffic lights (macOS only — Windows uses the right-side

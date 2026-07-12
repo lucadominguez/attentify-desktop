@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages'
-import { buildSystemPrompt } from './systemPrompt'
+import { STATIC_INSTRUCTIONS, buildDynamicContext, type SystemContext } from './systemPrompt'
+import { resolveModel, chatTier } from './modelRouter'
 import { TOOL_DEFINITIONS, executeTool, type ToolDeps } from './tools'
 import {
   insertAgentMessage, getAgentMessages, getConversationMessages, touchConversation,
@@ -31,8 +32,6 @@ export interface ChatCallbacks {
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const ANTHROPIC_MODEL    = 'claude-sonnet-4-6'
-const OPENROUTER_MODEL   = 'anthropic/claude-sonnet-4.5'
 const OPENROUTER_BASE    = 'https://openrouter.ai/api'
 const MAX_TOKENS = 2048
 const MAX_TOOL_ROUNDS = 8
@@ -46,7 +45,7 @@ const PROACTIVE_DISMISS_COOLDOWN_MS = 45 * 60 * 1000
 
 export class AgentService {
   private client: Anthropic | null = null
-  private model = ANTHROPIC_MODEL
+  private isOpenRouter = false
   private deps: ToolDeps
   private proactiveCount = 0
   private lastProactiveTs = 0
@@ -59,11 +58,10 @@ export class AgentService {
   }
 
   init(apiKey: string): void {
-    const isOpenRouter = apiKey.startsWith('sk-or-')
-    this.model = isOpenRouter ? OPENROUTER_MODEL : ANTHROPIC_MODEL
+    this.isOpenRouter = apiKey.startsWith('sk-or-')
     this.client = new Anthropic({
       apiKey,
-      ...(isOpenRouter ? {
+      ...(this.isOpenRouter ? {
         baseURL: OPENROUTER_BASE,
         defaultHeaders: {
           'HTTP-Referer': 'https://attentify.ai',
@@ -75,6 +73,15 @@ export class AgentService {
 
   isReady(): boolean {
     return this.client !== null
+  }
+
+  // Build the system prompt: the large STATIC instructions FIRST, then the live data.
+  // Keeping the static block + tools as a stable request prefix lets DeepSeek's automatic
+  // server-side prefix caching kick in (the default model for most turns), cutting repeat
+  // input cost with zero behaviour change — and it's future-proof for explicit Anthropic
+  // caching once the SDK exposes cache_control.
+  private systemFor(ctx: SystemContext, _model: string): string {
+    return `${STATIC_INSTRUCTIONS}\n\n${buildDynamicContext(ctx)}`
   }
 
   setProactiveCallback(cb: (text: string) => void): void {
@@ -136,7 +143,7 @@ export class AgentService {
         .slice(0, 8)
       const currentUrl = this.deps.monitor?.getCurrentUrl() ?? null
 
-      const systemPrompt = buildSystemPrompt({
+      const ctx: SystemContext = {
         goals,
         preferences,
         pendingInferences,
@@ -154,7 +161,12 @@ export class AgentService {
         recentSearches,
         extensionConnected: this.deps.contentRules?.isExtensionConnected() ?? false,
         userContext: (store.userContext ?? []).map((c) => c.text),
-      })
+      }
+
+      // Route: cheap DeepSeek for the bulk of turns; escalate to premium only for
+      // genuinely ambiguous / reasoning-heavy / image asks (zero-token local classifier).
+      const model = resolveModel(chatTier(userText, { hasImages: !!(images && images.length) }), this.isOpenRouter)
+      const system = this.systemFor(ctx, model)
 
       // Build message history (last 20 messages, oldest first). Scope to the active
       // conversation when one is supplied.
@@ -202,7 +214,7 @@ export class AgentService {
       } catch { /* checkpointing is best-effort */ }
 
       // Run the agentic loop
-      const fullReply = await this.runLoop(systemPrompt, messages, callbacks)
+      const fullReply = await this.runLoop(system, model, messages, callbacks)
 
       // Persist assistant reply (sanitized — strips any tool-call markup the model
       // occasionally leaks as text when tool-use is proxied through OpenRouter). If the
@@ -220,16 +232,18 @@ export class AgentService {
   // Raw, single-shot completion — NOT persisted to any conversation and NO tools. Used
   // to proxy the browser extension's internal calls (e.g. its URL-distraction classifier)
   // so they never pollute the user's chat history.
-  async complete(system: string, userText: string, maxTokens = 400): Promise<string> {
+  async complete(system: string, userText: string, maxTokens = 300): Promise<string> {
     if (!this.client) throw new Error('no_key')
     if (!canUseAi()) throw new Error('PAYWALL')
+    // Classification / one-liners → the cheapest model. Never needs a frontier model.
+    const model = resolveModel('micro', this.isOpenRouter)
     const resp = await this.client.messages.create({
-      model: this.model,
+      model,
       max_tokens: maxTokens,
       system: system || undefined,
       messages: [{ role: 'user', content: userText }],
     })
-    recordUsage(this.model, resp.usage?.input_tokens ?? 0, resp.usage?.output_tokens ?? 0)
+    recordUsage(model, resp.usage?.input_tokens ?? 0, resp.usage?.output_tokens ?? 0)
     return (resp.content.find((b) => b.type === 'text') as { type: 'text'; text: string } | undefined)?.text ?? ''
   }
 
@@ -242,7 +256,8 @@ export class AgentService {
     if (!canUseAi()) return { ok: false, error: 'PAYWALL' }
     try {
       const store = getStore()
-      const systemPrompt = buildSystemPrompt({
+      const model = resolveModel('cheap', this.isOpenRouter)
+      const system = this.systemFor({
         goals: getActiveGoals(),
         preferences: getPreferences(),
         pendingInferences: [],
@@ -252,11 +267,11 @@ export class AgentService {
         todayDistractedMs: 0,
         topDistractionApp: null,
         recentSessions: [],
-      })
-      const meta = `The user typed this into the "build your own analytics" bar on their Analytics page: "${description}".\n\nBuild the most sensible custom analytics card for it. First call query_activity_data to compute the real numbers from their tracked activity, then call create_analytics_card to save a live card (pick a clear title, an appropriate viz — bar/number/table — and fitting group_by/metric/range/distraction). Do not ask any clarifying questions; make reasonable choices. Keep any text response to one short sentence.`
+      }, model)
+      const meta = `The user typed this into the "build your own analytics" bar on their Analytics page: "${description}".\n\nBuild the most sensible custom analytics card for it. First call query_activity_data to compute the real numbers from their tracked activity, then call create_analytics_card to save a live card (pick a clear title, an appropriate viz — bar/line/table/number — and fitting group_by/metric/range/distraction). Do not ask any clarifying questions; make reasonable choices. Keep any text response to one short sentence.`
       const messages: MessageParam[] = [{ role: 'user', content: meta }]
       const noop = (): void => {}
-      const summary = await this.runLoop(systemPrompt, messages, { onChunk: noop, onToolUse: noop, onDone: noop, onError: noop })
+      const summary = await this.runLoop(system, model, messages, { onChunk: noop, onToolUse: noop, onDone: noop, onError: noop })
       return { ok: true, summary: sanitizeAssistantText(summary) }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -266,7 +281,8 @@ export class AgentService {
   // ── Agentic loop (streaming + tool execution) ─────────────────────────────
 
   private async runLoop(
-    systemPrompt: string,
+    system: string,
+    model: string,
     messages: MessageParam[],
     callbacks: ChatCallbacks
   ): Promise<string> {
@@ -283,9 +299,9 @@ export class AgentService {
 
       // Run one streaming round; get both the text and the final message
       const stream = this.client!.messages.stream({
-        model: this.model,
+        model,
         max_tokens: MAX_TOKENS,
-        system: systemPrompt,
+        system,
         messages: currentMessages,
         tools: TOOL_DEFINITIONS,
       })
@@ -298,7 +314,7 @@ export class AgentService {
       }
 
       const finalMsg = await stream.finalMessage()
-      recordUsage(this.model, finalMsg.usage?.input_tokens ?? 0, finalMsg.usage?.output_tokens ?? 0)
+      recordUsage(model, finalMsg.usage?.input_tokens ?? 0, finalMsg.usage?.output_tokens ?? 0)
       if (finalMsg.stop_reason !== 'tool_use') break
 
       // Execute all tool calls from this round
@@ -344,7 +360,8 @@ export class AgentService {
       const focusedMs = this.deps.tracker.getFocusedTime(new Date().setHours(0, 0, 0, 0))
       const distractedMs = this.deps.tracker.getDistractedTime(new Date().setHours(0, 0, 0, 0))
 
-      const systemPrompt = buildSystemPrompt({
+      const model = resolveModel('micro', this.isOpenRouter)
+      const system = this.systemFor({
         goals,
         preferences: getPreferences(),
         pendingInferences: getInferences('pending'),
@@ -357,7 +374,7 @@ export class AgentService {
         todayDistractedMs: distractedMs,
         topDistractionApp: session.app,
         recentSessions,
-      })
+      }, model)
 
       const recentDistracted = recentSessions.filter((s) => s.isDistraction)
       const distractedMinutes = Math.round(recentDistracted.reduce((a, s) => a + s.duration, 0) / 60000)
@@ -376,9 +393,9 @@ Speak directly to them, not about them.`,
 
       let text = ''
       const msgStream = this.client.messages.stream({
-        model: this.model,
+        model,
         max_tokens: 200,
-        system: systemPrompt,
+        system,
         messages: proactiveMessages,
       })
 
@@ -388,7 +405,7 @@ Speak directly to them, not about them.`,
         }
       }
       const proMsg = await msgStream.finalMessage()
-      recordUsage(this.model, proMsg.usage?.input_tokens ?? 0, proMsg.usage?.output_tokens ?? 0)
+      recordUsage(model, proMsg.usage?.input_tokens ?? 0, proMsg.usage?.output_tokens ?? 0)
 
       if (text.trim()) {
         this.proactiveCallback(text.trim())

@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import {
-  Shield, Lock, Calendar, Zap, Clock, LayoutDashboard, BarChart2, Brain,
-  MessageSquare, Activity, RefreshCw, ListChecks, Settings,
+  Shield, Lock, Calendar, Zap, Clock, BarChart2, Brain,
+  MessageSquare, RefreshCw, ListChecks, Settings,
 } from 'lucide-react'
 import type { ViewName, FocusSession, ElevationStatus } from '@shared/types'
 import BrandMark from './BrandMark'
+import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -29,7 +30,6 @@ interface NavItem {
 // assistant (Attentify's core surface); the dashboard and analytics sit alongside it.
 const mainNav: NavItem[] = [
   { id: 'home',         label: 'Assistant',  icon: <MessageSquare size={15} />, desc: 'Chat with Attentify — block sites, start focus, ask about your day' },
-  { id: 'dashboard',    label: 'Dashboard',  icon: <LayoutDashboard size={15} />, desc: 'Today\'s focus at a glance' },
   { id: 'analytics',    label: 'Analytics',  icon: <BarChart2 size={15} />, desc: 'Charts, patterns, alerts — and describe any custom analytics you want' },
   { id: 'logic',        label: 'Logic',      icon: <Brain size={15} />,     desc: 'How Attentify reasons about you — and add your own context' },
   { id: 'timesheets',   label: 'Timesheets', icon: <Clock size={15} />,     desc: 'Time logged per app and category, day by day' },
@@ -48,6 +48,7 @@ const utilityNav: NavItem[] = [
 export default function Sidebar({
   currentView, onNavigate, onChatOpen, activeSession, elevation, alertCount = 0, pendingActionCount = 0,
 }: SidebarProps): React.ReactElement {
+  const { colors } = useTheme()
   const [relaunching, setRelaunching] = useState(false)
 
   const handleRelaunch = async (): Promise<void> => {
@@ -70,7 +71,7 @@ export default function Sidebar({
       >
         <span
           className="flex-shrink-0"
-          style={{ color: isActive ? '#6366f1' : '#4a6a86', transition: 'color 0.15s' }}
+          style={{ color: isActive ? colors.accent : colors.textMuted, transition: 'color 0.15s' }}
         >
           {item.icon}
         </span>
@@ -97,14 +98,15 @@ export default function Sidebar({
       className="flex flex-col flex-shrink-0 h-full overflow-hidden"
       style={{
         width: 220,
-        background: 'linear-gradient(180deg, #020a16 0%, #030d1c 100%)',
-        borderRight: '1px solid rgba(99,102,241,0.1)',
+        background: colors.panelBg,
+        borderRight: `1px solid ${colors.border}`,
+        transition: 'background 0.2s ease',
       }}
     >
       {/* ── Logo ──────────────────────────────────────────────────────────── */}
       <div
         className="flex items-center gap-2.5 px-4 flex-shrink-0"
-        style={{ height: 56, borderBottom: '1px solid rgba(99,102,241,0.08)' }}
+        style={{ height: 56, borderBottom: `1px solid ${colors.border}` }}
       >
         {/* Attentify shield mark */}
         <div className="flex-shrink-0 relative" style={{ width: 26, height: 26 }}>
@@ -114,7 +116,7 @@ export default function Sidebar({
         <div className="min-w-0 flex-1">
           <div
             className="text-[15px] font-semibold leading-none"
-            style={{ color: '#e8f4ff', letterSpacing: '0.01em' }}
+            style={{ color: colors.textPrimary, letterSpacing: '0.01em' }}
           >
             Attentify
           </div>
@@ -153,7 +155,7 @@ export default function Sidebar({
               Blocking disabled
             </p>
           </div>
-          <p className="text-[10px] leading-relaxed mb-2" style={{ color: '#6a89a6' }}>
+          <p className="text-[10px] leading-relaxed mb-2" style={{ color: colors.textMuted }}>
             Admin rights are required for site blocking.
           </p>
           <button
@@ -161,9 +163,9 @@ export default function Sidebar({
             disabled={relaunching}
             className="w-full flex items-center justify-center gap-1.5 py-1.5 text-[11px] font-medium rounded-md transition-all disabled:opacity-60"
             style={{
-              background: 'rgba(99,102,241,0.10)',
-              color: '#6366f1',
-              border: '1px solid rgba(99,102,241,0.28)',
+              background: colors.accentBg,
+              color: colors.accent,
+              border: `1px solid ${colors.borderMid}`,
             }}
           >
             {relaunching
@@ -182,21 +184,21 @@ export default function Sidebar({
         <div className="mt-4">
           <div className="px-4 mb-1.5 flex items-center gap-2">
             <span className="hud-label">Utilities</span>
-            <div className="flex-1 h-px" style={{ background: 'rgba(99,102,241,0.10)' }} />
+            <div className="flex-1 h-px" style={{ background: colors.border }} />
           </div>
           {utilityNav.map(renderItem)}
         </div>
       </nav>
 
       {/* ── Assistant ─────────────────────────────────────────────────────── */}
-      <div className="flex-shrink-0 p-3" style={{ borderTop: '1px solid rgba(99,102,241,0.08)' }}>
+      <div className="flex-shrink-0 p-3" style={{ borderTop: `1px solid ${colors.border}` }}>
         <button
           onClick={() => onNavigate('home')}
           className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[12px] font-medium transition-all hover:brightness-110"
           style={{
-            background: 'rgba(99,102,241,0.08)',
-            border: '1px solid rgba(99,102,241,0.22)',
-            color: '#a5b4fc',
+            background: colors.accentBg,
+            border: `1px solid ${colors.borderMid}`,
+            color: colors.accent,
           }}
           title="Open the Attentify assistant"
         >

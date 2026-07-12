@@ -3,6 +3,7 @@ import { BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { getActiveGoals } from '../data/repository'
 import { getEffectiveApiKey, canUseAi, recordUsage } from '../billing'
+import { resolveModel } from '../agent/modelRouter'
 import { debugLog } from '../debug/logger'
 
 export interface OverlayAction {
@@ -24,8 +25,6 @@ export interface OverlayNotification {
   confidence?: number
 }
 
-const ANTHROPIC_MODEL  = 'claude-haiku-4-5-20251001'
-const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 const W = 400
 const H = 190
@@ -35,7 +34,7 @@ class NotificationQueue {
   private queue: OverlayNotification[] = []
   private current: OverlayNotification | null = null
   private client: Anthropic | null = null
-  private model = ANTHROPIC_MODEL
+  private model = resolveModel('micro', false)
   private rendererUrl: string | null = null
   private overlayFile = ''
   // windowReady is set ONLY by markReady(), which fires from the 'overlay:ready' IPC —
@@ -64,7 +63,7 @@ class NotificationQueue {
     const key = getEffectiveApiKey()
     if (!key) { this.client = null; return }
     const isOR = key.startsWith('sk-or-')
-    this.model = isOR ? OPENROUTER_MODEL : ANTHROPIC_MODEL
+    this.model = resolveModel('micro', isOR)
     this.client = new Anthropic({
       apiKey: key,
       ...(isOR ? { baseURL: OPENROUTER_BASE, defaultHeaders: { 'HTTP-Referer': 'https://attentify.ai', 'X-Title': 'Attentify' } } : {}),

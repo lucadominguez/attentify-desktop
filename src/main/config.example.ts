@@ -27,8 +27,13 @@ const MODEL_PRICING: Record<string, [number, number]> = {
   'anthropic/claude-haiku-4-5': [1, 5],
   'claude-sonnet-4-6': [3, 15],
   'anthropic/claude-sonnet-4-6': [3, 15],
+  'anthropic/claude-sonnet-4.5': [3, 15],
+  'anthropic/claude-sonnet-4-5': [3, 15],
+  'deepseek/deepseek-v4-pro': [0.35, 1.4],
+  'deepseek/deepseek-chat': [0.28, 1.1],
+  'deepseek/deepseek-reasoner': [0.55, 2.2],
 }
-const DEFAULT_PRICING: [number, number] = [1, 5] // assume haiku-class if unknown
+const DEFAULT_PRICING: [number, number] = [0.5, 2] // assume cheap-class if unknown
 
 export function estimateCostUsd(model: string, inputTokens: number, outputTokens: number): number {
   const [inPrice, outPrice] = MODEL_PRICING[model] ?? DEFAULT_PRICING

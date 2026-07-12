@@ -6,6 +6,7 @@ import {
 } from '../data/repository'
 import { getStore, patchStore } from '../store'
 import { canUseAi, recordUsage } from '../billing'
+import { resolveModel } from '../agent/modelRouter'
 import { debugLog } from '../debug/logger'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { ActivitySession } from '../../shared/types'
@@ -21,8 +22,6 @@ const DEDUP_TTL             = 5 * 60 * 1000
 const AI_CACHE_TTL          = 20 * 60 * 1000
 const AI_RATE_LIMIT_MS      = 4000  // min ms between AI calls
 
-const ANTHROPIC_MODEL  = 'claude-haiku-4-5-20251001'
-const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
 const SAFE_CATEGORIES = new Set(['development', 'productivity', 'system'])
@@ -277,7 +276,7 @@ const RECREATIONAL_SIGNALS = [
 export class InferenceEngine {
   private blockingEngine: BlockingEngine
   private client: Anthropic | null = null
-  private model = ANTHROPIC_MODEL
+  private model = resolveModel('cheap', false)
   private sweepTimer: ReturnType<typeof setInterval> | null = null
   private active = false
 
@@ -302,7 +301,7 @@ export class InferenceEngine {
 
   init(apiKey: string): void {
     const isOpenRouter = apiKey.startsWith('sk-or-')
-    this.model = isOpenRouter ? OPENROUTER_MODEL : ANTHROPIC_MODEL
+    this.model = resolveModel('cheap', isOpenRouter)
     this.client = new Anthropic({
       apiKey,
       ...(isOpenRouter ? {

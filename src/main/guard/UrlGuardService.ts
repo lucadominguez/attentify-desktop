@@ -1,9 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { getActiveGoals, getPreferences, bufferEvent } from '../data/repository'
 import { canUseAi, recordUsage } from '../billing'
+import { resolveModel } from '../agent/modelRouter'
 
-const ANTHROPIC_MODEL  = 'claude-haiku-4-5-20251001'
-const OPENROUTER_MODEL = 'anthropic/claude-haiku-4.5'
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
 // Domains that are always productive — skip AI check entirely
@@ -99,7 +98,7 @@ export function extractDomain(url: string): string | null {
 
 export class UrlGuardService {
   private client: Anthropic | null = null
-  private model = ANTHROPIC_MODEL
+  private model = resolveModel('micro', false)
   private enabled = true
   private onAlert: ((alert: GuardAlert) => void) | null = null
 
@@ -114,7 +113,7 @@ export class UrlGuardService {
 
   init(apiKey: string): void {
     const isOpenRouter = apiKey.startsWith('sk-or-')
-    this.model = isOpenRouter ? OPENROUTER_MODEL : ANTHROPIC_MODEL
+    this.model = resolveModel('micro', isOpenRouter)
     this.client = new Anthropic({
       apiKey,
       ...(isOpenRouter ? {
