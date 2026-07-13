@@ -436,6 +436,7 @@ declare global {
       deleteUserContext: (id: string) => Promise<{ ok: boolean }>
       getCheckpoints: (conversationId?: string) => Promise<{ id: string; message_id?: string; ts: number; label?: string }[]>
       restoreCheckpoint: (id: string) => Promise<{ ok: boolean; error?: string; label?: string }>
+      getAppVersion: () => Promise<string>
       getStartupItems: () => Promise<import('@shared/types').StartupItem[]>
       disableStartupItem: (item: import('@shared/types').StartupItem) => Promise<{ ok: boolean; error?: string; needsAdmin?: boolean }>
       onChatChunk: (cb: (chunk: string) => void) => (() => void)

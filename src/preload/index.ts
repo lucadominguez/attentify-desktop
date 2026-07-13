@@ -115,6 +115,7 @@ const api = {
   restoreCheckpoint: (id: string): Promise<{ ok: boolean; error?: string; label?: string }> => ipcRenderer.invoke('checkpoints:restore', id),
 
   // Startup (auto-run) management
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
   getStartupItems: (): Promise<import('../shared/types').StartupItem[]> => ipcRenderer.invoke('startup:list'),
   disableStartupItem: (item: import('../shared/types').StartupItem): Promise<{ ok: boolean; error?: string; needsAdmin?: boolean }> => ipcRenderer.invoke('startup:disable', item),
   dismissProactive: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:dismiss-proactive'),

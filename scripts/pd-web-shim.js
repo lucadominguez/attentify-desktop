@@ -378,6 +378,7 @@
       { id: 'folder:Epic Games Launcher.lnk', name: 'Epic Games Launcher', command: 'Epic Games Launcher.lnk', location: 'folder' },
     ]); },
     disableStartupItem: function () { return Promise.resolve({ ok: true }); },
+    getAppVersion: function () { return Promise.resolve('1.1.0'); },
     overlayReady: function () {}, overlayShown: function () {},
 
     getApiKeyStatus: function () { return Promise.resolve({ hasKey: hasKey }); },

@@ -37,6 +37,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
   const [licenseInput, setLicenseInput] = useState('')
   const [licenseBusy, setLicenseBusy] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  const [version, setVersion] = useState('')
+  useEffect(() => { api.getAppVersion?.().then(setVersion).catch(() => {}) }, [])
 
   // Safety & Recovery
   const [changeCount, setChangeCount] = useState<number | null>(null)
@@ -159,6 +161,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               {theme === 'dark' ? <><Sun size={13} /> Switch to light</> : <><Moon size={13} /> Switch to dark</>}
             </button>
           </div>
+          <p className="text-[10px] mt-2 text-right" style={{ color: colors.textDim }}>
+            Attentify{version ? ` v${version}` : ''}
+          </p>
         </section>
 
         {/* ── Extra modules ─────────────────────────────────────────────────── */}

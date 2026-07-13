@@ -1,4 +1,4 @@
-import { ipcMain, dialog, shell, BrowserWindow as ElectronBrowserWindow } from 'electron'
+import { ipcMain, dialog, shell, app, BrowserWindow as ElectronBrowserWindow } from 'electron'
 import type { BrowserWindow } from 'electron'
 import { writeFile } from 'fs/promises'
 import { getStore, patchStore } from './store'
@@ -818,6 +818,9 @@ export function initIpc(): void {
     patchStore({ userContext: (s.userContext ?? []).filter((c) => c.id !== id) })
     return { ok: true }
   })
+
+  // App version (so the UI can show which build is installed)
+  ipcMain.handle('app:version', () => app.getVersion())
 
   // ── Startup (auto-run) management ──────────────────────────────────────────
   ipcMain.handle('startup:list', () => listStartupItems())
