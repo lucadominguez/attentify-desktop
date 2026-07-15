@@ -32,7 +32,7 @@ function fmt(ms: number): string {
   if (h > 0) return `${h}h`
   if (m > 0) return `${m}m`
   const s = Math.floor(ms / 1000)
-  return s > 0 ? `${s}s` : '—'
+  return s > 0 ? `${s}s` : '-'
 }
 function fmtHM(ms: number): string {
   const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000)

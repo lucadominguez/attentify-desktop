@@ -286,10 +286,25 @@ export class AgentService {
   // present do we spend a cheap classifier call. Logs an ai_friction issue so the whole
   // log can later be reviewed to improve the product.
   private lastFrictionCheck = 0
-  private static readonly FRICTION_HINT = /\b(no,?\s|not what|didn'?t (mean|ask|work|understand|catch|notice|detect|get)|that'?s (wrong|not)|you (missed|didn'?t|should|failed|keep)|already (told|said|asked|did)|why (didn'?t|can'?t|won'?t|is|does|do you)|still (not|doesn'?t|isn'?t|won'?t)|actually,?\s*i|i meant|wrong|incorrect|useless|doesn'?t (work|make sense)|not right|frustrat|annoying|come on|that isn'?t|isn'?t what|misunderstood)\b/i
+  // The leading `no,?\s` alternative used to sit here. It matched the literal "no prose"
+  // in every engine prompt's "Reply with ONLY compact JSON, no prose", so 100% of the
+  // machine traffic below tripped the filter, burned the throttle, and starved the real
+  // signal. `\bno,\s` (comma required) keeps the "no, that's wrong" case without it.
+  private static readonly FRICTION_HINT = /\b(no,\s|not what|didn'?t (mean|ask|work|understand|catch|notice|detect|get)|that'?s (wrong|not)|you (missed|didn'?t|should|failed|keep)|already (told|said|asked|did)|why (didn'?t|can'?t|won'?t|is|does|do you)|still (not|doesn'?t|isn'?t|won'?t)|actually,?\s*i|i meant|wrong|incorrect|useless|doesn'?t (work|make sense)|not right|frustrat|annoying|come on|that isn'?t|isn'?t what|misunderstood)\b/i
+
+  // Engine prompts reach chat() through the extension bridge (DebugServer -> svc.chat)
+  // and get persisted as role:'user', so ~77% of stored "user" messages are machine
+  // traffic, not people. Friction classification must never see them: they are not the
+  // user talking, and classifying them wastes AI spend on every navigation.
+  private static readonly MACHINE_PROMPT = /You analyze browsing context|Reply with ONLY|Return ONLY|distractionProbability|goalAligned|You review ONE exchange|-> compact JSON/i
+
+  static isMachinePrompt(text: string): boolean {
+    return AgentService.MACHINE_PROMPT.test(text || '')
+  }
 
   private async maybeClassifyFriction(userText: string, assistantText: string, conversationId?: string): Promise<void> {
     if (!this.client || !userText) return
+    if (AgentService.isMachinePrompt(userText)) return
     if (!AgentService.FRICTION_HINT.test(userText)) return
     const now = Date.now()
     if (now - this.lastFrictionCheck < 15000) return   // throttle bursts

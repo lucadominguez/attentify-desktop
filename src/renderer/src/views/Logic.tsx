@@ -249,7 +249,7 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
       },
     },
     {
-      label: 'Top drain', value: topDistractor ?? '—', color: topDistractor ? colors.negative : colors.textMuted,
+      label: 'Top drain', value: topDistractor ?? '-', color: topDistractor ? colors.negative : colors.textMuted,
       drill: {
         title: 'Top distractions', subtitle: 'Where distracted time goes',
         rows: distractors.map((d) => ({ label: d.app, value: fmtMs(d.ms), tone: 'negative' as const })),

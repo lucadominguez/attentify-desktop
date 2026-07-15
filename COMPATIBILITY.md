@@ -57,7 +57,7 @@ stay in the local SQLite DB** — the raw tracking log is never uploaded.
 |-------------|------|--------------|
 | `api.anthropic.com` / `openrouter.ai` | Using AI features | Your prompt + the context the assistant needs. |
 | `attentify-cloud.ludomi2502.workers.dev` | Sign-in / subscription | Email, password hash, license key, session token. |
-| …`/v1/issues`, `/v1/usage` | Diagnostics sharing, **on by default** | Bug reports, crash/freeze captures (recent logs + a short excerpt of recent chat), and per-model token counts, tied to a random install ID. Turn it off in **Settings → Share anonymized diagnostics**. |
+| …`/v1/issues`, `/v1/usage` | Diagnostics sharing, **on by default** | Bug reports, crash/freeze captures (recent logs + a short excerpt of recent chat), and per-model token counts. Sent with a random install ID, and since an account is required to use the app, this is linked to you rather than anonymous. Turn it off in **Settings → Share diagnostics**. |
 | …`/v1/analytics` | Cloud sync | Focus events (blocks, distractions, corrections). |
 | …`/updates/` | Auto-update | A version check. |
 

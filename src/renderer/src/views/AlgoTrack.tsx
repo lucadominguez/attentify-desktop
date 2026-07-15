@@ -273,7 +273,7 @@ export default function AlgoTrack({ store, onChatWith }: AlgoTrackProps): React.
                 const m = Math.floor(ms / 60000)
                 const h = Math.floor(m / 60)
                 if (h > 0) return `${h}h ${m % 60}m`
-                return m > 0 ? `${m}m` : '—'
+                return m > 0 ? `${m}m` : '-'
               }
 
               return (

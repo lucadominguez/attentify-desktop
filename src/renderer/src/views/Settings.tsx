@@ -192,9 +192,10 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
           {/* Diagnostics sharing */}
           <div className="flex items-center justify-between p-4 rounded-lg mt-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="pr-3">
-              <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Share anonymized diagnostics</p>
+              <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Share diagnostics</p>
               <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
-                Sends bug reports, crash/freeze captures and token usage to help fix issues. No passwords or keys. Beta.
+                Sends crash and freeze reports, recent app logs, a short excerpt of recent chat, and token
+                usage, linked to your account so problems can be traced and fixed. Never passwords or API keys.
               </p>
             </div>
             <button

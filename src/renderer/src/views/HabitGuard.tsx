@@ -143,13 +143,13 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
           },
           {
             label: 'Focused',
-            value: totalTracked > 0 ? fmt(weekly.focusedTime) : '—',
+            value: totalTracked > 0 ? fmt(weekly.focusedTime) : '-',
             color: '#34d399',
             tooltip: `${fmt(weekly.focusedTime)} spent on productive apps this week`,
           },
           {
             label: 'Distracted',
-            value: totalTracked > 0 ? fmt(weekly.distractedTime) : '—',
+            value: totalTracked > 0 ? fmt(weekly.distractedTime) : '-',
             color: weekly.distractedTime > 3600000 ? '#f87171' : '#fbbf24',
             tooltip: `${fmt(weekly.distractedTime)} spent on distracting apps this week${weekly.distractedTime > 3600000 ? ' — over 1 hour' : ''}`,
           },

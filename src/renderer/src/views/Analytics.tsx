@@ -141,7 +141,7 @@ function buildDayRows(sessions: ActivitySession[]): DayRow[] {
     const tracked = v.focused + v.distracted
     const score = tracked > 0 ? Math.round(Math.min(100, (v.focused / tracked) * 120)) : 0
     const distractRate = tracked > 0 ? Math.round((v.distracted / tracked) * 100) : 0
-    const topApp = [...v.apps.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+    const topApp = [...v.apps.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-'
     return { day: days[d.getDay()]!, date, focused: v.focused, distracted: v.distracted, tracked, score, sessions: v.sessions, topApp, distractRate }
   })
 }
@@ -181,7 +181,7 @@ function buildHourRows(sessions: ActivitySession[]): HourRow[] {
   return Array.from(map.entries()).sort(([a], [b]) => a - b).map(([hour, v]) => {
     const total = v.focused + v.distracted
     const ratio = total > 0 ? Math.round((v.focused / total) * 100) : -1
-    const topApp = [...v.apps.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—'
+    const topApp = [...v.apps.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '-'
     const trackedHrs = Math.max(total / 3600000, 0.0167)
     const switchRate = Math.round(v.sessions / trackedHrs)
     return { hour, focused: v.focused, distracted: v.distracted, ratio, sessions: v.sessions, topApp, switchRate }
@@ -393,7 +393,7 @@ function HourOfWeekHeatmap({ matrix }: { matrix: HeatCell[][] }): React.ReactEle
   return (
     <div className="section-panel p-3">
       <div className="flex items-center justify-between mb-2">
-        <p className="hud-label">Focus Heatmap — Hour of Week</p>
+        <p className="hud-label">Focus Heatmap by Hour of Week</p>
         <div className="flex items-center gap-3 text-[8.5px]" style={{ color: 'rgba(99,102,241,0.45)' }}>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(52,211,153,0.75)' }} /> focused</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(251,191,36,0.65)' }} /> mixed</span>
@@ -403,7 +403,7 @@ function HourOfWeekHeatmap({ matrix }: { matrix: HeatCell[][] }): React.ReactEle
         </div>
       </div>
       {!hasData ? (
-        <p className="text-[10px] text-center py-6" style={{ color: 'rgba(99,102,241,0.3)' }}>No session data yet — heatmap populates after several sessions</p>
+        <p className="text-[10px] text-center py-6" style={{ color: 'rgba(99,102,241,0.3)' }}>No session data yet. The heatmap fills in after several sessions</p>
       ) : (
         <div className="flex gap-2">
           <div className="flex flex-col gap-0.5 flex-shrink-0" style={{ paddingTop: 14 }}>
@@ -451,7 +451,7 @@ function HourlyHeatmapRow({ hourRows }: { hourRows: HourRow[] }): React.ReactEle
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <p className="hud-label">Hourly Focus Map — Today</p>
+        <p className="hud-label">Hourly Focus Map Today</p>
         <div className="flex items-center gap-3 text-[8.5px]" style={{ color: colors.textMuted }}>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded inline-block" style={{ background: '#34d399' }} />focused</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded inline-block" style={{ background: '#f87171' }} />distracted</span>
@@ -518,7 +518,7 @@ function DayScoreStrip({ dayRows }: { dayRows: DayRow[] }): React.ReactElement |
                   boxShadow: isToday ? `0 0 8px ${color}20` : 'none',
                 }}
               >
-                {d.tracked > 0 ? `${d.score}%` : '—'}
+                {d.tracked > 0 ? `${d.score}%` : '-'}
               </div>
               <span className="text-[8.5px]" style={{ color: isToday ? '#818cf8' : '#6b84a0' }}>{d.day}</span>
             </div>
@@ -543,7 +543,7 @@ function AppBarChart({ rows }: { rows: AppRow[] }): React.ReactElement | null {
           <div
             key={row.app}
             className="flex items-center gap-2"
-            title={`${row.app} — ${fmt(row.totalTime)} total (${row.pctOfTime}% of tracked time) · ${row.sessions} session${row.sessions !== 1 ? 's' : ''} · avg ${fmt(row.avgDuration)}/session · ${row.isDistraction ? 'classified as distraction' : 'classified as productive'}`}
+            title={`${row.app}: ${fmt(row.totalTime)} total (${row.pctOfTime}% of tracked time) · ${row.sessions} session${row.sessions !== 1 ? 's' : ''} · avg ${fmt(row.avgDuration)}/session · ${row.isDistraction ? 'classified as distraction' : 'classified as productive'}`}
           >
             <div className="w-24 text-[10px] truncate flex-shrink-0 text-right" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.app}</div>
             <div className="flex-1 h-4 overflow-hidden" style={{ background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.06)' }}>
@@ -590,7 +590,7 @@ function qualityLabel(score: number): string {
   if (score >= 85) return 'Excellent session'
   if (score >= 70) return 'Strong focus'
   if (score >= 50) return 'Mixed session'
-  if (score >= 30) return 'Fragmented — hard to hold focus'
+  if (score >= 30) return 'Fragmented. Hard to hold focus'
   return 'Heavily scattered'
 }
 
@@ -619,7 +619,7 @@ function TodaySummaryCard({ score, focusedMs, distractedMs, idleMs, distractionE
   if (!hasData) {
     return (
       <div className="section-panel p-4 flex items-center gap-3">
-        <span className="text-3xl font-bold leading-none" style={{ color: colors.textMuted }}>—</span>
+        <span className="text-3xl font-bold leading-none" style={{ color: colors.textMuted }}>-</span>
         <p className="text-[11px] leading-relaxed" style={{ color: colors.textMuted }}>
           No activity tracked yet today. Your focus summary appears here once Attentify has watched a few minutes of work.
         </p>
@@ -836,7 +836,7 @@ function TimeDistributionPanel({ sessions, appRows }: { sessions: ActivitySessio
             ))}
           </div>
           <p className="text-[9px] leading-snug" style={{ color: colors.textMuted }}>
-            Time tracked, but URLs inside are not captured — so this time isn&apos;t attributed to a site.
+            Time tracked, but URLs inside are not captured, so this time isn&apos;t attributed to a site.
           </p>
         </div>
       )}
@@ -1015,26 +1015,26 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
   const topTransitions = [...transitions.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
 
   const distractionDrill: DrillSpec = {
-    title: 'Distraction events — today',
+    title: 'Distraction events today',
     subtitle: `${todayDistractionEvents} event${todayDistractionEvents !== 1 ? 's' : ''} · goal < 3`,
     rows: distractSessionsToday.slice(0, 12).map((s) => ({
       label: s.title ? s.title.slice(0, 40) : s.app,
       sub: `${s.app} · ${fmtClock(s.startTime)}`, value: fmt(s.duration), tone: 'negative' as const,
     })),
-    empty: 'No distraction events today — nice.',
+    empty: 'No distraction events today. Nice.',
     note: distractSessionsToday.length > 12 ? `+${distractSessionsToday.length - 12} more today` : undefined,
     askPrompt: `I had ${todayDistractionEvents} distraction events today${todayTopDistractor ? `, mostly ${todayTopDistractor.app}` : ''}. What triggered them and how do I cut them?`,
   }
   const switchDrill: DrillSpec = {
-    title: 'Context switching — today',
+    title: 'Context switching today',
     subtitle: `${todaySwitchRate}/h · goal < 25`,
     rows: topTransitions.map(([t, n]) => ({ label: t, value: `${n}×` })),
     empty: 'Not enough switching yet to analyze.',
-    note: 'Each app-to-app switch carries a re-entry cost — repeated pairs are worth automating away or batching.',
+    note: 'Each app-to-app switch carries a re-entry cost. Repeated pairs are worth automating away or batching.',
     askPrompt: `I'm switching apps about ${todaySwitchRate} times an hour today. Which of these switches look unnecessary, and how do I reduce context switching?`,
   }
   const idleDrill: DrillSpec = {
-    title: 'Idle gaps — today',
+    title: 'Idle gaps today',
     subtitle: `${fmt(todayIdleMs)} across ${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m`,
     rows: [...todayIdlePeriods].sort((a, b) => b.start - a.start).slice(0, 12).map((ip) => ({
       label: `after ${ip.prevApp}`, sub: fmtClock(ip.start), value: fmt(ip.duration), tone: 'warning' as const,
@@ -1043,16 +1043,16 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     askPrompt: `I had ${fmt(todayIdleMs)} of idle time today across ${todayIdlePeriods.length} gaps. Is that a problem and what should I do about it?`,
   }
   const relapseDrill: DrillSpec = {
-    title: 'Relapses — today',
+    title: 'Relapses today',
     subtitle: `${todayRelapses.length} return${todayRelapses.length !== 1 ? 's' : ''} to distraction within 30m · goal < 3`,
     rows: [...todayRelapses].sort((a, b) => b.ts - a.ts).slice(0, 12).map((r) => ({
       label: r.app, sub: `after ${r.prevApp} · ${fmtClock(r.ts)}`, value: `+${fmt(r.gapMs)}`, tone: 'negative' as const,
     })),
-    empty: 'No relapses today — discipline holding.',
+    empty: 'No relapses today. Discipline holding.',
     askPrompt: `I relapsed into distractions ${todayRelapses.length} times today. How do I make my recoveries stick?`,
   }
   const focusDrill: DrillSpec = {
-    title: 'Focus score — today',
+    title: 'Focus score today',
     subtitle: `${Math.round(today.focusScore)}% · target 85%`,
     rows: [
       { label: 'Focused time', value: fmt(today.focusedTime), tone: 'positive' as const },
@@ -1064,14 +1064,14 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     askPrompt: `My focus score today is ${Math.round(today.focusScore)}%${hasBaseline ? ` vs a ${Math.round(blScore)}% average` : ''}. Break down what's driving it and how to raise it.`,
   }
   const focusedDrill: DrillSpec = {
-    title: 'Focused time — today',
+    title: 'Focused time today',
     subtitle: `${fmt(today.focusedTime)} · ${todayTracked > 0 ? Math.round((today.focusedTime / todayTracked) * 100) : 0}% of tracked`,
     rows: aggAppRows(focusSessionsToday, 'positive'),
     empty: 'No focused time recorded yet today.',
     askPrompt: `Where did my ${fmt(today.focusedTime)} of focused time go today, and how do I protect more of it?`,
   }
   const distractedDrill: DrillSpec = {
-    title: 'Distracted time — today',
+    title: 'Distracted time today',
     subtitle: `${fmt(today.distractedTime)} · ${todayTracked > 0 ? Math.round((today.distractedTime / todayTracked) * 100) : 0}% of tracked`,
     rows: aggAppRows(todaySessions.filter((s) => s.isDistraction), 'negative'),
     empty: 'No distracted time recorded today.',
@@ -1080,7 +1080,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
 
   const kpiItems: Kpi[] = [
     {
-      label: 'Focus', value: todayTracked > 0 ? `${Math.round(today.focusScore)}%` : '—',
+      label: 'Focus', value: todayTracked > 0 ? `${Math.round(today.focusScore)}%` : '-',
       delta: hasBaseline ? { text: `${today.focusScore - blScore >= 0 ? '+' : '−'}${Math.abs(Math.round(today.focusScore - blScore))}pp`, good: today.focusScore >= blScore } : undefined,
       sub: 'Target 85%', drill: focusDrill,
     },
@@ -1099,7 +1099,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
       sub: `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m`, drill: idleDrill,
     },
     {
-      label: 'Switches', value: todayTracked > 0 ? `${todaySwitchRate}/h` : '—',
+      label: 'Switches', value: todayTracked > 0 ? `${todaySwitchRate}/h` : '-',
       delta: hasBaseline && blSwitch > 0 ? { text: `${todaySwitchRate - blSwitch >= 0 ? '+' : '−'}${Math.abs(Math.round(((todaySwitchRate - blSwitch) / blSwitch) * 100))}%`, good: todaySwitchRate <= blSwitch } : undefined,
       sub: 'Target <25', drill: switchDrill,
     },
@@ -1116,7 +1116,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     rankRows.push({
       priority: todaySwitchRate > 40 ? 'Critical' : todaySwitchRate > 25 ? 'High' : 'Low',
       signal: 'Context switching', current: `${todaySwitchRate}/h`,
-      baseline: hasBaseline && blSwitch > 0 ? `${Math.round(blSwitch)}/h` : '—',
+      baseline: hasBaseline && blSwitch > 0 ? `${Math.round(blSwitch)}/h` : '-',
       impact: todaySwitchRate > 25 ? `~${Math.round((todaySwitchRate - 25) * 0.4)}m focus lost` : 'within target',
     })
   }
@@ -1124,19 +1124,19 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     rankRows.push({
       priority: todayTopDistractor.pctOfTime > 15 ? 'High' : todayTopDistractor.pctOfTime > 7 ? 'Medium' : 'Low',
       signal: `${todayTopDistractor.app} distraction`, current: fmt(todayTopDistractor.totalTime),
-      baseline: '—', impact: `${todayTopDistractor.pctOfTime}% of today's time`,
+      baseline: '-', impact: `${todayTopDistractor.pctOfTime}% of today's time`,
     })
   }
   rankRows.push({
     priority: todayStreaks.longest > 3600000 ? 'Low' : 'Medium',
-    signal: 'Longest focus block', current: todayStreaks.longest > 0 ? fmt(todayStreaks.longest) : '—',
-    baseline: todayStreaks.avgLen > 0 ? `avg ${fmt(todayStreaks.avgLen)}` : '—',
+    signal: 'Longest focus block', current: todayStreaks.longest > 0 ? fmt(todayStreaks.longest) : '-',
+    baseline: todayStreaks.avgLen > 0 ? `avg ${fmt(todayStreaks.avgLen)}` : '-',
     impact: todayStreaks.longest > 3600000 ? 'deep-work capable' : 'aim for 45m+ blocks',
   })
   if (todayIdleMs > 5 * 60000) {
     rankRows.push({
       priority: todayIdleMs > 3600000 ? 'Medium' : 'Low',
-      signal: 'Idle gaps', current: fmt(todayIdleMs), baseline: '—',
+      signal: 'Idle gaps', current: fmt(todayIdleMs), baseline: '-',
       impact: `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m`,
     })
   }
@@ -1263,7 +1263,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
         <div className="section-panel px-3 py-3 flex items-center gap-2.5">
           <Lightbulb size={12} style={{ color: colors.accent, flexShrink: 0 }} />
           <p className="text-[10px] leading-relaxed" style={{ color: colors.textSecondary }}>
-            Not enough data yet to draw conclusions — keep Attentify running and insights will appear once there's enough activity to be meaningful.
+            Not enough data yet to draw conclusions yet. Keep Attentify running and insights will appear once there's enough activity to be meaningful.
           </p>
         </div>
       )}
@@ -1312,7 +1312,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
       {totalWeekly >= INSIGHT_MIN_MS && rankRows.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <p className="hud-label">Diagnostics — Ranked</p>
+            <p className="hud-label">Ranked Diagnostics</p>
             <TableQuery title="Ranked diagnostics" summary={rankRows.map((r) => `${r.priority}: ${r.signal} ${r.current}`).join('; ')} />
           </div>
           <RankedInsightTable rows={rankRows} recommendation={recommendation} />
@@ -1336,8 +1336,8 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
           { label: 'Focus Time', value: fmt(weekly.focusedTime), color: '#34d399', sub: `${Math.round(focusPct)}% ratio`, tooltip: `${fmt(weekly.focusedTime)} focused this week` },
           { label: 'Time Lost', value: fmt(weekly.distractedTime), color: weekly.distractedTime > 7 * 3600000 ? '#f87171' : '#fbbf24', sub: `${Math.round(100 - focusPct)}% ratio`, tooltip: `${fmt(weekly.distractedTime)} on distractions` },
           { label: 'Avg Score', value: `${weeklyAvgScore}%`, color: weeklyAvgScore >= 70 ? '#34d399' : weeklyAvgScore >= 40 ? '#fbbf24' : '#f87171', sub: `${dayRows.length} days`, tooltip: `Average daily focus score` },
-          { label: 'Longest Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '—', color: '#34d399', sub: 'unbroken focus', tooltip: `Longest unbroken focus streak` },
-          { label: 'Avg Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '—', color: '#6366f1', sub: `${streaks.count} streaks`, tooltip: `Average streak length` },
+          { label: 'Longest Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '-', color: '#34d399', sub: 'unbroken focus', tooltip: `Longest unbroken focus streak` },
+          { label: 'Avg Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '-', color: '#6366f1', sub: `${streaks.count} streaks`, tooltip: `Average streak length` },
           { label: 'Blocked', value: String(weekly.blockEvents), color: '#6366f1', sub: 'this week', tooltip: `${weekly.blockEvents} total block events` },
         ].map((chip, i) => kpiChip(chip, i, 330))}
       </div>
@@ -1387,8 +1387,8 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
           <div className="space-y-2">
             {[
               { label: 'Distraction Debt', value: fmt(distractDebtMs), sub: 'lost this week', detail: avgDailyWastedMs > 0 ? `~${fmt(avgDailyWastedMs)}/day avg` : null, color: '#f87171' },
-              { label: 'Switch Cost', value: recentSessions.length > 0 ? fmt(recentSessions.length * 23 * 60000) : '—', sub: 'recovery overhead', detail: `${recentSessions.length} switches × 23m`, color: '#fbbf24' },
-              { label: 'Reclaim Potential', value: topDistractor ? fmt(topDistractor.totalTime) : '—', sub: topDistractor ? `block ${topDistractor.app}` : 'no distractors', detail: topDistractor ? `${topDistractor.pctOfTime}% of time` : null, color: '#34d399' },
+              { label: 'Switch Cost', value: recentSessions.length > 0 ? fmt(recentSessions.length * 23 * 60000) : '-', sub: 'recovery overhead', detail: `${recentSessions.length} switches × 23m`, color: '#fbbf24' },
+              { label: 'Reclaim Potential', value: topDistractor ? fmt(topDistractor.totalTime) : '-', sub: topDistractor ? `block ${topDistractor.app}` : 'no distractors', detail: topDistractor ? `${topDistractor.pctOfTime}% of time` : null, color: '#34d399' },
             ].map((card) => (
               <div key={card.label} className="section-panel flex animate-entry"
                 style={{ borderLeft: `2px solid ${card.color}`, animationFillMode: 'both', opacity: 0 }}>
@@ -1547,7 +1547,7 @@ function AppTable({ rows, toggleSort, SortIcon }: { // eslint-disable-line
 
 function DailyTable({ rows }: { rows: DayRow[] }): React.ReactElement {
   const { colors } = useTheme()
-  if (rows.length === 0) return <EmptyState text="No daily data yet — sessions accumulate here over time." />
+  if (rows.length === 0) return <EmptyState text="No daily data yet. Sessions accumulate here over time." />
   const totals = rows.reduce((acc, r) => ({
     focused: acc.focused + r.focused, distracted: acc.distracted + r.distracted,
     tracked: acc.tracked + r.tracked, sessions: acc.sessions + r.sessions,
@@ -1574,12 +1574,12 @@ function DailyTable({ rows }: { rows: DayRow[] }): React.ReactElement {
                   {isToday && <span className="ml-1 text-[8px] px-1 py-0.5" style={{ background: 'rgba(99,102,241,0.12)', color: '#6366f1', fontFamily: '"Share Tech Mono", monospace' }}>today</span>}
                 </td>
                 <td className="px-2.5 py-1.5 text-[10px] font-mono tabular-nums" style={{ color: 'rgba(99,102,241,0.3)' }}>{row.date}</td>
-                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.tracked > 0 ? fmt(row.tracked) : '—'}</td>
-                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.focused > 0 ? '#34d399' : '#4a6280' }}>{row.focused > 0 ? fmt(row.focused) : '—'}</td>
-                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.distracted > 3600000 ? '#f87171' : row.distracted > 0 ? '#fbbf24' : '#4a6280' }}>{row.distracted > 0 ? fmt(row.distracted) : '—'}</td>
+                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.tracked > 0 ? fmt(row.tracked) : '-'}</td>
+                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.focused > 0 ? '#34d399' : '#4a6280' }}>{row.focused > 0 ? fmt(row.focused) : '-'}</td>
+                <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.distracted > 3600000 ? '#f87171' : row.distracted > 0 ? '#fbbf24' : '#4a6280' }}>{row.distracted > 0 ? fmt(row.distracted) : '-'}</td>
                 <td className="px-2.5 py-1.5">
                   <span className="text-[10px] tabular-nums" style={{ color: row.distractRate > 50 ? '#f87171' : row.distractRate > 25 ? '#fbbf24' : '#34d399' }}>
-                    {row.tracked > 0 ? `${row.distractRate}%` : '—'}
+                    {row.tracked > 0 ? `${row.distractRate}%` : '-'}
                   </span>
                 </td>
                 <td className="px-2.5 py-1.5">
@@ -1602,7 +1602,7 @@ function DailyTable({ rows }: { rows: DayRow[] }): React.ReactElement {
             <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#34d399' }}>{fmt(totals.focused)}</td>
             <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: '#f87171' }}>{fmt(totals.distracted)}</td>
             <td className="px-2.5 py-1.5 text-[10px]" style={{ color: totals.tracked > 0 && (totals.distracted / totals.tracked) > 0.5 ? '#f87171' : '#fbbf24' }}>
-              {totals.tracked > 0 ? `${Math.round((totals.distracted / totals.tracked) * 100)}%` : '—'}
+              {totals.tracked > 0 ? `${Math.round((totals.distracted / totals.tracked) * 100)}%` : '-'}
             </td>
             <td colSpan={3} />
           </tr>
@@ -1630,10 +1630,10 @@ function PatternsTab({ hourRows, streaks, sessions }: {
     <div className="space-y-3">
       <div className="grid grid-cols-4 gap-2">
         {[
-          { label: 'Longest Focus Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '—', icon: <TrendingUp size={12} style={{ color: '#34d399' }} />, color: '#34d399' },
+          { label: 'Longest Focus Run', value: streaks.longest > 0 ? fmt(streaks.longest) : '-', icon: <TrendingUp size={12} style={{ color: '#34d399' }} />, color: '#34d399' },
           { label: 'Current Streak', value: streaks.current > 0 ? fmt(streaks.current) : 'None', icon: <Zap size={12} style={{ color: '#34d399' }} />, color: streaks.current > 0 ? '#34d399' : 'rgba(99,102,241,0.25)' },
-          { label: 'Avg Focus Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '—', icon: <Clock size={12} style={{ color: 'rgba(99,102,241,0.5)' }} />, color: '#6366f1' },
-          { label: 'Peak Focus Hour', value: peakFocusHour ? fmtHour(peakFocusHour.hour) : '—', icon: <TrendingUp size={12} style={{ color: '#6366f1' }} />, color: '#6366f1' },
+          { label: 'Avg Focus Run', value: streaks.avgLen > 0 ? fmt(streaks.avgLen) : '-', icon: <Clock size={12} style={{ color: 'rgba(99,102,241,0.5)' }} />, color: '#6366f1' },
+          { label: 'Peak Focus Hour', value: peakFocusHour ? fmtHour(peakFocusHour.hour) : '-', icon: <TrendingUp size={12} style={{ color: '#6366f1' }} />, color: '#6366f1' },
         ].map((s) => (
           <div key={s.label} className="hud-panel p-3">
             <div className="flex items-center gap-1.5 mb-1">{s.icon}<p className="hud-label">{s.label}</p></div>
@@ -1645,7 +1645,7 @@ function PatternsTab({ hourRows, streaks, sessions }: {
       {hourRows.length >= 2 && (
         <div className="section-panel p-3">
           <div className="flex items-center justify-between mb-2">
-            <p className="hud-label">Hourly Focus Score — Today</p>
+            <p className="hud-label">Hourly Focus Score Today</p>
             {peakDistractHour && (
               <span className="text-[9px]" style={{ color: 'rgba(99,102,241,0.45)' }}>
                 Peak distraction: <span style={{ color: '#f87171' }}>{fmtHour(peakDistractHour.hour)}</span>
@@ -1687,7 +1687,7 @@ function PatternsTab({ hourRows, streaks, sessions }: {
 
       {topDistractors.length > 0 && (
         <div>
-          <p className="hud-label mb-1.5">Top Distraction Vectors — This Week</p>
+          <p className="hud-label mb-1.5">Top Distraction Vectors This Week</p>
           <div className="section-panel overflow-hidden">
             <table className="hud-table">
               <thead><tr><Th>App</Th><Th>Time Lost</Th><Th>Share of Distractions</Th><Th>Impact</Th></tr></thead>
@@ -1725,7 +1725,7 @@ function PatternsTab({ hourRows, streaks, sessions }: {
 
       {hourRows.length > 0 && (
         <div>
-          <p className="hud-label mb-1.5">Hourly Breakdown — Today</p>
+          <p className="hud-label mb-1.5">Hourly Breakdown Today</p>
           <div className="section-panel overflow-hidden">
             <table className="hud-table">
               <thead>
@@ -1735,8 +1735,8 @@ function PatternsTab({ hourRows, streaks, sessions }: {
                 {hourRows.map((row, i) => (
                   <tr key={row.hour} style={{ background: i % 2 === 0 ? colors.rowEven : colors.rowOdd }}>
                     <td className="px-2.5 py-1.5 font-mono text-[11px] whitespace-nowrap" style={{ color: colors.textPrimary }}>{fmtHour(row.hour)}</td>
-                    <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.focused > 0 ? '#34d399' : '#4a6280' }}>{row.focused > 0 ? fmt(row.focused) : '—'}</td>
-                    <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.distracted > 0 ? '#f87171' : '#4a6280' }}>{row.distracted > 0 ? fmt(row.distracted) : '—'}</td>
+                    <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.focused > 0 ? '#34d399' : '#4a6280' }}>{row.focused > 0 ? fmt(row.focused) : '-'}</td>
+                    <td className="px-2.5 py-1.5 font-mono tabular-nums text-[10px]" style={{ color: row.distracted > 0 ? '#f87171' : '#4a6280' }}>{row.distracted > 0 ? fmt(row.distracted) : '-'}</td>
                     <td className="px-2.5 py-1.5">
                       {row.ratio >= 0 ? (
                         <div className="flex items-center gap-1.5">
@@ -1745,7 +1745,7 @@ function PatternsTab({ hourRows, streaks, sessions }: {
                           </div>
                           <span className="text-[10px] tabular-nums" style={{ color: row.ratio >= 70 ? '#34d399' : row.ratio >= 40 ? '#fbbf24' : '#f87171' }}>{row.ratio}%</span>
                         </div>
-                      ) : <span style={{ color: 'rgba(99,102,241,0.2)' }}>—</span>}
+                      ) : <span style={{ color: 'rgba(99,102,241,0.2)' }}>-</span>}
                     </td>
                     <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.6)' }}>{row.sessions}</td>
                     <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: row.switchRate > 20 ? '#f87171' : row.switchRate > 10 ? '#fbbf24' : '#34d399' }}>{row.switchRate}</td>
@@ -1781,7 +1781,7 @@ function AlertsTable({ alerts, onDismiss }: { alerts: HeuristicAlert[]; onDismis
                   <span className="text-[8px] px-1.5 py-0.5 rounded font-bold" style={{ background: sev.bg, color: sev.text }}>{sev.label}</span>
                 </td>
                 <td className="px-2.5 py-1.5 text-[10px] max-w-[200px] leading-tight" style={{ color: 'rgba(180,210,235,0.6)' }}>{alert.description}</td>
-                <td className="px-2.5 py-1.5 text-[9px] truncate max-w-[80px]" style={{ color: 'rgba(99,102,241,0.45)' }}>{alert.app ?? '—'}</td>
+                <td className="px-2.5 py-1.5 text-[9px] truncate max-w-[80px]" style={{ color: 'rgba(99,102,241,0.45)' }}>{alert.app ?? '-'}</td>
                 <td className="px-2.5 py-1.5">
                   {alert.dismissed
                     ? <span className="text-[9px]" style={{ color: 'rgba(99,102,241,0.2)' }}>dismissed</span>
@@ -1922,7 +1922,7 @@ function WebsitesTab({ domains, sessions }: { domains: DomainRow[]; sessions: Ac
                   </div>
                 </td>
                 <td className="px-2.5 py-1.5 tabular-nums text-[10px]" style={{ color: 'rgba(180,210,235,0.5)' }}>
-                  {row.visits > 0 ? row.visits : '—'}
+                  {row.visits > 0 ? row.visits : '-'}
                 </td>
               </tr>
             )
@@ -1940,13 +1940,13 @@ function RelapseTracker({ relapses, idlePeriods }: { relapses: Relapse[]; idlePe
       <div className="section-panel p-3">
         <div className="flex items-center gap-1.5 mb-2.5">
           <AlertTriangle size={10} style={{ color: relapses.length > 0 ? '#fbbf24' : '#34d399', flexShrink: 0 }} />
-          <p className="hud-label">Relapse Events — Today</p>
+          <p className="hud-label">Relapse Events Today</p>
           <span className="ml-auto text-[10px] font-bold data-value" style={{ color: relapses.length > 3 ? '#f87171' : relapses.length > 0 ? '#fbbf24' : '#34d399' }}>
             {relapses.length}
           </span>
         </div>
         {relapses.length === 0 ? (
-          <p className="text-[9px]" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>No relapses today — discipline holding.</p>
+          <p className="text-[9px]" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>No relapses today. Discipline holding.</p>
         ) : (
           <div className="space-y-1 max-h-28 overflow-y-auto">
             {[...relapses].reverse().slice(0, 6).map((r, i) => (
@@ -1963,7 +1963,7 @@ function RelapseTracker({ relapses, idlePeriods }: { relapses: Relapse[]; idlePe
       <div className="section-panel p-3">
         <div className="flex items-center gap-1.5 mb-2.5">
           <Clock size={10} style={{ color: 'rgba(99,102,241,0.5)', flexShrink: 0 }} />
-          <p className="hud-label">Idle Gaps — Today</p>
+          <p className="hud-label">Idle Gaps Today</p>
           <span className="ml-auto text-[9px] font-mono" style={{ color: 'rgba(99,102,241,0.45)' }}>
             {idlePeriods.length} gap{idlePeriods.length !== 1 ? 's' : ''}
           </span>
@@ -2039,7 +2039,7 @@ function CustomAnalyticsSection(): React.ReactElement {
     try {
       const res = await api.buildAnalyticsCard(q)
       if (res.ok) { setDesc(''); loadCards(); api.getTimesheet(31).then((r) => setSessions(r.sessions ?? [])).catch(() => {}) }
-      else setError(res.error === 'PAYWALL' ? 'Free AI used up — add your key in Settings.' : (res.error || 'Could not build that. Try rephrasing.'))
+      else setError(res.error === 'PAYWALL' ? 'Free AI used up. Add your key in Settings.' : (res.error || 'Could not build that. Try rephrasing.'))
     } catch { setError('Could not build that. Try rephrasing.') }
     setBuilding(false)
   }
@@ -2156,7 +2156,7 @@ function CustomCard(
                 <tr key={r.label}>
                   <td className="text-[11px] py-1 pr-2 capitalize truncate" style={{ color: colors.textSecondary, maxWidth: 120 }}>{r.label}</td>
                   <td className="text-[11px] py-1 px-2 text-right data-value" style={{ color: colors.textPrimary }}>{cardUnitFmt(r.value, res.unit)}</td>
-                  <td className="text-[10px] py-1 pl-2 text-right" style={{ color: colors.textMuted }}>{r.detail ?? '—'}</td>
+                  <td className="text-[10px] py-1 pl-2 text-right" style={{ color: colors.textMuted }}>{r.detail ?? '-'}</td>
                 </tr>
               ))}
             </tbody>
