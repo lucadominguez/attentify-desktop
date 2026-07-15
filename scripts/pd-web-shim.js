@@ -103,6 +103,29 @@
 
   var recent = todaySessions.concat(buildWeek());
 
+  // Fine-grained raw window-change events (like the real tracker emits every 15–60s) so
+  // the Activity page can demonstrate merging consecutive events into one session.
+  function activitySessions() {
+    function ev(id, app, title, url, startMin, durSec, dist) {
+      var st = now - startMin * MIN;
+      return { id: id, app: app, title: title, url: url, category: 'browser', startTime: st, endTime: st + durSec * 1000, duration: durSec * 1000, isDistraction: !!dist };
+    }
+    var burst = [
+      // A Firefox research burst — six page changes within a few minutes → one session.
+      ev('r1', 'firefox', 'searxng/searxng: privacy-respecting metasearch — Mozilla Firefox', 'https://github.com/searxng/searxng', 22, 39, false),
+      ev('r2', 'firefox', 'self-hosted web search — Google Search — Mozilla Firefox', 'https://www.google.com/search?q=self-hosted+web+search', 21.3, 36, false),
+      ev('r3', 'firefox', 'Administration API — SearXNG Documentation — Mozilla Firefox', 'https://docs.searxng.org/admin/index.html', 20.6, 57, false),
+      ev('r4', 'firefox', 'Hermes: a fast search backend — Mozilla Firefox', 'https://hermes.dev/docs', 19.6, 44, false),
+      ev('r5', 'firefox', 'Reverse proxy config — SearXNG — Mozilla Firefox', 'https://docs.searxng.org/admin/installation-nginx.html', 18.8, 31, false),
+      ev('r6', 'firefox', 'searxng/searxng: Discussions — Mozilla Firefox', 'https://github.com/searxng/searxng/discussions', 18.2, 28, false),
+      // A Windows Terminal burst → one terminal session.
+      ev('t1', 'windowsterminal', '~/hermesagent — pwsh', undefined, 17.5, 27, false),
+      ev('t2', 'windowsterminal', '~/hermesagent — npm run build — pwsh', undefined, 17, 41, false),
+      ev('t3', 'windowsterminal', '~/hermesagent — git status — pwsh', undefined, 16.2, 22, false),
+    ].map(function (e) { e.category = e.app === 'windowsterminal' ? 'development' : 'browser'; return e; });
+    return burst.concat(recent);
+  }
+
   // Behavioural patterns (clean, work-context) — power the Logic page + Analytics.
   var alerts = [
     { id: 'h1', type: 'doom-loop', severity: 'high', title: 'Doom-loop on Reddit', description: 'You cycled Reddit → X → Reddit six times in 40 minutes this afternoon, each visit a little longer than the last.', detectedAt: now - 95 * MIN, app: 'chrome', dismissed: false, switchRate: 0 },
@@ -267,6 +290,20 @@
     },
     removeProcess: function (name) { store.blocklist.processes = store.blocklist.processes.filter(function (p) { return p.name !== name; }); return Promise.resolve(); },
     getElevationCheck: function () { return Promise.resolve({ elevated: true, writable: true }); },
+    runCompatCheck: function () {
+      return Promise.resolve({
+        overall: 'ok',
+        checkedAt: Date.now(),
+        checks: [
+          { id: 'os', label: 'Operating system', status: 'ok', detail: 'Windows 11 (build 26100)' },
+          { id: 'arch', label: 'Architecture', status: 'ok', detail: 'x64 (native)' },
+          { id: 'elevation', label: 'Administrator rights', status: 'ok', detail: 'Elevated — blocks are enforced' },
+          { id: 'hosts', label: 'Hosts file', status: 'ok', detail: 'Writable — domain blocking works' },
+          { id: 'tracking', label: 'Activity tracking', status: 'ok', detail: 'PowerShell FullLanguage — foreground window readable' },
+          { id: 'dataDir', label: 'Data folder', status: 'ok', detail: 'C:\\ProgramData\\Attentify' }
+        ]
+      });
+    },
 
     startSession: function (mode, durationMs) {
       var s = { id: 'sess-' + Date.now(), startedAt: Date.now(), endsAt: durationMs ? Date.now() + durationMs : undefined, mode: mode, active: true };
@@ -379,6 +416,26 @@
     ]); },
     disableStartupItem: function () { return Promise.resolve({ ok: true }); },
     getAppVersion: function () { return Promise.resolve('1.1.0'); },
+    getActivity: function () {
+      return Promise.resolve({
+        rangeDays: 14,
+        searches: [
+          { ts: now - 12 * MIN, query: 'rust async trait object safety', url: 'https://www.google.com/search?q=rust+async+trait+object+safety' },
+          { ts: now - 55 * MIN, query: 'tokio select vs join', url: 'https://www.google.com/search?q=tokio+select+vs+join' },
+          { ts: now - 3 * HOUR, query: 'postgres index only scan', url: 'https://www.google.com/search?q=postgres+index+only+scan' },
+          { ts: now - 26 * HOUR, query: 'sourdough hydration ratio', url: 'https://www.google.com/search?q=sourdough+hydration+ratio' },
+          { ts: now - 30 * HOUR, query: 'best mechanical keyboard 2026', url: 'https://www.google.com/search?q=best+mechanical+keyboard+2026' },
+        ],
+        visits: [
+          { ts: now - 8 * MIN, url: 'https://docs.rs/tokio', title: 'tokio - Rust' },
+          { ts: now - 40 * MIN, url: 'https://reddit.com/r/rust', title: 'r/rust' },
+          { ts: now - 70 * MIN, url: 'https://news.ycombinator.com', title: 'Hacker News' },
+          { ts: now - 150 * MIN, url: 'https://x.com/home', title: 'X / Home' },
+          { ts: now - 20 * HOUR, url: 'https://youtube.com/watch?v=t1', title: 'How Tokio schedules tasks - YouTube' },
+        ],
+        sessions: activitySessions(),
+      });
+    },
     overlayReady: function () {}, overlayShown: function () {},
 
     getApiKeyStatus: function () { return Promise.resolve({ hasKey: hasKey }); },
@@ -396,6 +453,32 @@
     },
     clearCloudLicense: function () { store.cloudLicense = undefined; store.cloudActive = false; store.cloudTier = undefined; store.cloudEmail = undefined; emit('usage:changed', usage()); return Promise.resolve(cloud()); },
     cloudCheckout: function () { return Promise.resolve({ url: 'https://attentify.ai/#pricing' }); },
+
+    // Account auth (demo): in-memory sign in / create account.
+    getAuth: function () { return Promise.resolve({ signedIn: !!store.authEmail, email: store.authEmail || null, tier: store.authEmail ? (store.cloudActive ? 'cloud' : 'free') : null, subscribed: !!store.cloudActive }); },
+    signUp: function (email, password) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ''))) return Promise.resolve({ ok: false, error: 'Enter a valid email address.' });
+      if (String(password || '').length < 8) return Promise.resolve({ ok: false, error: 'Password must be at least 8 characters.' });
+      store.authEmail = String(email).toLowerCase(); store.cloudEmail = store.authEmail;
+      return Promise.resolve({ ok: true, auth: { signedIn: true, email: store.authEmail, tier: 'free', subscribed: false } });
+    },
+    signIn: function (email, password) {
+      if (!email || !password) return Promise.resolve({ ok: false, error: 'Enter your email and password.' });
+      store.authEmail = String(email).toLowerCase(); store.cloudEmail = store.authEmail;
+      return Promise.resolve({ ok: true, auth: { signedIn: true, email: store.authEmail, tier: store.cloudActive ? 'cloud' : 'free', subscribed: !!store.cloudActive } });
+    },
+    signOut: function () { store.authEmail = undefined; return Promise.resolve({ ok: true, auth: { signedIn: false, email: null, tier: null, subscribed: false } }); },
+    getAuthProviders: function () { return Promise.resolve(['google', 'microsoft', 'facebook', 'github']); },
+    signInWithProvider: function (provider) {
+      store.authEmail = 'you@' + String(provider || 'demo') + '.com'; store.cloudEmail = store.authEmail;
+      return Promise.resolve({ ok: true, auth: { signedIn: true, email: store.authEmail, tier: store.cloudActive ? 'cloud' : 'free', subscribed: !!store.cloudActive } });
+    },
+
+    // Auto-update (demo): in the real installed app electron-updater drives this.
+    getUpdateStatus: function () { return Promise.resolve({ state: 'dev' }); },
+    checkForUpdate: function () { return Promise.resolve({ state: 'none' }); },
+    installUpdate: function () { return Promise.resolve({ ok: true }); },
+    onUpdateStatus: function () { return function () {}; },
     openExternal: function (url) { try { window.open(url, '_blank', 'noopener'); } catch (e) { } return Promise.resolve({ ok: true }); },
 
     // event subscriptions (return an unsubscribe fn)

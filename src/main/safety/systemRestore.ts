@@ -35,7 +35,7 @@ export function revertAllChanges(): RevertResult {
   step('Restored browser DNS settings', () => { removeBrowserPolicies() })
 
   // 4. Login startup entry (Windows scheduled task / macOS LaunchAgent).
-  step('Removed the login startup entry', () => { unregisterStartupDaemon() })
+  step('Removed the login startup entry', () => { void unregisterStartupDaemon() })
 
   // 5. Flush the DNS cache so unblocked sites resolve immediately.
   step('Flushed the DNS cache', () => { flushDnsCache() })

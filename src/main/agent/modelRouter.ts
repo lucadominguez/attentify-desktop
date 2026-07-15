@@ -40,17 +40,16 @@ export function isCacheable(model: string): boolean {
 // adds no tokens. Conservative: default to cheap; only escalate on clear signals of an
 // open-ended, reasoning-heavy, or nuanced request.
 
-const SIMPLE_CMD = /^(block|unblock|hide|show|allow|start|stop|end|pause|resume|mute|snooze|skip|schedule|add|remove|delete|clear|list|enable|disable|turn (on|off)|set|open|go to)\b/i
-
-const COMPLEX = /\b(why|how (do|can|should|would|might)|should i|figure out|analy[sz]e|advice|help me (understand|figure|decide|plan|work|get)|make a plan|strateg|struggl|keep (getting|being|ending up|going|coming)|explain|compare|trade-?off|recommend|what.?s the best|design|debug|troubleshoot|understand|make sense of|overwhelm|procrastinat|motivat|feel like|burn(ing|t) out|can'?t focus|distracted (all|every)|what should i)\b/i
+// DEFAULT IS CHEAP (DeepSeek). Only genuinely deep / open-ended / planning / emotional
+// asks — the small slice where a frontier model's quality actually matters — escalate.
+// Deliberately narrow so the overwhelming majority of turns run on DeepSeek.
+const DEEP = /\b(figure out why|help me (figure|understand why|decide|plan|work out)|make (me )?a plan|come up with (a )?(plan|strateg|approach)|strateg(y|ise|ize)|analy[sz]e (my|the|why|how)|why (do|am|does|is|can'?t) (i|it|this|my)|(i(?:'m| am) )?(struggl|overwhelm|burn(t|ing) out|stuck|lost|anxious|depressed)|can'?t (focus|concentrate|stop|seem to)|think (this |it )?through|weigh (the |my )?(options|pros)|what should i do about|advice (on|about)|help me get (my|back)|root cause|why does the app|doesn'?t (make sense|understand))\b/i
 
 export function chatTier(userText: string, opts: { hasImages?: boolean } = {}): Tier {
-  if (opts.hasImages) return 'premium'                 // vision + reasoning
+  if (opts.hasImages) return 'premium'   // vision — needs a capable multimodal model
   const t = (userText || '').trim()
   if (!t) return 'cheap'
-  if (COMPLEX.test(t)) return 'premium'                // open-ended / advice / analysis
-  if (t.length > 240) return 'premium'                 // long → likely nuanced
-  if ((t.match(/\?/g) || []).length >= 2) return 'premium' // multiple questions
-  if (SIMPLE_CMD.test(t) && t.length < 160) return 'cheap' // clear imperative
-  return 'cheap'                                        // most tasks → cheap
+  if (t.length > 600) return 'premium'   // unusually long → likely genuinely complex
+  if (DEEP.test(t)) return 'premium'     // deep reasoning / advice / planning / emotional
+  return 'cheap'                         // everything else → DeepSeek (the vast majority)
 }

@@ -3,6 +3,7 @@ import { platform } from 'process'
 import { EventEmitter } from 'events'
 import { randomUUID } from 'crypto'
 import type { ActivitySession, AppCategory } from '../../shared/types'
+import { detectPrivacyMode } from '../../shared/privacyMode'
 
 // Top desktop browsers (process/executable names, lowercased, no .exe). Covers the
 // 15 most-used plus common forks so foreground-window tracking works everywhere —
@@ -245,6 +246,7 @@ done
     const duration = snap.timestamp - this.current.timestamp
     if (duration >= 3000) {
       const category = categorize(this.current.process, this.current.title)
+      const privacy = detectPrivacyMode(this.current.process, this.current.title)
       const session: ActivitySession = {
         id: randomUUID(),
         app: this.current.process,
@@ -254,6 +256,7 @@ done
         endTime: snap.timestamp,
         duration,
         isDistraction: isDistraction(category, this.current.process, this.current.title),
+        ...(privacy ? { privacy } : {}),
       }
       this.sessions.push(session)
       if (this.sessions.length > 5000) this.sessions = this.sessions.slice(-5000)

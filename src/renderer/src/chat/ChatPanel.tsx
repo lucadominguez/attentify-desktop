@@ -173,6 +173,14 @@ function renderInline(text: string): React.ReactNode {
   )
 }
 
+// Memoized message body: renderMarkdown is a pure function of `content`, so wrapping it
+// in React.memo means only the message whose content changed (i.e. the one currently
+// streaming) re-parses its markdown. Without this, every streaming update re-parsed
+// EVERY message in the conversation — a major cause of the "freeze while thinking".
+const MessageBody = React.memo(function MessageBody({ content, clean }: { content: string; clean: boolean }): React.ReactElement {
+  return <>{renderMarkdown(clean ? cleanForDisplay(content) : content)}</>
+})
+
 // ── ChatPanel ─────────────────────────────────────────────────────────────────
 
 export default function ChatPanel({ onClose, onRefresh, initialMessage = '', variant = 'panel' }: ChatPanelProps): React.ReactElement {
@@ -342,6 +350,9 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
       setActiveToolName(null)
       const isPaywall = err === 'PAYWALL'
       if (isPaywall) setPaywalled(true)
+      // The main process rejects chat:start when signed out; say so in the thread rather
+      // than surfacing a raw error string.
+      const isAuth = err === 'AUTH_REQUIRED'
       setMessages((prev) => [
         ...prev.filter((m) => !m.streaming),
         {
@@ -349,7 +360,9 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
           role: 'assistant',
           content: isPaywall
             ? "You've used up your **$1 of free AI**. Subscribe to **Attentify Cloud** for **$5/month** to keep using the assistant — or add your own OpenRouter key in Settings (never metered)."
-            : `Error: ${err}`,
+            : isAuth
+              ? 'Sign in to use the assistant — open the account button at the bottom of the sidebar.'
+              : `Error: ${err}`,
           timestamp: Date.now(),
         },
       ])
@@ -589,7 +602,10 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
                   ))}
                 </div>
               ) : (
-                renderMarkdown(msg.role === 'assistant' ? cleanForDisplay(msg.content) : msg.content)
+                // The streaming message already arrives sanitized from main, so skip the
+                // per-chunk regex pass while it types. Memoized so only the changed
+                // message re-renders.
+                <MessageBody content={msg.content} clean={msg.role === 'assistant' && !msg.streaming} />
               )}
               {msg.streaming && msg.content !== '' && (
                 <span className="inline-block w-1.5 h-3 ml-0.5 rounded-sm animate-pulse" style={{ background: colors.textMuted, verticalAlign: 'text-bottom' }} />

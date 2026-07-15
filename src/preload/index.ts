@@ -25,6 +25,8 @@ const api = {
     ipcRenderer.invoke('blocking:remove-process', name),
   getElevationCheck: (): Promise<{ elevated: boolean; writable: boolean }> =>
     ipcRenderer.invoke('blocking:elevation-status'),
+  runCompatCheck: (): Promise<import('../shared/types').CompatReport> =>
+    ipcRenderer.invoke('compat:check'),
 
   startSession: (mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]): Promise<FocusSession> =>
     ipcRenderer.invoke('session:start', mode, durationMs, allowlist),
@@ -74,6 +76,22 @@ const api = {
   setCloudLicense: (license: string): Promise<CloudState> => ipcRenderer.invoke('cloud:set-license', license),
   clearCloudLicense: (): Promise<CloudState> => ipcRenderer.invoke('cloud:clear-license'),
   cloudCheckout: (email?: string): Promise<{ url?: string; error?: string }> => ipcRenderer.invoke('cloud:checkout', email),
+  // Account authentication
+  getAuth: (): Promise<import('../shared/types').AuthState> => ipcRenderer.invoke('auth:get'),
+  signUp: (email: string, password: string): Promise<import('../shared/types').AuthResult> => ipcRenderer.invoke('auth:signup', { email, password }),
+  signIn: (email: string, password: string): Promise<import('../shared/types').AuthResult> => ipcRenderer.invoke('auth:login', { email, password }),
+  signOut: (): Promise<{ ok: boolean; auth: import('../shared/types').AuthState }> => ipcRenderer.invoke('auth:logout'),
+  getAuthProviders: (): Promise<import('../shared/types').AuthProvider[]> => ipcRenderer.invoke('auth:providers'),
+  signInWithProvider: (provider: import('../shared/types').AuthProvider): Promise<import('../shared/types').AuthResult> => ipcRenderer.invoke('auth:oauth', provider),
+  // Auto-update
+  getUpdateStatus: (): Promise<import('../shared/types').UpdateStatus> => ipcRenderer.invoke('update:status'),
+  checkForUpdate: (): Promise<import('../shared/types').UpdateStatus> => ipcRenderer.invoke('update:check'),
+  installUpdate: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('update:install'),
+  onUpdateStatus: (cb: (s: import('../shared/types').UpdateStatus) => void): (() => void) => {
+    const handler = (_e: unknown, s: import('../shared/types').UpdateStatus): void => cb(s)
+    ipcRenderer.on('update:status', handler)
+    return () => ipcRenderer.off('update:status', handler)
+  },
   openExternal: (url: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('shell:open-external', url),
 
   // ── Goals ────────────────────────────────────────────────────────────────
@@ -104,8 +122,7 @@ const api = {
   // Build a custom analytics card directly from a description (no chat UI)
   buildAnalyticsCard: (description: string): Promise<{ ok: boolean; error?: string; summary?: string }> => ipcRenderer.invoke('analytics:build-card', description),
 
-  // Logic page — preferences + user-provided context
-  getPreferences: (): Promise<{ key: string; value: string; scope: string; confidence: number; source: string }[]> => ipcRenderer.invoke('preferences:get'),
+  // Logic page — user-provided context (getPreferences is defined above)
   getUserContext: (): Promise<import('../shared/types').UserContextNote[]> => ipcRenderer.invoke('context:list'),
   addUserContext: (text: string): Promise<{ ok: boolean; error?: string; note?: import('../shared/types').UserContextNote }> => ipcRenderer.invoke('context:add', text),
   deleteUserContext: (id: string): Promise<{ ok: boolean }> => ipcRenderer.invoke('context:delete', id),
@@ -116,6 +133,19 @@ const api = {
 
   // Startup (auto-run) management
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  reportBug: (input: { title?: string; description?: string; view?: string; severity?: string }): Promise<{ ok: boolean; id: string }> => ipcRenderer.invoke('issue:report', input),
+  getIssues: (limit?: number): Promise<unknown[]> => ipcRenderer.invoke('issue:list', limit),
+  onDiagnosticsIncident: (cb: (evt: { id: string; kind: string; title: string }) => void): (() => void) => {
+    const handler = (_e: unknown, evt: { id: string; kind: string; title: string }): void => cb(evt)
+    ipcRenderer.on('diagnostics:incident', handler)
+    return () => ipcRenderer.off('diagnostics:incident', handler)
+  },
+  getActivity: (days?: number): Promise<{
+    rangeDays: number
+    searches: { ts: number; query: string; url?: string }[]
+    visits: { ts: number; url: string; title?: string }[]
+    sessions: ActivitySession[]
+  }> => ipcRenderer.invoke('activity:get', days),
   getStartupItems: (): Promise<import('../shared/types').StartupItem[]> => ipcRenderer.invoke('startup:list'),
   disableStartupItem: (item: import('../shared/types').StartupItem): Promise<{ ok: boolean; error?: string; needsAdmin?: boolean }> => ipcRenderer.invoke('startup:disable', item),
   dismissProactive: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('agent:dismiss-proactive'),

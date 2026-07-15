@@ -219,6 +219,35 @@ CREATE TABLE IF NOT EXISTS checkpoints (
 CREATE INDEX IF NOT EXISTS idx_checkpoints_conv ON checkpoints(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_checkpoints_msg  ON checkpoints(message_id);
 `,
+  '004_diagnostics.sql': `
+-- Issues: manual bug reports, auto-captured crashes/freezes, and AI-detected friction.
+CREATE TABLE IF NOT EXISTS issues (
+  id          TEXT PRIMARY KEY,
+  ts          INTEGER NOT NULL,
+  kind        TEXT NOT NULL,          -- bug_manual | crash | freeze | ai_friction
+  category    TEXT,                   -- e.g. missed-nuance, detection-gap, wrong-action
+  severity    TEXT NOT NULL DEFAULT 'medium',
+  title       TEXT,
+  description TEXT,
+  context     TEXT,                   -- JSON blob (version, view, logs, chat excerpt, os)
+  status      TEXT NOT NULL DEFAULT 'open',
+  uploaded    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_issues_ts ON issues(ts);
+CREATE INDEX IF NOT EXISTS idx_issues_uploaded ON issues(uploaded);
+
+-- Per-model token usage, aggregated by day, for cost visibility in the admin panel.
+CREATE TABLE IF NOT EXISTS usage_stats (
+  day           TEXT NOT NULL,        -- YYYY-MM-DD
+  model         TEXT NOT NULL,
+  input_tokens  INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  cost_usd      REAL NOT NULL DEFAULT 0,
+  calls         INTEGER NOT NULL DEFAULT 0,
+  synced        INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (day, model)
+);
+`,
 }
 
 function runMigrations(db: Database): void {

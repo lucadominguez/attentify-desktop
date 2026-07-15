@@ -6,6 +6,9 @@ import { initIpc, setInterstitialWindow, setMainWindow, startTracking, stopTrack
 import { startDebugServer, setDebugMainWindow } from './debug/DebugServer'
 import { notificationQueue } from './overlay/NotificationQueue'
 import { importBrowserHistory } from './tracking/BrowserHistoryImporter'
+import { reportIssue, uploadPending, startDiagnosticsSync } from './diagnostics/report'
+import { restoreSession } from './auth'
+import { initUpdater, setUpdaterSend } from './updater'
 import { getStore, patchStore } from './store'
 import { openDatabase, closeDatabase } from './data/db'
 import { migrateFromStateJson, purgeOldData, ensureConversations } from './data/repository'
@@ -33,6 +36,24 @@ if (process.platform === 'win32') {
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disable-shader-disk-cache')
 
+// ── Uninstall cleanup ───────────────────────────────────────────────────────────
+// Invoked by the NSIS uninstaller (`ExecWait '… --uninstall-cleanup'`) so that removing
+// Attentify also REVERSES every machine change it made — hosts entries, firewall rules,
+// browser DNS policies and the login startup task — instead of leaving them behind.
+// Runs headless (no window, no single-instance lock) and exits fast, with a hard timeout
+// so a hung child process can never wedge the uninstaller.
+if (process.argv.includes('--uninstall-cleanup')) {
+  const finish = (): void => { try { app.quit() } catch { /* ignore */ } ; process.exit(0) }
+  const killer = setTimeout(finish, 20_000)
+  if (typeof killer.unref === 'function') killer.unref()
+  ;(async () => {
+    try { const { revertAllChanges } = await import('./safety/systemRestore'); revertAllChanges() }
+    catch { /* best-effort — never block the uninstaller */ }
+    clearTimeout(killer)
+    finish()
+  })()
+} else {
+
 const RENDERER_URL = process.env['ELECTRON_RENDERER_URL']
 
 // ── Single-instance guard ─────────────────────────────────────────────────────
@@ -49,12 +70,15 @@ if (!gotSingleInstanceLock) {
   process.exit(0)
 }
 
-// Never let an unhandled rejection/exception silently kill the background service.
+// Never let an unhandled rejection/exception silently kill the background service —
+// and capture it as a diagnostics issue so crashes are logged/reported automatically.
 process.on('unhandledRejection', (reason) => {
   console.error('[main] unhandledRejection:', reason)
+  try { reportIssue({ kind: 'crash', severity: 'high', title: 'Unhandled promise rejection', description: String(reason instanceof Error ? (reason.stack ?? reason.message) : reason).slice(0, 2000) }) } catch { /* ignore */ }
 })
 process.on('uncaughtException', (err) => {
   console.error('[main] uncaughtException:', err)
+  try { reportIssue({ kind: 'crash', severity: 'high', title: `Uncaught exception: ${err.message}`, description: (err.stack ?? String(err)).slice(0, 2000) }) } catch { /* ignore */ }
 })
 
 function getIconPath(): string {
@@ -159,6 +183,23 @@ function createMainWindow(): void {
   mainWin.on('closed', () => {
     mainWin = null
     setMainWindow(null)  // also null out the ipc.ts reference so sendMain() stops firing
+  })
+
+  // ── Auto-capture UI freezes + renderer crashes ──────────────────────────────
+  // 'unresponsive' fires when the window's UI hangs; log it and ask the user to report
+  // (deduped so one hang isn't logged repeatedly).
+  let lastUnresponsive = 0
+  mainWin.on('unresponsive', () => {
+    const now = Date.now()
+    if (now - lastUnresponsive < 30_000) return
+    lastUnresponsive = now
+    try {
+      const issue = reportIssue({ kind: 'freeze', severity: 'high', title: 'App became unresponsive', description: 'The window UI stopped responding.' })
+      mainWin?.webContents.send('diagnostics:incident', { id: issue.id, kind: 'freeze', title: 'Attentify froze' })
+    } catch { /* ignore */ }
+  })
+  mainWin.webContents.on('render-process-gone', (_e, details) => {
+    try { reportIssue({ kind: 'crash', severity: 'high', title: `Renderer crashed (${details.reason})`, description: `exitCode=${details.exitCode}` }) } catch { /* ignore */ }
   })
 }
 
@@ -308,6 +349,32 @@ app.whenReady().then(async () => {
     contentRules: getContentRuleEngine,
   })
 
+  // Diagnostics: sync queued issues + token usage to the backend on a slow cadence.
+  startDiagnosticsSync()
+
+  // Revalidate any signed-in account session in the background (refreshes tier/expiry).
+  void restoreSession()
+
+  // Auto-update: check on launch + periodically, forwarding status to the renderer.
+  setUpdaterSend((channel, payload) => { if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send(channel, payload) })
+  initUpdater()
+
+  // Main-process freeze watchdog: schedule a tick every second; if it fires much later
+  // than expected, the event loop was blocked (a freeze) — capture it once per episode.
+  let watchdogExpected = Date.now() + 1000
+  let lastFreezeLog = 0
+  setInterval(() => {
+    const drift = Date.now() - watchdogExpected
+    watchdogExpected = Date.now() + 1000
+    if (drift > 2500 && Date.now() - lastFreezeLog > 30_000) {
+      lastFreezeLog = Date.now()
+      try {
+        const issue = reportIssue({ kind: 'freeze', severity: 'medium', title: 'Main process stalled', description: `Event loop blocked for ~${Math.round(drift)}ms.`, context: { driftMs: Math.round(drift) } })
+        if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send('diagnostics:incident', { id: issue.id, kind: 'freeze', title: 'Attentify briefly froze' })
+      } catch { /* ignore */ }
+    }
+  }, 1000)
+
   app.on('activate', () => focusMainWindow())
 })
 
@@ -319,8 +386,12 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  // Flush any queued diagnostics (usage + issues) to the backend.
+  void uploadPending()
   // Stop monitoring subprocesses FIRST so they don't fire events during teardown
   stopTracking()
   patchStore({ sessions: getStore().sessions.map((s) => ({ ...s, active: false })) })
   closeDatabase()
 })
+
+} // end of normal-launch branch (see `--uninstall-cleanup` guard above)

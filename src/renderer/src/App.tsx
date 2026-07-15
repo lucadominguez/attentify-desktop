@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useTheme } from './context/ThemeContext'
 import Sidebar from './components/Sidebar'
-import BrandMark from './components/BrandMark'
 import Overview from './views/Overview'
 import DeepClean from './views/DeepClean'
 import DeepFocusMode from './views/DeepFocusMode'
@@ -15,9 +14,11 @@ import SettingsView from './views/Settings'
 import Onboarding from './views/Onboarding'
 import Timesheets from './views/Timesheets'
 import Logic from './views/Logic'
+import Activity from './views/Activity'
 import ChatPanel from './chat/ChatPanel'
+import AuthPanel from './components/AuthPanel'
 import type { ViewName, AppStore, ScanResult, HeuristicAlert } from '@shared/types'
-import { Minus, Square, X, Coffee, Sun, Moon } from 'lucide-react'
+import { Minus, Square, X, Coffee, Download, Lock } from 'lucide-react'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -34,7 +35,7 @@ export default function App(): React.ReactElement {
   const [alwaysOn, setAlwaysOn] = useState(false)
   const [platform, setPlatform] = useState<'windows' | 'mac' | 'linux'>('windows')
 
-  const { colors, theme, toggle: toggleTheme } = useTheme()
+  const { colors } = useTheme()
 
   const handleNavigate = useCallback((v: ViewName) => {
     setView(v)
@@ -107,6 +108,33 @@ export default function App(): React.ReactElement {
     return () => { off?.() }
   }, [handleNavigate])
 
+  // Sign-in state. The app stays browsable signed-out, but the main process rejects every
+  // action channel (see OPEN_CHANNELS in ipc.ts), so the UI has to say why rather than
+  // letting buttons fail silently. Re-checked on window focus so signing in through the
+  // system browser (OAuth) reflects here without a restart.
+  const [auth, setAuth] = useState<import('@shared/types').AuthState | null>(null)
+  const refreshAuth = useCallback(() => {
+    api.getAuth?.().then(setAuth).catch(() => setAuth(null))
+  }, [])
+  useEffect(() => {
+    refreshAuth()
+    window.addEventListener('focus', refreshAuth)
+    return () => window.removeEventListener('focus', refreshAuth)
+  }, [refreshAuth])
+  // null = still loading; don't flash the banner before we know.
+  const signedOut = auth !== null && !auth.signedIn
+  const [authPrompt, setAuthPrompt] = useState(false)
+  // Close the prompt the moment sign-in succeeds.
+  useEffect(() => { if (auth?.signedIn) setAuthPrompt(false) }, [auth?.signedIn])
+
+  // Auto-update status → show a "restart to update" banner when a build is ready.
+  const [update, setUpdate] = useState<import('@shared/types').UpdateStatus>({ state: 'idle' })
+  useEffect(() => {
+    api.getUpdateStatus?.().then(setUpdate).catch(() => {})
+    const off = api.onUpdateStatus?.((s) => setUpdate(s))
+    return () => { off?.() }
+  }, [])
+
   // Load pending inference count on mount and on new suggestions
   useEffect(() => {
     const loadPending = (): void => {
@@ -143,7 +171,8 @@ export default function App(): React.ReactElement {
     switch (view) {
       case 'home': return <ChatPanel key="home-chat" variant="full" onRefresh={refreshStore} initialMessage={chatPreFill} />
       case 'timesheets': return <Timesheets onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
-      case 'logic': return <Logic />
+      case 'logic': return <Logic onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
+      case 'activity': return <Activity onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
 
       case 'focus-shield': return <Overview store={store} onRefresh={refreshStore} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
       case 'deep-clean': return <DeepClean store={store} onChatWith={(msg) => { setChatPreFill(msg); setChatOpen(true) }} />
@@ -225,18 +254,9 @@ export default function App(): React.ReactElement {
           </button>
         </div>
 
-        {/* Center: logo mark + quick theme toggle */}
-        <div className="flex items-center gap-2">
-          <BrandMark size={18} style={{ opacity: 0.9 }} />
-          <button
-            onClick={toggleTheme}
-            className="titlebar-nodrag flex items-center justify-center rounded transition-colors hover:bg-white/5"
-            style={{ width: 22, height: 22, color: colors.textMuted }}
-            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-          >
-            {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
-          </button>
-        </div>
+        {/* Theme, bug report and account used to sit here as a centre cluster; they now
+            live in the sidebar's utility row, which keeps the title bar to window
+            chrome only. */}
 
         {/* Right: Windows / Linux window controls (hidden on macOS, which uses the
             traffic lights on the left). */}
@@ -284,6 +304,43 @@ export default function App(): React.ReactElement {
           className="flex-1 overflow-hidden relative flex flex-col"
           style={{ background: colors.mainBg, transition: 'background 0.2s ease' }}
         >
+          {signedOut && (
+            <div className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
+              style={{ background: 'rgba(251,191,36,0.07)', borderBottom: '1px solid rgba(251,191,36,0.25)' }}>
+              <div className="flex items-center gap-2.5">
+                <Lock size={12} style={{ color: '#fbbf24' }} />
+                <span className="text-[11px]" style={{ color: colors.textSecondary }}>
+                  You&rsquo;re signed out. Look around freely — blocking, focus sessions and the
+                  assistant need an account.
+                </span>
+              </div>
+              <button onClick={() => setAuthPrompt(true)}
+                className="text-[11px] font-medium px-2.5 py-1 rounded-md transition-opacity hover:opacity-90"
+                style={{ background: 'rgba(251,191,36,0.14)', border: '1px solid rgba(251,191,36,0.4)', color: '#fbbf24' }}>
+                Sign in
+              </button>
+            </div>
+          )}
+          {(update.state === 'ready' || update.state === 'downloading') && (
+            <div className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
+              style={{ background: 'rgba(99,102,241,0.06)', borderBottom: '1px solid rgba(99,102,241,0.2)' }}>
+              <div className="flex items-center gap-2.5">
+                <Download size={12} style={{ color: colors.accent }} />
+                <span className="text-[11px]" style={{ color: colors.textSecondary }}>
+                  {update.state === 'ready'
+                    ? <>Update{update.version ? ` ${update.version}` : ''} ready to install.</>
+                    : <>Downloading update{typeof update.percent === 'number' ? ` — ${update.percent}%` : '…'}</>}
+                </span>
+              </div>
+              {update.state === 'ready' && (
+                <button onClick={() => void api.installUpdate?.()}
+                  className="text-[11px] font-medium px-2.5 py-1 rounded-md transition-opacity hover:opacity-90"
+                  style={{ background: colors.accent, color: '#fff' }}>
+                  Restart to update
+                </button>
+              )}
+            </div>
+          )}
           {breakMode && Date.now() < breakMode.endsAt && (
             <div
               className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
@@ -357,7 +414,7 @@ export default function App(): React.ReactElement {
           )}
           {/* key={view} remounts on navigation so each screen fades in — gives a calm,
               consistent sense of moving from one screen to the next. */}
-          <div key={view} className={`flex-1 min-h-0 animate-fade-in ${view === 'home' || view === 'logic' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <div key={view} className={`flex-1 min-h-0 animate-fade-in ${view === 'home' || view === 'logic' || view === 'activity' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
             {renderView()}
           </div>
         </main>
@@ -367,6 +424,32 @@ export default function App(): React.ReactElement {
         )}
       </div>
 
+      {/* Sign-in prompt. Dismissible on purpose: signed-out users are meant to be able to
+          browse, so this asks rather than walls the app off. */}
+      {authPrompt && (
+        <>
+          <div className="fixed inset-0 z-[70]" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setAuthPrompt(false)} />
+          <div className="fixed z-[71] left-1/2 top-1/2" style={{ transform: 'translate(-50%,-50%)', width: 360 }}>
+            <div className="rounded-xl overflow-hidden"
+              style={{ background: colors.panelBg, border: `1px solid ${colors.borderMid}`, boxShadow: '0 20px 60px rgba(0,0,0,0.55)' }}>
+              <div className="flex items-start justify-between px-4 pt-3.5 pb-1">
+                <div>
+                  <p className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>Sign in to Attentify</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+                    Needed to block sites, run focus sessions and use the assistant.
+                  </p>
+                </div>
+                <button onClick={() => setAuthPrompt(false)} className="rounded p-1 hover:bg-white/5" title="Close">
+                  <X size={13} style={{ color: colors.textMuted }} />
+                </button>
+              </div>
+              <div className="p-3 pt-2">
+                <AuthPanel onChange={refreshAuth} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -385,6 +468,7 @@ declare global {
       addProcess: (name: string, expiresInMs?: number) => Promise<void>
       removeProcess: (name: string) => Promise<void>
       getElevationCheck: () => Promise<{ elevated: boolean; writable: boolean }>
+      runCompatCheck: () => Promise<import('@shared/types').CompatReport>
       startSession: (mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]) => Promise<import('@shared/types').FocusSession>
       stopSession: (id: string) => Promise<void>
       sendMessage: (text: string) => Promise<{ reply: string; actions: unknown[] }>
@@ -437,6 +521,15 @@ declare global {
       getCheckpoints: (conversationId?: string) => Promise<{ id: string; message_id?: string; ts: number; label?: string }[]>
       restoreCheckpoint: (id: string) => Promise<{ ok: boolean; error?: string; label?: string }>
       getAppVersion: () => Promise<string>
+      reportBug: (input: { title?: string; description?: string; view?: string; severity?: string }) => Promise<{ ok: boolean; id: string }>
+      getIssues: (limit?: number) => Promise<unknown[]>
+      onDiagnosticsIncident: (cb: (evt: { id: string; kind: string; title: string }) => void) => (() => void)
+      getActivity: (days?: number) => Promise<{
+        rangeDays: number
+        searches: { ts: number; query: string; url?: string }[]
+        visits: { ts: number; url: string; title?: string }[]
+        sessions: import('@shared/types').ActivitySession[]
+      }>
       getStartupItems: () => Promise<import('@shared/types').StartupItem[]>
       disableStartupItem: (item: import('@shared/types').StartupItem) => Promise<{ ok: boolean; error?: string; needsAdmin?: boolean }>
       onChatChunk: (cb: (chunk: string) => void) => (() => void)
@@ -462,6 +555,16 @@ declare global {
       setCloudLicense: (license: string) => Promise<import('@shared/types').CloudState>
       clearCloudLicense: () => Promise<import('@shared/types').CloudState>
       cloudCheckout: (email?: string) => Promise<{ url?: string; error?: string }>
+      getAuth: () => Promise<import('@shared/types').AuthState>
+      signUp: (email: string, password: string) => Promise<import('@shared/types').AuthResult>
+      signIn: (email: string, password: string) => Promise<import('@shared/types').AuthResult>
+      signOut: () => Promise<{ ok: boolean; auth: import('@shared/types').AuthState }>
+      getAuthProviders: () => Promise<import('@shared/types').AuthProvider[]>
+      signInWithProvider: (provider: import('@shared/types').AuthProvider) => Promise<import('@shared/types').AuthResult>
+      getUpdateStatus: () => Promise<import('@shared/types').UpdateStatus>
+      checkForUpdate: () => Promise<import('@shared/types').UpdateStatus>
+      installUpdate: () => Promise<{ ok: boolean }>
+      onUpdateStatus: (cb: (s: import('@shared/types').UpdateStatus) => void) => (() => void)
       openExternal: (url: string) => Promise<{ ok: boolean }>
       minimizeWindow: () => void
       maximizeWindow: () => void

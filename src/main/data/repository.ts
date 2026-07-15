@@ -427,6 +427,104 @@ export function clearAgentMessages(conversationId?: string): void {
   markDirty()
 }
 
+// ── Diagnostics: issues (bugs/crashes/freezes/friction) + model usage ───────────
+
+export interface DbIssue {
+  id: string
+  ts: number
+  kind: 'bug_manual' | 'crash' | 'freeze' | 'ai_friction'
+  category?: string
+  severity?: string
+  title?: string
+  description?: string
+  context?: unknown        // object; stored as JSON
+  status?: string
+  uploaded?: number
+}
+
+export function insertIssue(i: Omit<DbIssue, 'id' | 'ts'> & { id?: string; ts?: number }): DbIssue {
+  const row: DbIssue = {
+    id: i.id ?? randomUUID(),
+    ts: i.ts ?? Date.now(),
+    kind: i.kind,
+    category: i.category,
+    severity: i.severity ?? 'medium',
+    title: i.title,
+    description: i.description,
+    context: i.context,
+    status: i.status ?? 'open',
+    uploaded: 0,
+  }
+  getDb().run(
+    'INSERT INTO issues (id,ts,kind,category,severity,title,description,context,status,uploaded) VALUES (?,?,?,?,?,?,?,?,?,0)',
+    [row.id, row.ts, row.kind, row.category ?? null, row.severity ?? 'medium', row.title ?? null,
+      row.description ?? null, row.context != null ? JSON.stringify(row.context) : null, row.status ?? 'open']
+  )
+  // Keep the local table bounded.
+  getDb().run('DELETE FROM issues WHERE id NOT IN (SELECT id FROM issues ORDER BY ts DESC LIMIT 500)')
+  markDirty()
+  return row
+}
+
+function mapIssue(r: unknown[]): DbIssue {
+  return {
+    id: r[0] as string, ts: r[1] as number, kind: r[2] as DbIssue['kind'],
+    category: r[3] as string | undefined, severity: r[4] as string | undefined,
+    title: r[5] as string | undefined, description: r[6] as string | undefined,
+    context: r[7] ? (() => { try { return JSON.parse(r[7] as string) } catch { return r[7] } })() : undefined,
+    status: r[8] as string | undefined, uploaded: r[9] as number | undefined,
+  }
+}
+
+export function listIssues(limit = 200): DbIssue[] {
+  const rows = getDb().exec('SELECT id,ts,kind,category,severity,title,description,context,status,uploaded FROM issues ORDER BY ts DESC LIMIT ?', [limit])
+  return (rows[0]?.values ?? []).map(mapIssue)
+}
+
+export function getUnuploadedIssues(limit = 50): DbIssue[] {
+  const rows = getDb().exec('SELECT id,ts,kind,category,severity,title,description,context,status,uploaded FROM issues WHERE uploaded = 0 ORDER BY ts ASC LIMIT ?', [limit])
+  return (rows[0]?.values ?? []).map(mapIssue)
+}
+
+export function markIssuesUploaded(ids: string[]): void {
+  if (ids.length === 0) return
+  const db = getDb()
+  for (const id of ids) db.run('UPDATE issues SET uploaded = 1 WHERE id = ?', [id])
+  markDirty()
+}
+
+// Record per-model token usage (aggregated by UTC day). Always called, regardless of
+// whose key paid — this powers the admin panel's token/cost breakdown.
+export function recordModelUsage(model: string, inputTokens: number, outputTokens: number, costUsd: number): void {
+  const day = new Date().toISOString().split('T')[0]!
+  const db = getDb()
+  db.run(
+    `INSERT INTO usage_stats (day,model,input_tokens,output_tokens,cost_usd,calls,synced)
+     VALUES (?,?,?,?,?,1,0)
+     ON CONFLICT(day,model) DO UPDATE SET
+       input_tokens = input_tokens + excluded.input_tokens,
+       output_tokens = output_tokens + excluded.output_tokens,
+       cost_usd = cost_usd + excluded.cost_usd,
+       calls = calls + 1,
+       synced = 0`,
+    [day, model, inputTokens, outputTokens, costUsd]
+  )
+  markDirty()
+}
+
+export interface DbUsageStat { day: string; model: string; input_tokens: number; output_tokens: number; cost_usd: number; calls: number }
+
+export function getUnsyncedUsage(): DbUsageStat[] {
+  const rows = getDb().exec('SELECT day,model,input_tokens,output_tokens,cost_usd,calls FROM usage_stats WHERE synced = 0')
+  return (rows[0]?.values ?? []).map((r) => ({ day: r[0] as string, model: r[1] as string, input_tokens: r[2] as number, output_tokens: r[3] as number, cost_usd: r[4] as number, calls: r[5] as number }))
+}
+
+export function markUsageSynced(rows: { day: string; model: string }[]): void {
+  const db = getDb()
+  for (const r of rows) db.run('UPDATE usage_stats SET synced = 1 WHERE day = ? AND model = ?', [r.day, r.model])
+  markDirty()
+}
+
 // ── Checkpoints (Cursor-style state snapshots per message) ──────────────────────
 
 export interface DbCheckpoint {

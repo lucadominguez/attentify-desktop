@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import type { HeuristicAlert, ActivitySession, AppCategory, CustomAnalyticsCard } from '@shared/types'
 import { runAnalyticsQuery } from '@shared/analyticsQuery'
+import { detectPrivacyMode, privacyLabel, type PrivacyMode } from '@shared/privacyMode'
+import { MetricDrill, TableQuery, AskAIProvider, type DrillSpec, type DrillRow } from '../components/MetricDrill'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -64,7 +66,6 @@ interface DayRow { day: string; date: string; focused: number; distracted: numbe
 interface AppRow { app: string; category: AppCategory; totalTime: number; sessions: number; avgDuration: number; pctOfTime: number; isDistraction: boolean }
 interface HourRow { hour: number; focused: number; distracted: number; ratio: number; sessions: number; topApp: string; switchRate: number }
 interface HeatCell { focused: number; distracted: number }
-interface Insight { label: string; text: string; color: string }
 
 type SortDir = 'asc' | 'desc'
 
@@ -278,52 +279,6 @@ function cellColor(cell: HeatCell): string {
   return `rgba(248,113,113,${0.45 + (1 - r) * 0.4})`
 }
 
-// ── Insight generator ─────────────────────────────────────────────────────────
-
-function generateInsights(
-  focusPct: number,
-  weeklyDistracted: number,
-  streaks: { longest: number; current: number; count: number; avgLen: number },
-  switchFreq: number,
-  appRows: AppRow[],
-  hourRows: HourRow[],
-  totalWeekly: number,
-): Insight[] {
-  if (totalWeekly === 0) return []
-  const out: Insight[] = []
-
-  if (focusPct >= 70)
-    out.push({ label: 'Focus', text: `${Math.round(focusPct)}% focus ratio this week — excellent. You're maintaining deep work discipline.`, color: '#34d399' })
-  else if (focusPct >= 40)
-    out.push({ label: 'Focus', text: `${Math.round(focusPct)}% focus ratio — ${fmt(weeklyDistracted)} lost to distractions this week. Room to improve.`, color: '#fbbf24' })
-  else
-    out.push({ label: 'Focus', text: `Only ${Math.round(focusPct)}% focus ratio — attention is heavily fragmented. Start by blocking your top distractor.`, color: '#f87171' })
-
-  if (streaks.longest > 5400000)
-    out.push({ label: 'Streak', text: `Best run: ${fmt(streaks.longest)} unbroken. You reach 90m+ deep work blocks — protect that window.`, color: '#34d399' })
-  else if (streaks.longest > 1200000)
-    out.push({ label: 'Streak', text: `Longest run: ${fmt(streaks.longest)}. Work toward 90-minute blocks for compounding deep work gains.`, color: '#34d399' })
-  else if (streaks.longest > 0)
-    out.push({ label: 'Streak', text: `Longest run: ${fmt(streaks.longest)} — heavily fragmented. Start with 25-minute Pomodoro blocks and extend from there.`, color: '#fbbf24' })
-
-  const topDist = appRows.find(r => r.isDistraction)
-  if (topDist && topDist.pctOfTime >= 3)
-    out.push({ label: 'Drain', text: `${topDist.app} took ${topDist.pctOfTime}% of tracked time (${fmt(topDist.totalTime)}). Blocking it is your highest-ROI change.`, color: '#f87171' })
-
-  if (switchFreq > 20)
-    out.push({ label: 'Switching', text: `${switchFreq} context switches/h is fragmented. Each switch delays re-entry into deep focus by up to 23 minutes.`, color: '#f87171' })
-  else if (switchFreq > 10)
-    out.push({ label: 'Switching', text: `${switchFreq} switches/h — moderate. Use timed focus sessions to reduce task-switching overhead.`, color: '#fbbf24' })
-  else if (switchFreq > 0)
-    out.push({ label: 'Switching', text: `${switchFreq} switches/h — low context switching. Your focus depth is solid.`, color: '#34d399' })
-
-  const peak = hourRows.filter(r => r.ratio >= 0 && r.focused > 300000).sort((a, b) => b.focused - a.focused)[0]
-  if (peak)
-    out.push({ label: 'Peak Hour', text: `Today's strongest hour: ${fmtHour(peak.hour)} — ${fmt(peak.focused)} focused at ${peak.ratio}% ratio. Schedule hard work here.`, color: '#3b9eff' })
-
-  return out.slice(0, 4)
-}
-
 // ── SVG: Focus line chart ─────────────────────────────────────────────────────
 
 function FocusLineChart({ hourRows }: { hourRows: HourRow[] }): React.ReactElement | null {
@@ -360,42 +315,6 @@ function FocusLineChart({ hourRows }: { hourRows: HourRow[] }): React.ReactEleme
           stroke="rgba(2,9,18,0.9)" strokeWidth="0.8"
         />
       ))}
-    </svg>
-  )
-}
-
-// ── SVG: Donut chart ──────────────────────────────────────────────────────────
-
-function DonutChart({ segments }: { segments: { label: string; value: number; color: string }[] }): React.ReactElement | null {
-  const total = segments.reduce((s, d) => s + d.value, 0)
-  if (total === 0) return null
-  const R = 34, sw = 13, cx = 44, cy = 44, size = 88
-  const circ = 2 * Math.PI * R
-  let cumPct = 0
-  return (
-    <svg width={size} height={size} style={{ flexShrink: 0 }}>
-      <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(20,38,60,0.6)" strokeWidth={sw} />
-      {segments.map((seg, i) => {
-        const pct = seg.value / total
-        const dash = pct * circ
-        const offset = -(cumPct * circ)
-        cumPct += pct
-        return (
-          <circle key={i} cx={cx} cy={cy} r={R} fill="none"
-            stroke={seg.color} strokeWidth={sw}
-            strokeDasharray={`${dash} ${circ - dash}`}
-            strokeDashoffset={offset}
-            transform={`rotate(-90 ${cx} ${cy})`}
-            strokeLinecap="butt"
-          />
-        )
-      })}
-      <text x={cx} y={cy - 3} textAnchor="middle" fontSize="9" fontWeight="700" fill="white">
-        {segments.length}
-      </text>
-      <text x={cx} y={cx + 8} textAnchor="middle" fontSize="5.5" fill="rgba(107,132,160,0.9)">
-        categories
-      </text>
     </svg>
   )
 }
@@ -480,6 +399,7 @@ function HourOfWeekHeatmap({ matrix }: { matrix: HeatCell[][] }): React.ReactEle
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(251,191,36,0.65)' }} /> mixed</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(248,113,113,0.7)' }} /> distracted</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm inline-block" style={{ background: 'rgba(20,38,60,0.5)' }} /> no data</span>
+          <TableQuery title="Focus heatmap (hour of week)" summary="focus ratio by day-of-week and hour" />
         </div>
       </div>
       {!hasData ? (
@@ -568,46 +488,16 @@ function HourlyHeatmapRow({ hourRows }: { hourRows: HourRow[] }): React.ReactEle
   )
 }
 
-// ── Infographic: Category breakdown ──────────────────────────────────────────
-
-function CategoryBreakdown({ sessions }: { sessions: ActivitySession[] }): React.ReactElement {
-  const cats = buildCategoryBreakdown(sessions)
-  const total = cats.reduce((s, c) => s + c.ms, 0)
-  // A donut that's one 99% "Other" slice is worse than nothing — below a real
-  // breakdown, show a compact empty state instead of a misleading chart.
-  const meaningfulMs = cats.filter((c) => c.cat.toLowerCase() !== 'other').reduce((s, c) => s + c.ms, 0)
-  if (cats.length === 0 || total < 120000 || meaningfulMs / total < 0.15) {
-    return (
-      <p className="text-[10px] text-center py-6 leading-relaxed" style={{ color: 'rgba(120,150,180,0.5)' }}>
-        Not enough recognised activity yet.<br />Category breakdown appears as apps are classified.
-      </p>
-    )
-  }
-  const donutData = cats.slice(0, 7).map((c) => ({ label: c.cat, value: c.ms, color: c.color }))
-  return (
-    <div className="flex items-center gap-3">
-      <DonutChart segments={donutData} />
-      <div className="flex-1 space-y-1 min-w-0">
-        {cats.slice(0, 7).map((c) => (
-          <div key={c.cat} className="flex items-center gap-1.5">
-            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: c.color }} />
-            <span className="text-[9.5px] capitalize flex-1 truncate" style={{ color: 'rgba(180,210,235,0.6)' }}>{c.cat}</span>
-            <span className="text-[9.5px] text-white font-mono tabular-nums">{fmt(c.ms)}</span>
-            <span className="text-[8.5px] w-7 text-right tabular-nums" style={{ color: 'rgba(99,102,241,0.3)' }}>{Math.round(c.pct)}%</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 // ── Infographic: 7-day focus score strip ─────────────────────────────────────
 
 function DayScoreStrip({ dayRows }: { dayRows: DayRow[] }): React.ReactElement | null {
   if (dayRows.length === 0) return null
   return (
     <div>
-      <p className="hud-label mb-2">7-Day Focus Score</p>
+      <div className="flex items-center justify-between mb-2">
+        <p className="hud-label">7-Day Focus Score</p>
+        <TableQuery title="7-day focus score" summary={dayRows.map((d) => `${d.day} ${d.score}%`).join(', ')} />
+      </div>
       <div className="flex gap-1.5">
         {dayRows.map((d) => {
           const color = d.score >= 70 ? '#34d399' : d.score >= 40 ? '#fbbf24' : '#f87171'
@@ -680,6 +570,321 @@ function AppBarChart({ rows }: { rows: AppRow[] }): React.ReactElement | null {
   )
 }
 
+// ── Redesigned "Today": one prominent summary + a dense KPI strip ─────────────
+// Replaces eight equal cards. The score, time, and progress bar form one coherent
+// story; the strip below adds change-vs-baseline and targets without more boxes.
+
+function fmtClock(ts: number): string {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+// App-aggregated drill rows (time per app, biggest first) — used by several metric
+// drill-downs so the detail behind "Focused" / "Distracted" is real, not vague.
+function aggAppRows(sessions: ActivitySession[], tone: DrillRow['tone']): DrillRow[] {
+  const m = new Map<string, number>()
+  for (const s of sessions) m.set(s.app, (m.get(s.app) ?? 0) + s.duration)
+  return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([app, ms]) => ({ label: app, value: fmt(ms), tone }))
+}
+
+function qualityLabel(score: number): string {
+  if (score >= 85) return 'Excellent session'
+  if (score >= 70) return 'Strong focus'
+  if (score >= 50) return 'Mixed session'
+  if (score >= 30) return 'Fragmented — hard to hold focus'
+  return 'Heavily scattered'
+}
+
+// "+38m" / "−21m" from a signed millisecond delta (uses a real minus sign).
+function fmtSignedMin(ms: number): string {
+  const sign = ms >= 0 ? '+' : '−'
+  const m = Math.round(Math.abs(ms) / 60000)
+  if (m >= 60) { const h = Math.floor(m / 60), mm = m % 60; return `${sign}${h}h${mm ? ` ${mm}m` : ''}` }
+  return `${sign}${m}m`
+}
+
+function TodaySummaryCard({ score, focusedMs, distractedMs, idleMs, distractionEvents, switchRate, hasData, drills }: {
+  score: number; focusedMs: number; distractedMs: number; idleMs: number
+  distractionEvents: number; switchRate: number; hasData: boolean
+  drills: { score?: DrillSpec; focused?: DrillSpec; distracted?: DrillSpec; idle?: DrillSpec; distraction?: DrillSpec; switches?: DrillSpec }
+}): React.ReactElement {
+  const { colors } = useTheme()
+  const scoreColor = score >= 70 ? colors.positive : score >= 40 ? colors.warning : colors.negative
+  const totalBar = Math.max(focusedMs + distractedMs + idleMs, 1)
+  const fw = (focusedMs / totalBar) * 100
+  const dw = (distractedMs / totalBar) * 100
+  const iw = (idleMs / totalBar) * 100
+  const distOk = distractionEvents < 3
+  const switchOk = switchRate < 25
+
+  if (!hasData) {
+    return (
+      <div className="section-panel p-4 flex items-center gap-3">
+        <span className="text-3xl font-bold leading-none" style={{ color: colors.textMuted }}>—</span>
+        <p className="text-[11px] leading-relaxed" style={{ color: colors.textMuted }}>
+          No activity tracked yet today. Your focus summary appears here once Attentify has watched a few minutes of work.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="section-panel p-4">
+      {/* Score + time — the two halves of the same story (each clickable for detail) */}
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <MetricDrill spec={drills.score ?? { title: 'Focus score' }} width={320} className="px-2 py-1 -ml-2"
+          render={
+            <div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[40px] font-bold leading-none tracking-tight" style={{ color: scoreColor }}>
+                  <AnimatedStat value={`${Math.round(score)}%`} />
+                </span>
+                <span className="text-sm font-medium" style={{ color: colors.textSecondary }}>Focused</span>
+              </div>
+              <p className="text-[11px] mt-2" style={{ color: scoreColor }}>{qualityLabel(score)}</p>
+            </div>
+          }
+        />
+        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
+          <MetricDrill spec={drills.focused ?? { title: 'Focused time' }} width={320} className="px-2 py-0.5"
+            render={
+              <p className="text-lg font-semibold data-value" style={{ color: colors.positive }}>
+                {fmt(focusedMs)} <span className="text-[11px] font-normal" style={{ color: colors.textMuted }}>focused</span>
+              </p>
+            }
+          />
+          <p className="text-[11px]" style={{ color: colors.textMuted }}>
+            <MetricDrill spec={drills.distracted ?? { title: 'Distracted time' }} width={320} className="px-1"
+              render={<span style={{ color: colors.negative }}>{fmt(distractedMs)} distracted</span>} />
+            {idleMs > 0 && <> · <MetricDrill spec={drills.idle ?? { title: 'Idle time' }} width={320} className="px-1"
+              render={<span style={{ color: colors.textSecondary }}>{fmt(idleMs)} idle</span>} /></>}
+          </p>
+        </div>
+      </div>
+
+      {/* Progress visualization — focused / distracted / idle in one bar */}
+      <div className="flex h-2.5 rounded-full overflow-hidden mb-3.5" style={{ background: colors.accentBg }}>
+        {fw > 0 && <div style={{ width: `${fw}%`, background: colors.positive }} title={`${fmt(focusedMs)} focused`} />}
+        {dw > 0 && <div style={{ width: `${dw}%`, background: colors.negative }} title={`${fmt(distractedMs)} distracted`} />}
+        {iw > 0 && <div style={{ width: `${iw}%`, background: 'rgba(120,140,170,0.35)' }} title={`${fmt(idleMs)} idle`} />}
+      </div>
+
+      {/* Goals — click to see the events behind the number */}
+      <div className="grid grid-cols-2 gap-2">
+        <MetricDrill spec={drills.distraction ?? { title: 'Distraction events' }} full width={340}
+          render={
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+              <div>
+                <p className="text-[13px] font-semibold" style={{ color: distOk ? colors.textPrimary : colors.negative }}>
+                  {distractionEvents} distraction event{distractionEvents !== 1 ? 's' : ''}
+                </p>
+                <p className="text-[9px] mt-0.5 hud-label" style={{ color: colors.textDim }}>Goal &lt; 3 · click for detail</p>
+              </div>
+              <span className="text-[8.5px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: distOk ? colors.positiveBg : colors.negativeBg, color: distOk ? colors.positive : colors.negative }}>
+                {distOk ? 'on target' : 'over'}
+              </span>
+            </div>
+          }
+        />
+        <MetricDrill spec={drills.switches ?? { title: 'Context switching' }} full width={340}
+          render={
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+              <div>
+                <p className="text-[13px] font-semibold" style={{ color: switchOk ? colors.textPrimary : colors.warning }}>
+                  {switchRate} switches/hour
+                </p>
+                <p className="text-[9px] mt-0.5 hud-label" style={{ color: colors.textDim }}>Goal &lt; 25/hour · click for detail</p>
+              </div>
+              <span className="text-[8.5px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: switchOk ? colors.positiveBg : colors.warningBg, color: switchOk ? colors.positive : colors.warning }}>
+                {switchOk ? 'on target' : 'high'}
+              </span>
+            </div>
+          }
+        />
+      </div>
+    </div>
+  )
+}
+
+interface Kpi { label: string; value: string; delta?: { text: string; good: boolean }; sub: string; drill?: DrillSpec }
+
+// One shared container, subtle vertical separators — not six cards. Each metric is
+// clickable: it opens a drill-down with the detail behind the number + Ask AI.
+function KpiStrip({ items, onAskAI }: { items: Kpi[]; onAskAI?: (p: string) => void }): React.ReactElement {
+  const { colors } = useTheme()
+  const cell = (k: Kpi): React.ReactElement => (
+    <div className="px-3 py-2.5">
+      <p className="hud-label mb-1" style={{ color: colors.textMuted }}>{k.label}</p>
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-[15px] font-semibold data-value" style={{ color: colors.textPrimary }}>{k.value}</span>
+        {k.delta && (
+          <span className="text-[9px] font-medium flex-shrink-0" style={{ color: k.delta.good ? colors.positive : colors.negative }}>{k.delta.text}</span>
+        )}
+      </div>
+      <p className="text-[8.5px] mt-0.5 truncate" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>{k.sub}</p>
+    </div>
+  )
+  return (
+    <div className="section-panel flex items-stretch overflow-x-auto">
+      {items.map((k, i) => (
+        <div key={k.label} className="flex-1 flex" style={{ minWidth: 96, borderLeft: i === 0 ? 'none' : `1px solid ${colors.border}` }}>
+          {k.drill
+            ? <MetricDrill spec={k.drill} onAskAI={onAskAI} full width={320} render={cell(k)} />
+            : cell(k)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// Right-hand diagnostic column: categories + top apps + top distractions. Answers
+// "how much / what % / which app / was it a distraction" better than a donut.
+function TimeDistributionPanel({ sessions, appRows }: { sessions: ActivitySession[]; appRows: AppRow[] }): React.ReactElement {
+  const { colors } = useTheme()
+  const cats = buildCategoryBreakdown(sessions)
+  const total = cats.reduce((s, c) => s + c.ms, 0)
+  const maxCat = cats[0]?.ms ?? 1
+  const topApps = appRows.slice(0, 5)
+  const distMap = new Map<string, number>()
+  for (const s of sessions) if (s.isDistraction) distMap.set(s.app, (distMap.get(s.app) ?? 0) + s.duration)
+  const topDist = [...distMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
+
+  // Private / incognito / Tor time — detected from the stored window title so it also
+  // covers historical sessions. We report it honestly (time tracked, URLs not visible)
+  // rather than mis-attributing it to a domain.
+  const privMap = new Map<PrivacyMode, number>()
+  for (const s of sessions) {
+    const mode = s.privacy ?? detectPrivacyMode(s.app, s.title)
+    if (mode) privMap.set(mode, (privMap.get(mode) ?? 0) + s.duration)
+  }
+  const privRows = [...privMap.entries()].sort((a, b) => b[1] - a[1])
+  const privTotal = privRows.reduce((s, [, ms]) => s + ms, 0)
+
+  if (total < 60000) {
+    return <p className="text-[10px] text-center py-8 leading-relaxed" style={{ color: colors.textMuted }}>Not enough recognised activity yet.<br />A breakdown appears as apps are classified.</p>
+  }
+
+  const catSummary = cats.slice(0, 5).map((c) => `${c.cat} ${fmt(c.ms)}`).join(', ')
+  const appSummary = topApps.map((a) => `${a.app} ${fmt(a.totalTime)}`).join(', ')
+  const distSummary = topDist.map(([app, ms]) => `${app} ${fmt(ms)}`).join(', ')
+  return (
+    <div className="space-y-3.5">
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="hud-label">Time Distribution</p>
+          <TableQuery title="Time Distribution" summary={catSummary} />
+        </div>
+        <div className="space-y-1.5">
+          {cats.slice(0, 6).map((c) => (
+            <div key={c.cat} className="flex items-center gap-2" title={`${c.cat}: ${fmt(c.ms)} (${Math.round(c.pct)}%)`}>
+              <span className="text-[10px] capitalize flex-shrink-0" style={{ width: 74, color: colors.textSecondary }}>{c.cat}</span>
+              <span className="text-[10px] data-value text-right flex-shrink-0" style={{ width: 46, color: colors.textPrimary }}>{fmt(c.ms)}</span>
+              <span className="text-[9px] data-value text-right flex-shrink-0" style={{ width: 30, color: colors.textMuted }}>{Math.round(c.pct)}%</span>
+              <div className="flex-1 h-1.5 rounded-full overflow-hidden min-w-0" style={{ background: colors.accentBg }}>
+                <div className="h-full rounded-full" style={{ width: `${(c.ms / maxCat) * 100}%`, background: c.color }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 pt-1" style={{ borderTop: `1px solid ${colors.border}` }}>
+        <div>
+          <div className="flex items-center justify-between mb-2 mt-2.5">
+            <p className="hud-label">Top Apps</p>
+            <TableQuery title="Top Apps" summary={appSummary} />
+          </div>
+          <div className="space-y-1">
+            {topApps.map((a) => (
+              <div key={a.app} className="flex items-center justify-between gap-2">
+                <span className="text-[10px] truncate" style={{ color: colors.textSecondary }}>{a.app}</span>
+                <span className="text-[10px] data-value flex-shrink-0" style={{ color: colors.textPrimary }}>{fmt(a.totalTime)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-2 mt-2.5">
+            <p className="hud-label">Top Distractions</p>
+            {topDist.length > 0 && <TableQuery title="Top Distractions" summary={distSummary} />}
+          </div>
+          {topDist.length === 0 ? (
+            <p className="text-[9px]" style={{ color: colors.textDim }}>None recorded.</p>
+          ) : (
+            <div className="space-y-1">
+              {topDist.map(([app, ms]) => (
+                <div key={app} className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] truncate" style={{ color: colors.negative }}>{app}</span>
+                  <span className="text-[10px] data-value flex-shrink-0" style={{ color: colors.textPrimary }}>{fmt(ms)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {privTotal >= 30000 && (
+        <div className="pt-2.5" style={{ borderTop: `1px solid ${colors.border}` }}>
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="hud-label" style={{ color: colors.warning }}>Private Windows</p>
+            <span className="text-[10px] data-value" style={{ color: colors.textPrimary }}>{fmt(privTotal)}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mb-1">
+            {privRows.map(([mode, ms]) => (
+              <span key={mode} className="text-[9px] px-1.5 py-0.5 rounded" style={{ background: colors.warningBg, color: colors.warning }}>
+                {privacyLabel(mode)} · {fmt(ms)}
+              </span>
+            ))}
+          </div>
+          <p className="text-[9px] leading-snug" style={{ color: colors.textMuted }}>
+            Time tracked, but URLs inside are not captured — so this time isn&apos;t attributed to a site.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// The four insight cards, recast as one ranked table with a single recommendation —
+// so relative importance is explicit instead of four equal-weight boxes.
+type Priority = 'Critical' | 'High' | 'Medium' | 'Low'
+interface RankRow { priority: Priority; signal: string; current: string; baseline: string; impact: string }
+
+function RankedInsightTable({ rows, recommendation }: {
+  rows: RankRow[]
+  recommendation: { action: string; effect: string } | null
+}): React.ReactElement | null {
+  const { colors } = useTheme()
+  if (rows.length === 0) return null
+  const PRI: Record<Priority, string> = { Critical: colors.negative, High: colors.negative, Medium: colors.warning, Low: colors.positive }
+  return (
+    <div className="section-panel overflow-hidden">
+      <table className="hud-table">
+        <thead><tr><Th>Priority</Th><Th>Signal</Th><Th>Current</Th><Th>Baseline</Th><Th>Impact</Th></tr></thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.signal} style={{ background: i % 2 === 0 ? colors.rowEven : colors.rowOdd }}>
+              <td className="px-2.5 py-1.5">
+                <span className="text-[8px] px-1.5 py-0.5 rounded font-bold uppercase" style={{ background: PRI[r.priority] + '22', color: PRI[r.priority] }}>{r.priority}</span>
+              </td>
+              <td className="px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap" style={{ color: colors.textPrimary }}>{r.signal}</td>
+              <td className="px-2.5 py-1.5 text-[10px] data-value whitespace-nowrap" style={{ color: colors.textSecondary }}>{r.current}</td>
+              <td className="px-2.5 py-1.5 text-[10px] data-value whitespace-nowrap" style={{ color: colors.textMuted }}>{r.baseline}</td>
+              <td className="px-2.5 py-1.5 text-[10px]" style={{ color: colors.textSecondary }}>{r.impact}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {recommendation && (
+        <div className="px-3 py-2.5" style={{ borderTop: `1px solid ${colors.border}`, background: colors.accentBg }}>
+          <p className="hud-label mb-1" style={{ color: colors.accent }}>Recommended action</p>
+          <p className="text-[11px] leading-snug" style={{ color: colors.textPrimary }}>{recommendation.action}</p>
+          <p className="text-[9.5px] mt-1" style={{ color: colors.textMuted }}>Expected effect: {recommendation.effect}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface AnalyticsProps {
@@ -690,7 +895,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [appSort, setAppSort] = useState<{ col: keyof AppRow; dir: SortDir }>({ col: 'totalTime', dir: 'desc' })
-  const [activeTab, setActiveTab] = useState<'apps' | 'websites' | 'daily' | 'patterns' | 'alerts' | 'log'>('apps')
+  const [activeTab, setActiveTab] = useState<'apps' | 'daily' | 'patterns' | 'alerts'>('apps')
   const [exporting, setExporting] = useState<'idle' | 'busy' | 'done' | 'error'>('idle')
 
   const load = useCallback((): void => {
@@ -772,12 +977,179 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
   const distractDebtMs = weekly.distractedTime
   const avgDailyWastedMs = distractDebtMs > 0 ? Math.round(distractDebtMs / Math.max(dayRows.length, 1)) : 0
 
-  const insights = generateInsights(focusPct, weekly.distractedTime, streaks, switchFreq, appRows, hourRows, totalWeekly)
-
   const todayStart = new Date().setHours(0, 0, 0, 0)
   const todayIdlePeriods = idlePeriods.filter((ip) => ip.start >= todayStart)
   const todayIdleMs = todayIdlePeriods.reduce((s, ip) => s + ip.duration, 0)
   const todayRelapses = relapses.filter((r) => r.ts >= todayStart)
+
+  // ── Today-specific figures + a 7-day baseline (prior tracked days, today excluded)
+  // so every KPI can show change-vs-average instead of a bare number. ────────────
+  const todaySessions = recentSessions.filter((s) => s.startTime >= todayStart)
+  const todayDistractionEvents = todaySessions.filter((s) => s.isDistraction).length
+  const todaySwitchRate = todayTracked > 0 ? Math.round(todaySessions.length / (todayTracked / 3600000)) : 0
+  // Today-scoped aggregates so the TODAY section never shows week-long totals (which
+  // read as wrong — e.g. "15h today"). Weekly figures stay in the This Week section.
+  const todayAppRows = buildAppRows(todaySessions, todayTracked)
+  const todayTopDistractor = todayAppRows.find((r) => r.isDistraction)
+  const todayStreaks = computeStreaks(todaySessions)
+
+  // 7-day baseline (prior tracked days, today excluded) so KPIs + drills can compare.
+  const todayKey = new Date().toISOString().split('T')[0]
+  const priorDays = dayRows.filter((d) => d.date !== todayKey && d.tracked > 0)
+  const avgOf = (arr: number[]): number => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0)
+  const hasBaseline = priorDays.length > 0
+  const blScore = avgOf(priorDays.map((d) => d.score))
+  const blFocused = avgOf(priorDays.map((d) => d.focused))
+  const blDistracted = avgOf(priorDays.map((d) => d.distracted))
+  const blSwitch = avgOf(priorDays.map((d) => (d.tracked > 0 ? d.sessions / (d.tracked / 3600000) : 0)))
+
+  // ── Drill-down detail behind each headline metric ───────────────────────────
+  const todaySessionsAsc = [...todaySessions].sort((a, b) => a.startTime - b.startTime)
+  const distractSessionsToday = todaySessions.filter((s) => s.isDistraction).sort((a, b) => b.startTime - a.startTime)
+  const focusSessionsToday = todaySessions.filter((s) => !s.isDistraction)
+  const transitions = new Map<string, number>()
+  for (let i = 1; i < todaySessionsAsc.length; i++) {
+    const a = todaySessionsAsc[i - 1]!.app, b = todaySessionsAsc[i]!.app
+    if (a !== b) transitions.set(`${a} → ${b}`, (transitions.get(`${a} → ${b}`) ?? 0) + 1)
+  }
+  const topTransitions = [...transitions.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+
+  const distractionDrill: DrillSpec = {
+    title: 'Distraction events — today',
+    subtitle: `${todayDistractionEvents} event${todayDistractionEvents !== 1 ? 's' : ''} · goal < 3`,
+    rows: distractSessionsToday.slice(0, 12).map((s) => ({
+      label: s.title ? s.title.slice(0, 40) : s.app,
+      sub: `${s.app} · ${fmtClock(s.startTime)}`, value: fmt(s.duration), tone: 'negative' as const,
+    })),
+    empty: 'No distraction events today — nice.',
+    note: distractSessionsToday.length > 12 ? `+${distractSessionsToday.length - 12} more today` : undefined,
+    askPrompt: `I had ${todayDistractionEvents} distraction events today${todayTopDistractor ? `, mostly ${todayTopDistractor.app}` : ''}. What triggered them and how do I cut them?`,
+  }
+  const switchDrill: DrillSpec = {
+    title: 'Context switching — today',
+    subtitle: `${todaySwitchRate}/h · goal < 25`,
+    rows: topTransitions.map(([t, n]) => ({ label: t, value: `${n}×` })),
+    empty: 'Not enough switching yet to analyze.',
+    note: 'Each app-to-app switch carries a re-entry cost — repeated pairs are worth automating away or batching.',
+    askPrompt: `I'm switching apps about ${todaySwitchRate} times an hour today. Which of these switches look unnecessary, and how do I reduce context switching?`,
+  }
+  const idleDrill: DrillSpec = {
+    title: 'Idle gaps — today',
+    subtitle: `${fmt(todayIdleMs)} across ${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m`,
+    rows: [...todayIdlePeriods].sort((a, b) => b.start - a.start).slice(0, 12).map((ip) => ({
+      label: `after ${ip.prevApp}`, sub: fmtClock(ip.start), value: fmt(ip.duration), tone: 'warning' as const,
+    })),
+    empty: 'No idle gaps ≥3m today.',
+    askPrompt: `I had ${fmt(todayIdleMs)} of idle time today across ${todayIdlePeriods.length} gaps. Is that a problem and what should I do about it?`,
+  }
+  const relapseDrill: DrillSpec = {
+    title: 'Relapses — today',
+    subtitle: `${todayRelapses.length} return${todayRelapses.length !== 1 ? 's' : ''} to distraction within 30m · goal < 3`,
+    rows: [...todayRelapses].sort((a, b) => b.ts - a.ts).slice(0, 12).map((r) => ({
+      label: r.app, sub: `after ${r.prevApp} · ${fmtClock(r.ts)}`, value: `+${fmt(r.gapMs)}`, tone: 'negative' as const,
+    })),
+    empty: 'No relapses today — discipline holding.',
+    askPrompt: `I relapsed into distractions ${todayRelapses.length} times today. How do I make my recoveries stick?`,
+  }
+  const focusDrill: DrillSpec = {
+    title: 'Focus score — today',
+    subtitle: `${Math.round(today.focusScore)}% · target 85%`,
+    rows: [
+      { label: 'Focused time', value: fmt(today.focusedTime), tone: 'positive' as const },
+      { label: 'Distracted time', value: fmt(today.distractedTime), tone: 'negative' as const },
+      { label: 'Idle time', value: fmt(todayIdleMs), tone: 'warning' as const },
+      ...(hasBaseline ? [{ label: '7-day average', value: `${Math.round(blScore)}%` } as DrillRow] : []),
+    ],
+    note: 'Focus score weights focused vs distracted time, lightly rewarding long unbroken blocks.',
+    askPrompt: `My focus score today is ${Math.round(today.focusScore)}%${hasBaseline ? ` vs a ${Math.round(blScore)}% average` : ''}. Break down what's driving it and how to raise it.`,
+  }
+  const focusedDrill: DrillSpec = {
+    title: 'Focused time — today',
+    subtitle: `${fmt(today.focusedTime)} · ${todayTracked > 0 ? Math.round((today.focusedTime / todayTracked) * 100) : 0}% of tracked`,
+    rows: aggAppRows(focusSessionsToday, 'positive'),
+    empty: 'No focused time recorded yet today.',
+    askPrompt: `Where did my ${fmt(today.focusedTime)} of focused time go today, and how do I protect more of it?`,
+  }
+  const distractedDrill: DrillSpec = {
+    title: 'Distracted time — today',
+    subtitle: `${fmt(today.distractedTime)} · ${todayTracked > 0 ? Math.round((today.distractedTime / todayTracked) * 100) : 0}% of tracked`,
+    rows: aggAppRows(todaySessions.filter((s) => s.isDistraction), 'negative'),
+    empty: 'No distracted time recorded today.',
+    askPrompt: `What ate my ${fmt(today.distractedTime)} of distracted time today, and what's the single highest-ROI thing to block?`,
+  }
+
+  const kpiItems: Kpi[] = [
+    {
+      label: 'Focus', value: todayTracked > 0 ? `${Math.round(today.focusScore)}%` : '—',
+      delta: hasBaseline ? { text: `${today.focusScore - blScore >= 0 ? '+' : '−'}${Math.abs(Math.round(today.focusScore - blScore))}pp`, good: today.focusScore >= blScore } : undefined,
+      sub: 'Target 85%', drill: focusDrill,
+    },
+    {
+      label: 'Focused', value: durOrZero(today.focusedTime, todayTracked > 0),
+      delta: hasBaseline ? { text: fmtSignedMin(today.focusedTime - blFocused), good: today.focusedTime >= blFocused } : undefined,
+      sub: todayTracked > 0 ? `${Math.round((today.focusedTime / todayTracked) * 100)}% of time` : 'no data', drill: focusedDrill,
+    },
+    {
+      label: 'Distracted', value: durOrZero(today.distractedTime, todayTracked > 0),
+      delta: hasBaseline ? { text: fmtSignedMin(today.distractedTime - blDistracted), good: today.distractedTime <= blDistracted } : undefined,
+      sub: todayTracked > 0 ? `${Math.round((today.distractedTime / todayTracked) * 100)}% of time` : 'no data', drill: distractedDrill,
+    },
+    {
+      label: 'Idle', value: durOrZero(todayIdleMs, todayTracked > 0),
+      sub: `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m`, drill: idleDrill,
+    },
+    {
+      label: 'Switches', value: todayTracked > 0 ? `${todaySwitchRate}/h` : '—',
+      delta: hasBaseline && blSwitch > 0 ? { text: `${todaySwitchRate - blSwitch >= 0 ? '+' : '−'}${Math.abs(Math.round(((todaySwitchRate - blSwitch) / blSwitch) * 100))}%`, good: todaySwitchRate <= blSwitch } : undefined,
+      sub: 'Target <25', drill: switchDrill,
+    },
+    {
+      label: 'Relapses', value: String(todayRelapses.length),
+      sub: 'Target <3', drill: relapseDrill,
+    },
+  ]
+
+  // Ranked diagnostics — the four insight cards recast as a prioritized table.
+  const PRI_ORDER: Record<Priority, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
+  const rankRows: RankRow[] = []
+  if (todayTracked > 0 && todaySwitchRate > 0) {
+    rankRows.push({
+      priority: todaySwitchRate > 40 ? 'Critical' : todaySwitchRate > 25 ? 'High' : 'Low',
+      signal: 'Context switching', current: `${todaySwitchRate}/h`,
+      baseline: hasBaseline && blSwitch > 0 ? `${Math.round(blSwitch)}/h` : '—',
+      impact: todaySwitchRate > 25 ? `~${Math.round((todaySwitchRate - 25) * 0.4)}m focus lost` : 'within target',
+    })
+  }
+  if (todayTopDistractor && todayTopDistractor.pctOfTime >= 2) {
+    rankRows.push({
+      priority: todayTopDistractor.pctOfTime > 15 ? 'High' : todayTopDistractor.pctOfTime > 7 ? 'Medium' : 'Low',
+      signal: `${todayTopDistractor.app} distraction`, current: fmt(todayTopDistractor.totalTime),
+      baseline: '—', impact: `${todayTopDistractor.pctOfTime}% of today's time`,
+    })
+  }
+  rankRows.push({
+    priority: todayStreaks.longest > 3600000 ? 'Low' : 'Medium',
+    signal: 'Longest focus block', current: todayStreaks.longest > 0 ? fmt(todayStreaks.longest) : '—',
+    baseline: todayStreaks.avgLen > 0 ? `avg ${fmt(todayStreaks.avgLen)}` : '—',
+    impact: todayStreaks.longest > 3600000 ? 'deep-work capable' : 'aim for 45m+ blocks',
+  })
+  if (todayIdleMs > 5 * 60000) {
+    rankRows.push({
+      priority: todayIdleMs > 3600000 ? 'Medium' : 'Low',
+      signal: 'Idle gaps', current: fmt(todayIdleMs), baseline: '—',
+      impact: `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m`,
+    })
+  }
+  rankRows.sort((a, b) => PRI_ORDER[a.priority] - PRI_ORDER[b.priority])
+
+  // Estimate reclaimable minutes from TODAY's distractor time (not a week-long total),
+  // so the projection stays believable ("~18 fewer minutes", not "391 per session").
+  const distractorMinToday = todayTopDistractor ? Math.round(todayTopDistractor.totalTime / 60000) : 0
+  const recommendation = todayTopDistractor && distractorMinToday >= 3
+    ? { action: `Block ${todayTopDistractor.app} during active focus sessions.`, effect: `up to ~${Math.max(5, Math.round(distractorMinToday * 0.6))} fewer distracted minutes reclaimed per day.` }
+    : todaySwitchRate > 25
+      ? { action: 'Start a timed Deep Focus session to cut context switching.', effect: 'fewer re-entry costs and noticeably longer focus blocks.' }
+      : null
 
   const sortedApps = [...appRows].sort((a, b) => {
     const av = a[appSort.col] as number | string | boolean
@@ -807,26 +1179,34 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     )
   }
 
-  const kpiChip = (chip: { label: string; value: string; color: string; sub: string; tooltip: string }, i: number, baseDelay = 0): React.ReactElement => (
+  const kpiChip = (chip: { label: string; value: string; color: string; sub: string; tooltip: string; drill?: DrillSpec }, i: number, baseDelay = 0): React.ReactElement => (
     <div
       key={chip.label}
-      className="section-panel flex flex-col gap-1 p-3 animate-entry"
-      style={{ animationDelay: `${baseDelay + i * 55}ms`, animationFillMode: 'both', opacity: 0, cursor: 'default' }}
+      className="section-panel flex animate-entry"
+      style={{ animationDelay: `${baseDelay + i * 55}ms`, animationFillMode: 'both', opacity: 0 }}
       title={chip.tooltip}
     >
-      <p className="text-base font-bold leading-none data-value" style={{ color: chip.color }}>
-        <AnimatedStat value={chip.value} />
-      </p>
-      <p className="text-[9px] leading-tight" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
-        {chip.label}
-      </p>
-      <p className="text-[8px]" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>
-        {chip.sub}
-      </p>
+      <MetricDrill full width={300}
+        spec={chip.drill ?? { title: chip.label, subtitle: `${chip.value} · ${chip.sub}`, note: chip.tooltip, askPrompt: `Tell me about my ${chip.label.toLowerCase()} (${chip.value}) — what does it mean and how do I improve it?` }}
+        render={
+          <div className="flex flex-col gap-1 p-3">
+            <p className="text-base font-bold leading-none data-value" style={{ color: chip.color }}>
+              <AnimatedStat value={chip.value} />
+            </p>
+            <p className="text-[9px] leading-tight" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
+              {chip.label}
+            </p>
+            <p className="text-[8px]" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>
+              {chip.sub}
+            </p>
+          </div>
+        }
+      />
     </div>
   )
 
   return (
+   <AskAIProvider value={onChatWith}>
     <div className="p-4 space-y-4 animate-fade-in">
 
       {/* ── Header ───────────────────────────────────────────────────────── */}
@@ -879,25 +1259,12 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
       {/* Gated behind a minimum-data threshold so we never praise "100% focus"
           off a few minutes of tracking (which reads as broken next to the
           fragmented-streak stats). Until then, one honest "keep tracking" card. */}
-      {totalWeekly < INSIGHT_MIN_MS ? (
+      {totalWeekly < INSIGHT_MIN_MS && (
         <div className="section-panel px-3 py-3 flex items-center gap-2.5">
           <Lightbulb size={12} style={{ color: colors.accent, flexShrink: 0 }} />
           <p className="text-[10px] leading-relaxed" style={{ color: colors.textSecondary }}>
             Not enough data yet to draw conclusions — keep Attentify running and insights will appear once there's enough activity to be meaningful.
           </p>
-        </div>
-      ) : insights.length > 0 && (
-        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${insights.length}, 1fr)` }}>
-          {insights.map((ins, i) => (
-            <div key={i} className="section-panel px-3 py-2.5 flex flex-col gap-1.5 animate-entry"
-              style={{ borderLeft: `2px solid ${ins.color}`, animationDelay: `${i * 70}ms`, animationFillMode: 'both', opacity: 0 }}>
-              <div className="flex items-center gap-1.5">
-                <Lightbulb size={9} style={{ color: ins.color, flexShrink: 0 }} />
-                <span className="text-[8px] font-semibold uppercase tracking-wide" style={{ color: ins.color, fontFamily: '"Share Tech Mono", monospace' }}>{ins.label}</span>
-              </div>
-              <p className="text-[10px] leading-relaxed" style={{ color: colors.textSecondary }}>{ins.text}</p>
-            </div>
-          ))}
         </div>
       )}
 
@@ -907,21 +1274,22 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
         sub={new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })}
       />
 
-      {/* Today KPIs */}
-      <div className="grid grid-cols-4 gap-1.5">
-        {[
-          { label: 'Focus Score', value: todayTracked > 0 ? `${Math.round(today.focusScore)}%` : 'No data', color: today.focusScore >= 70 ? '#34d399' : today.focusScore >= 40 ? '#fbbf24' : '#f87171', sub: todayTracked > 0 ? `${fmt(todayTracked)} tracked` : 'keep tracking', tooltip: `${Math.round(today.focusScore)}% focus score` },
-          { label: 'Focused', value: durOrZero(today.focusedTime, todayTracked > 0), color: '#6366f1', sub: todayTracked > 0 ? `${Math.round((today.focusedTime / todayTracked) * 100)}% of tracked` : 'keep tracking', tooltip: `${fmt(today.focusedTime)} on productive apps today` },
-          { label: 'Distracted', value: durOrZero(today.distractedTime, todayTracked > 0), color: today.distractedTime > 3600000 ? '#f87171' : '#fbbf24', sub: todayTracked > 0 ? `${Math.round((today.distractedTime / todayTracked) * 100)}% of tracked` : 'keep tracking', tooltip: `${fmt(today.distractedTime)} on distracting apps` },
-          { label: 'Switch Rate', value: todayTracked > 0 ? `${switchFreq}/h` : 'No data', color: switchFreq > 20 ? '#f87171' : switchFreq > 10 ? '#fbbf24' : '#34d399', sub: todayTracked > 0 ? (switchFreq > 20 ? 'fragmented' : 'steady') : 'keep tracking', tooltip: `${switchFreq} app switches/h` },
-          { label: 'Idle Time', value: durOrZero(todayIdleMs, todayTracked > 0), color: todayIdleMs > 3600000 ? '#fbbf24' : 'rgba(99,102,241,0.5)', sub: todayIdlePeriods.length > 0 ? `${todayIdlePeriods.length} gap${todayIdlePeriods.length !== 1 ? 's' : ''} ≥3m` : (todayTracked > 0 ? 'no idle gaps' : 'keep tracking'), tooltip: `${fmt(todayIdleMs)} idle today (gaps ≥3m between sessions)` },
-          { label: 'Relapses', value: String(todayRelapses.length), color: todayRelapses.length > 3 ? '#f87171' : todayRelapses.length > 0 ? '#fbbf24' : '#34d399', sub: todayRelapses.length > 0 ? 'returned to dist.' : 'none today', tooltip: `${todayRelapses.length} times returned to distraction within 30m` },
-          { label: 'Blocked', value: String(today.blockEvents || 0), color: '#6366f1', sub: 'blocked today', tooltip: `${today.blockEvents} blocked attempts today` },
-          { label: 'Sessions', value: String(today.focusSessions), color: '#6366f1', sub: 'started today', tooltip: `${today.focusSessions} focus sessions today` },
-        ].map((chip, i) => kpiChip(chip, i, 0))}
-      </div>
+      {/* One prominent summary — score, time and progress as a single story */}
+      <TodaySummaryCard
+        score={today.focusScore}
+        focusedMs={today.focusedTime}
+        distractedMs={today.distractedTime}
+        idleMs={todayIdleMs}
+        distractionEvents={todayDistractionEvents}
+        switchRate={todaySwitchRate}
+        hasData={todayTracked > 0}
+        drills={{ score: focusDrill, focused: focusedDrill, distracted: distractedDrill, idle: idleDrill, distraction: distractionDrill, switches: switchDrill }}
+      />
 
-      {/* Today: Timeline + Hourly viz + Category breakdown */}
+      {/* Dense KPI strip — click any metric for the detail behind it + Ask AI */}
+      <KpiStrip items={kpiItems} />
+
+      {/* Session analysis (left) + diagnostic column (right) */}
       <div className="grid grid-cols-3 gap-2">
         <div className="col-span-2 space-y-2">
           <SessionTimeline sessions={recentSessions} />
@@ -936,10 +1304,20 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
           </div>
         </div>
         <div className="section-panel p-3">
-          <p className="hud-label mb-2.5">Time by Category</p>
-          <CategoryBreakdown sessions={recentSessions} />
+          <TimeDistributionPanel sessions={todaySessions} appRows={todayAppRows} />
         </div>
       </div>
+
+      {/* Diagnostics — ranked issues + one recommended action */}
+      {totalWeekly >= INSIGHT_MIN_MS && rankRows.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <p className="hud-label">Diagnostics — Ranked</p>
+            <TableQuery title="Ranked diagnostics" summary={rankRows.map((r) => `${r.priority}: ${r.signal} ${r.current}`).join('; ')} />
+          </div>
+          <RankedInsightTable rows={rankRows} recommendation={recommendation} />
+        </div>
+      )}
 
       {/* Relapse + Idle tracker */}
       {(todayRelapses.length > 0 || todayIdlePeriods.length > 0) && (
@@ -972,9 +1350,10 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
             <div className="section-panel px-3 py-2.5">
               <div className="flex items-center justify-between mb-1.5">
                 <p className="hud-label">Focus vs Distraction</p>
-                <div className="flex gap-3 text-[9px]" style={{ color: 'rgba(99,102,241,0.4)', fontFamily: '"Share Tech Mono", monospace' }}>
+                <div className="flex items-center gap-3 text-[9px]" style={{ color: 'rgba(99,102,241,0.4)', fontFamily: '"Share Tech Mono", monospace' }}>
                   <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5" style={{ background: '#34d399' }} />{fmt(weekly.focusedTime)} focused</span>
                   <span className="flex items-center gap-1"><span className="inline-block w-1.5 h-1.5" style={{ background: '#ff6b35' }} />{fmt(weekly.distractedTime)} distracted</span>
+                  <TableQuery title="Focus vs Distraction (this week)" summary={`${fmt(weekly.focusedTime)} focused vs ${fmt(weekly.distractedTime)} distracted, ${Math.round(focusPct)}% focus ratio`} />
                 </div>
               </div>
               <div className="flex overflow-hidden h-2" style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.1)' }}>
@@ -1011,12 +1390,19 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
               { label: 'Switch Cost', value: recentSessions.length > 0 ? fmt(recentSessions.length * 23 * 60000) : '—', sub: 'recovery overhead', detail: `${recentSessions.length} switches × 23m`, color: '#fbbf24' },
               { label: 'Reclaim Potential', value: topDistractor ? fmt(topDistractor.totalTime) : '—', sub: topDistractor ? `block ${topDistractor.app}` : 'no distractors', detail: topDistractor ? `${topDistractor.pctOfTime}% of time` : null, color: '#34d399' },
             ].map((card) => (
-              <div key={card.label} className="section-panel p-3 animate-entry"
+              <div key={card.label} className="section-panel flex animate-entry"
                 style={{ borderLeft: `2px solid ${card.color}`, animationFillMode: 'both', opacity: 0 }}>
-                <p className="text-[8px] uppercase tracking-wide mb-1.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>{card.label}</p>
-                <p className="text-xl font-bold leading-none data-value" style={{ color: card.color }}>{card.value}</p>
-                <p className="text-[9px] mt-1 leading-snug" style={{ color: colors.textSecondary }}>{card.sub}</p>
-                {card.detail && <p className="text-[8px] mt-0.5 data-value" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>{card.detail}</p>}
+                <MetricDrill full width={300}
+                  spec={{ title: card.label, subtitle: `${card.value} · ${card.sub}`, note: card.detail ?? undefined, askPrompt: `Explain my "${card.label}" (${card.value}) this week and what I can do about it.` }}
+                  render={
+                    <div className="p-3">
+                      <p className="text-[8px] uppercase tracking-wide mb-1.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>{card.label}</p>
+                      <p className="text-xl font-bold leading-none data-value" style={{ color: card.color }}>{card.value}</p>
+                      <p className="text-[9px] mt-1 leading-snug" style={{ color: colors.textSecondary }}>{card.sub}</p>
+                      {card.detail && <p className="text-[8px] mt-0.5 data-value" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>{card.detail}</p>}
+                    </div>
+                  }
+                />
               </div>
             ))}
           </div>
@@ -1031,14 +1417,12 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
       <AnalyticsSectionHeader label="Deep Dive" sub={`${recentSessions.length} sessions · ${sortedApps.length} apps tracked`} />
 
       {/* Tabs */}
-      <div className="flex gap-0" style={{ borderBottom: `1px solid ${colors.border}` }}>
+      <div className="flex gap-0 items-center" style={{ borderBottom: `1px solid ${colors.border}` }}>
         {([
           { id: 'apps', label: `Apps (${sortedApps.length})` },
-          { id: 'websites', label: `Websites (${domains.length})` },
           { id: 'daily', label: `Daily (${dayRows.length}d)` },
           { id: 'patterns', label: 'Patterns' },
           { id: 'alerts', label: `Alerts${activeAlerts.length > 0 ? ` (${activeAlerts.length})` : ''}` },
-          { id: 'log', label: `Log (${Math.min(recentSessions.length, 100)})` },
         ] as const).map((tab) => (
           <button key={tab.id} onClick={() => setActiveTab(tab.id)}
             className="px-4 py-2 text-[10px] font-medium transition-all border-b-2 -mb-px"
@@ -1046,15 +1430,26 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
             {tab.label}
           </button>
         ))}
+        <div className="ml-auto pr-1">
+          <TableQuery
+            title={activeTab === 'apps' ? 'Apps table' : activeTab === 'daily' ? 'Daily table' : activeTab === 'patterns' ? 'Patterns' : 'Alerts table'}
+            summary={
+              activeTab === 'apps' ? sortedApps.slice(0, 6).map((a) => `${a.app} ${fmt(a.totalTime)} (${a.pctOfTime}%)`).join(', ')
+              : activeTab === 'daily' ? dayRows.map((d) => `${d.day} ${d.score}%`).join(', ')
+              : activeTab === 'alerts' ? activeAlerts.slice(0, 6).map((a) => TYPE_LABELS[a.type]).join(', ')
+              : `${hourRows.length} hours tracked, longest run ${fmt(streaks.longest)}`
+            }
+          />
+        </div>
       </div>
 
       {activeTab === 'apps' && (<><AppBarChart rows={sortedApps} /><AppTable rows={sortedApps} toggleSort={toggleSort} SortIcon={SortIcon} /></>)}
-      {activeTab === 'websites' && <WebsitesTab domains={domains} sessions={recentSessions} />}
       {activeTab === 'daily' && <DailyTable rows={dayRows} />}
       {activeTab === 'patterns' && <PatternsTab hourRows={hourRows} streaks={streaks} sessions={recentSessions} />}
       {activeTab === 'alerts' && <AlertsTable alerts={heuristicAlerts} onDismiss={dismissAlert} />}
-      {activeTab === 'log' && <ActivityLog sessions={[...recentSessions].reverse().slice(0, 100)} />}
+      {/* Raw browsing/session data + search history now live on the Activity page. */}
     </div>
+   </AskAIProvider>
   )
 }
 

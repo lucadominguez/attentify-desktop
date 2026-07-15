@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Shield, ChevronRight, Lock, ScanLine, CheckCircle2, AlertTriangle, RefreshCw, Zap } from 'lucide-react'
 import BrandMark from '../components/BrandMark'
+import AuthPanel from '../components/AuthPanel'
 import { useTheme } from '../context/ThemeContext'
+import type { AuthState } from '@shared/types'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -9,7 +11,10 @@ interface OnboardingProps {
   onComplete: () => void
 }
 
-type Step = 'welcome' | 'permission' | 'scanning' | 'results'
+// Sign-in comes before setup on purpose: the permission and scanning steps call channels
+// the main process gates on an account, so without it first-run would silently degrade —
+// elevation stuck on "soft" and a placeholder scan count — rather than fail honestly.
+type Step = 'welcome' | 'signin' | 'permission' | 'scanning' | 'results'
 type ElevationState = 'checking' | 'full' | 'soft' | 'relaunching'
 
 const SCAN_STEPS = [
@@ -29,6 +34,19 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
   const [issueCount, setIssueCount] = useState(0)
   const [elevation, setElevation] = useState<ElevationState>('checking')
   const autoAdvanceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [auth, setAuth] = useState<AuthState | null>(null)
+  const refreshAuth = useCallback(() => { api.getAuth?.().then(setAuth).catch(() => setAuth(null)) }, [])
+  useEffect(() => {
+    refreshAuth()
+    // OAuth completes in the system browser, so re-check when the window regains focus.
+    window.addEventListener('focus', refreshAuth)
+    return () => window.removeEventListener('focus', refreshAuth)
+  }, [refreshAuth])
+  const signedIn = !!auth?.signedIn
+
+  // Advance as soon as sign-in lands (works for both the inline form and OAuth).
+  useEffect(() => { if (step === 'signin' && signedIn) setStep('permission') }, [step, signedIn])
 
   // Auto-check elevation the moment the permission step shows
   useEffect(() => {
@@ -119,13 +137,33 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
           We're engineered to get it back.
         </p>
         <button
-          onClick={() => setStep('permission')}
+          onClick={() => setStep(signedIn ? 'permission' : 'signin')}
           className="flex items-center gap-2 bg-accent-blue hover:bg-accent-blue-light text-white font-bold px-10 py-4 rounded-full text-lg transition-all hover:scale-105"
           style={{ boxShadow: '0 0 40px rgba(33,150,243,0.35)' }}
         >
           Get started <ChevronRight size={20} />
         </button>
-        <p className="text-xs mt-6" style={{ color: colors.textMuted }}>No accounts. No telemetry. Everything stays on your device.</p>
+        <p className="text-xs mt-6" style={{ color: colors.textMuted }}>
+          Your activity history stays on this device.
+        </p>
+      </Wrapper>
+    )
+  }
+
+  // ── Sign in ────────────────────────────────────────────────────────────────
+  if (step === 'signin') {
+    return (
+      <Wrapper>
+        <div className="mb-5" style={{ filter: 'drop-shadow(0 0 20px rgba(42,168,234,0.3))' }}>
+          <BrandMark size={72} />
+        </div>
+        <h2 className="text-2xl font-bold mb-2" style={{ color: colors.textPrimary }}>Create your account</h2>
+        <p className="text-sm leading-relaxed mb-6" style={{ color: colors.textSecondary }}>
+          Attentify needs an account to block sites, run focus sessions and use the assistant.
+        </p>
+        <div className="w-full" style={{ maxWidth: 340 }}>
+          <AuthPanel onChange={refreshAuth} />
+        </div>
       </Wrapper>
     )
   }

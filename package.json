@@ -36,7 +36,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "Attentify-Setup.${ext}"
+      "artifactName": "Attentify-Setup.${ext}",
+      "include": "build/installer.nsh"
     },
     "mac": {
       "target": "dmg",
@@ -47,14 +48,28 @@
     },
     "dmg": {
       "contents": [
-        { "x": 130, "y": 220 },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "linux": {
       "target": "AppImage",
       "icon": "resources/icon.png"
-    }
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://attentify-cloud.ludomi2502.workers.dev/updates/"
+      }
+    ]
   },
   "devDependencies": {
     "@types/node": "^20.11.5",
@@ -72,9 +87,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
-    "sql.js": "^1.10.3",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.312.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "sql.js": "^1.10.3"
   }
 }

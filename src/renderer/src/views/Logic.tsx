@@ -4,6 +4,7 @@ import {
   Check, X, Trash2, User, ArrowDown, Zap, RefreshCw,
 } from 'lucide-react'
 import type { HeuristicAlert, UserContextNote } from '@shared/types'
+import { MetricDrill, TableQuery, AskAIProvider, type DrillSpec } from '../components/MetricDrill'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -15,6 +16,18 @@ const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electr
 interface Inference { id: string; type: string; value: string; confidence: number; reasoning?: string; status: string; action?: string }
 interface Goal { id: string; text: string; priority: number }
 interface Pref { key: string; value: string; scope: string; confidence: number; source: string }
+
+// ── Section header — mono label + rule, matching the Analytics page ────────────
+function SectionHeader({ label, sub }: { label: string; sub?: string }): React.ReactElement {
+  const { colors } = useTheme()
+  return (
+    <div className="flex items-center gap-3 pt-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider flex-shrink-0" style={{ color: 'var(--label)', fontFamily: '"Share Tech Mono", monospace' }}>{label}</p>
+      <div className="flex-1 h-px" style={{ background: colors.border }} />
+      {sub && <p className="text-[9px] flex-shrink-0" style={{ color: colors.textDim, fontFamily: '"Share Tech Mono", monospace' }}>{sub}</p>}
+    </div>
+  )
+}
 
 // ── Collapsible section ─────────────────────────────────────────────────────────
 function Section({ icon, title, count, defaultOpen = true, children }: {
@@ -142,14 +155,14 @@ function PatternChain({ alert }: { alert: HeuristicAlert }): React.ReactElement 
   )
 }
 
-export default function Logic(): React.ReactElement {
+export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => void }): React.ReactElement {
   const { colors } = useTheme()
   const [inferences, setInferences] = useState<Inference[]>([])
   const [goals, setGoals] = useState<Goal[]>([])
   const [prefs, setPrefs] = useState<Pref[]>([])
   const [context, setContext] = useState<UserContextNote[]>([])
   const [alerts, setAlerts] = useState<HeuristicAlert[]>([])
-  const [topDistractor, setTopDistractor] = useState<string | null>(null)
+  const [distractors, setDistractors] = useState<{ app: string; ms: number }[]>([])
   const [input, setInput] = useState('')
   const [adding, setAdding] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -164,7 +177,7 @@ export default function Logic(): React.ReactElement {
         setAlerts((d.heuristicAlerts ?? []).filter((a) => !a.dismissed))
         const byApp = new Map<string, number>()
         for (const s of (d.recentSessions ?? []).filter((s) => s.isDistraction)) byApp.set(s.app, (byApp.get(s.app) ?? 0) + s.duration)
-        setTopDistractor([...byApp.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null)
+        setDistractors([...byApp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([app, ms]) => ({ app, ms })))
       }).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
@@ -195,25 +208,69 @@ export default function Logic(): React.ReactElement {
 
   const pending = inferences.filter((i) => i.status === 'pending')
   const activeInf = pending.length > 0 ? pending : inferences.slice(0, 6)
+  const topDistractor = distractors[0]?.app ?? null
+  const fmtMs = (ms: number): string => { const h = Math.floor(ms / 3600000), m = Math.round((ms % 3600000) / 60000); return h > 0 ? `${h}h ${m}m` : `${m}m` }
 
-  const chip = (label: string, value: string | number, color?: string): React.ReactElement => (
-    <div className="rounded-lg px-3 py-2 flex-1 min-w-[90px]" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
-      <p className="text-[16px] font-bold leading-none data-value" style={{ color: color ?? colors.textPrimary }}>{value}</p>
-      <p className="text-[9.5px] mt-1" style={{ color: colors.textMuted }}>{label}</p>
-    </div>
-  )
+  // Summary metrics, each clickable to reveal the detail behind it + Ask AI.
+  const summary: { label: string; value: string; color?: string; drill: DrillSpec }[] = [
+    {
+      label: 'Goals', value: String(goals.length), color: goals.length ? colors.accent : colors.textMuted,
+      drill: {
+        title: 'Your goals', subtitle: `${goals.length} active`,
+        rows: goals.map((g) => ({ label: g.text })), empty: 'No goals set yet — tell the assistant what you want to achieve.',
+        askPrompt: 'What are my current goals and how well is my activity aligned with them?',
+      },
+    },
+    {
+      label: 'Learned', value: String(prefs.length),
+      drill: {
+        title: 'Learned about you', subtitle: `${prefs.length} preferences`,
+        rows: prefs.slice(0, 14).map((p) => ({ label: p.key, sub: p.source === 'user' ? 'you told me' : 'inferred', value: p.value })),
+        empty: 'Nothing learned yet — this fills in as you use Attentify.',
+        askPrompt: 'What have you learned about my habits and preferences so far?',
+      },
+    },
+    {
+      label: 'Live signals', value: String(pending.length), color: pending.length ? colors.warning : colors.textMuted,
+      drill: {
+        title: 'Live reasoning signals', subtitle: `${pending.length} awaiting your call`,
+        rows: pending.map((i) => ({ label: i.value, sub: i.type, value: `${Math.round(i.confidence * 100)}%`, tone: 'warning' as const })),
+        empty: 'No open signals right now.',
+        askPrompt: 'Walk me through the signals you are currently reasoning about.',
+      },
+    },
+    {
+      label: 'Patterns', value: String(alerts.length), color: alerts.length ? colors.negative : colors.textMuted,
+      drill: {
+        title: 'Behavioral patterns', subtitle: `${alerts.length} detected recently`,
+        rows: alerts.slice(0, 12).map((a) => ({ label: a.title, sub: a.severity, tone: a.severity === 'high' ? 'negative' as const : a.severity === 'medium' ? 'warning' as const : 'positive' as const })),
+        empty: 'No patterns detected recently.',
+        askPrompt: 'What behavioral patterns have you noticed in how I work, and what should I do about them?',
+      },
+    },
+    {
+      label: 'Top drain', value: topDistractor ?? '—', color: topDistractor ? colors.negative : colors.textMuted,
+      drill: {
+        title: 'Top distractions', subtitle: 'Where distracted time goes',
+        rows: distractors.map((d) => ({ label: d.app, value: fmtMs(d.ms), tone: 'negative' as const })),
+        empty: 'No distractions recorded yet.',
+        askPrompt: `My biggest distraction lately is ${topDistractor ?? 'unclear'}. How do I bring it under control?`,
+      },
+    },
+  ]
 
   return (
+   <AskAIProvider value={onChatWith}>
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto px-5 py-5 space-y-3.5">
+        <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <Brain size={17} style={{ color: colors.accent }} />
+              <Brain size={16} style={{ color: colors.accent }} />
               <div>
-                <h1 className="text-[15px] font-semibold" style={{ color: colors.textPrimary }}>Logic</h1>
-                <p className="text-[11px]" style={{ color: colors.textMuted }}>How Attentify reasons about your attention — and what it's working from.</p>
+                <h1 className="text-[14px] font-semibold" style={{ color: colors.textPrimary }}>Logic</h1>
+                <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>How Attentify reasons about your attention — and what it's working from.</p>
               </div>
             </div>
             <button onClick={load} className="p-1.5 rounded-lg" style={{ border: `1px solid ${colors.border}`, color: colors.textMuted }} title="Refresh">
@@ -221,13 +278,20 @@ export default function Logic(): React.ReactElement {
             </button>
           </div>
 
-          {/* Summary strip */}
-          <div className="flex flex-wrap gap-2.5">
-            {chip('Goals', goals.length, colors.accent)}
-            {chip('Learned prefs', prefs.length)}
-            {chip('Live signals', pending.length, pending.length ? colors.warning : colors.textMuted)}
-            {chip('Patterns', alerts.length, alerts.length ? colors.negative : colors.textMuted)}
-            {chip('Top drain', topDistractor ?? '—', topDistractor ? colors.negative : colors.textMuted)}
+          {/* KPI strip — click any metric for the detail behind it + Ask AI */}
+          <div className="section-panel flex items-stretch overflow-x-auto">
+            {summary.map((m, i) => (
+              <div key={m.label} className="flex-1 flex" style={{ minWidth: 96, borderLeft: i === 0 ? 'none' : `1px solid ${colors.border}` }}>
+                <MetricDrill spec={m.drill} onAskAI={onChatWith} full width={320}
+                  render={
+                    <div className="px-3 py-2.5">
+                      <p className="hud-label mb-1" style={{ color: colors.textMuted }}>{m.label}</p>
+                      <p className="text-[15px] font-semibold data-value truncate" style={{ color: m.color ?? colors.textPrimary }}>{m.value}</p>
+                    </div>
+                  }
+                />
+              </div>
+            ))}
           </div>
 
           {loading ? (
@@ -237,14 +301,15 @@ export default function Logic(): React.ReactElement {
           ) : (
             <>
               {/* Context I'm using */}
-              <Section icon={<Target size={14} />} title="Context I'm using" count={goals.length + prefs.length + context.length}>
+              <SectionHeader label="Context I'm using" sub={`${goals.length + prefs.length + context.length} items`} />
+              <div className="section-panel p-3.5">
                 {goals.length === 0 && prefs.length === 0 && context.length === 0 ? (
                   <p className="text-[11px]" style={{ color: colors.textMuted }}>Nothing yet. Set a goal in chat, or add context below — it sharpens my reasoning.</p>
                 ) : (
                   <div className="space-y-3">
                     {goals.length > 0 && (
                       <div>
-                        <p className="text-[9.5px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: colors.textMuted }}>Your goals</p>
+                        <p className="hud-label mb-1.5" style={{ color: colors.textMuted }}>Your goals</p>
                         <div className="flex flex-wrap gap-1.5">
                           {goals.map((g) => (
                             <span key={g.id} className="text-[11px] px-2 py-1 rounded-lg" style={{ background: colors.accentBg, color: colors.textSecondary, border: `1px solid ${colors.border}` }}>{g.text}</span>
@@ -254,7 +319,7 @@ export default function Logic(): React.ReactElement {
                     )}
                     {context.length > 0 && (
                       <div>
-                        <p className="text-[9.5px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: colors.textMuted }}>Context you gave me</p>
+                        <p className="hud-label mb-1.5" style={{ color: colors.textMuted }}>Context you gave me</p>
                         <div className="space-y-1">
                           {context.map((c) => (
                             <div key={c.id} className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: colors.inputBg, border: `1px solid ${colors.border}` }}>
@@ -270,7 +335,7 @@ export default function Logic(): React.ReactElement {
                     )}
                     {prefs.length > 0 && (
                       <div>
-                        <p className="text-[9.5px] font-semibold uppercase tracking-wide mb-1.5" style={{ color: colors.textMuted }}>Learned about you</p>
+                        <p className="hud-label mb-1.5" style={{ color: colors.textMuted }}>Learned about you</p>
                         <div className="space-y-1">
                           {prefs.slice(0, 12).map((p, i) => (
                             <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: colors.inputBg, border: `1px solid ${colors.border}` }}>
@@ -283,10 +348,11 @@ export default function Logic(): React.ReactElement {
                     )}
                   </div>
                 )}
-              </Section>
+              </div>
 
               {/* Live reasoning */}
-              <Section icon={<Zap size={14} />} title="Live reasoning" count={activeInf.length} defaultOpen={activeInf.length > 0}>
+              <SectionHeader label="Live reasoning" sub={`${activeInf.length} signal${activeInf.length !== 1 ? 's' : ''}`} />
+              <div className="section-panel p-3.5">
                 {activeInf.length === 0 ? (
                   <p className="text-[11px]" style={{ color: colors.textMuted }}>No active signals. As you work, Attentify surfaces reasoning about what's pulling your focus here.</p>
                 ) : (
@@ -295,16 +361,20 @@ export default function Logic(): React.ReactElement {
                     {activeInf.map((inf) => <ReasoningChain key={inf.id} inf={inf} onResolve={resolve} />)}
                   </>
                 )}
-              </Section>
+              </div>
 
               {/* Behavioral patterns */}
-              <Section icon={<Lightbulb size={14} />} title="Behavioral patterns" count={alerts.length} defaultOpen={alerts.length > 0}>
+              <div className="flex items-center gap-3">
+                <div className="flex-1"><SectionHeader label="Behavioral patterns" sub={`${alerts.length} detected`} /></div>
+                {alerts.length > 0 && <TableQuery title="Behavioral patterns" summary={alerts.slice(0, 6).map((a) => a.title).join('; ')} />}
+              </div>
+              <div className="section-panel p-3.5">
                 {alerts.length === 0 ? (
                   <p className="text-[11px]" style={{ color: colors.textMuted }}>No patterns detected recently.</p>
                 ) : (
                   alerts.slice(0, 12).map((a) => <PatternChain key={a.id} alert={a} />)
                 )}
-              </Section>
+              </div>
             </>
           )}
         </div>
@@ -334,5 +404,6 @@ export default function Logic(): React.ReactElement {
         </div>
       </div>
     </div>
+   </AskAIProvider>
   )
 }

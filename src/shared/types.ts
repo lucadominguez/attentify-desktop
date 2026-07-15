@@ -96,6 +96,10 @@ export interface ActivitySession {
   endTime: number
   duration: number
   isDistraction: boolean
+  // Set when this session was in a private/incognito/Tor browser window. In that case
+  // the URL inside is intentionally not captured, so time is tracked but not attributed
+  // to a domain. See src/shared/privacyMode.ts.
+  privacy?: import('./privacyMode').PrivacyMode
 }
 
 export interface DailyStats {
@@ -149,6 +153,9 @@ export interface AppSettings {
   ollamaModel: string
   blockingMode?: 'auto' | 'ask'
   alwaysOn?: boolean
+  // Share anonymized diagnostics (bug reports, crashes/freezes, AI-friction signals,
+  // token usage) with the developer to help fix issues. Default on during beta.
+  shareDiagnostics?: boolean
 }
 
 export interface BreakMode {
@@ -204,6 +211,10 @@ export interface AppStore {
   contentRules?: ContentRule[]
   // Estimated USD of AI spend against the bundled OpenRouter key (free-tier metering).
   aiUsageUsd?: number
+  // Signed-in account: a 30-day website session token (ses_…) from /v1/auth/*.
+  // Establishes identity in-app; the linked license key (cloudLicense) still drives
+  // AI/cloud gating so existing billing/sync keep working unchanged.
+  authToken?: string
   // Cloud ($5/mo) subscription state, when the user has linked a license key.
   cloudLicense?: string
   cloudActive?: boolean
@@ -219,6 +230,8 @@ export interface AppStore {
   // Free-text context the user added on the Logic page to inform the AI. Injected
   // verbatim into the system prompt so it shapes the assistant's reasoning.
   userContext?: UserContextNote[]
+  // Stable anonymous id for grouping this install's uploaded diagnostics.
+  installId?: string
 }
 
 export interface UserContextNote {
@@ -284,6 +297,55 @@ export interface CloudState {
   email: string | null
 }
 
+// ── System compatibility ────────────────────────────────────────────────────────
+// 'ok'   — works as designed.
+// 'warn' — the app runs but a capability is degraded or unenforced.
+// 'fail' — a core capability cannot work on this machine.
+export type CompatStatus = 'ok' | 'warn' | 'fail'
+
+export interface CompatCheck {
+  id: 'os' | 'arch' | 'elevation' | 'hosts' | 'tracking' | 'dataDir'
+  label: string
+  status: CompatStatus
+  /** What was actually detected, e.g. "Windows 11 (build 26200)". */
+  detail: string
+  /** Present when the user can do something about a warn/fail. */
+  fix?: string
+}
+
+export interface CompatReport {
+  /** Worst status across all checks — drives the summary badge. */
+  overall: CompatStatus
+  checks: CompatCheck[]
+  checkedAt: number
+}
+
+// Social sign-in providers supported by the backend OAuth flow.
+export type AuthProvider = 'google' | 'facebook' | 'github' | 'microsoft'
+
+// In-app account/session state, surfaced to the renderer (Settings + onboarding).
+export interface AuthState {
+  signedIn: boolean
+  email: string | null
+  tier: string | null
+  subscribed: boolean
+}
+
+export interface AuthResult {
+  ok: boolean
+  error?: string
+  auth?: AuthState
+}
+
+// Auto-update status pushed from the main process (electron-updater).
+export type UpdateState = 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'none' | 'error' | 'dev'
+export interface UpdateStatus {
+  state: UpdateState
+  version?: string
+  percent?: number
+  message?: string
+}
+
 export interface ChangeEntry {
   ts: number
   category: 'hosts' | 'firewall' | 'policy' | 'startup' | 'system'
@@ -295,6 +357,7 @@ export interface ChangeEntry {
 export type ViewName =
   | 'home'
   | 'logic'
+  | 'activity'
   | 'timesheets'
   | 'focus-shield'
   | 'deep-clean'

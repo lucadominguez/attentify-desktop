@@ -6,10 +6,14 @@ import {
   getEffectiveApiKey, getUsageState, getCloudState, setCloudLicense, clearCloudLicense,
   startCheckout, setUsageChangeCallback,
 } from './billing'
+import { getAuthState, signup as authSignup, login as authLogin, logout as authLogout, getAuthProviders as authProviders, oauthLogin as authOauthLogin } from './auth'
+import { checkForUpdates, installUpdate, getUpdateStatus } from './updater'
 import { BlockingEngine } from './blocking/BlockingEngine'
 import { processMessage } from './chat/ChatEngine'
 import { runFocusScan } from './scanner/FocusScan'
 import { listStartupItems, disableStartupItem } from './scanner/StartupManager'
+import { reportIssue } from './diagnostics/report'
+import { listIssues } from './data/repository'
 import { checkElevation, verifyHostsWritable } from './blocking/hostsFileEditor'
 import { registerStartupDaemon, unregisterStartupDaemon, isStartupDaemonRegistered, getPlatformLabel } from './daemonManager'
 import { revertAllChanges } from './safety/systemRestore'
@@ -27,11 +31,11 @@ import {
   getActiveGoals, insertGoal, clearGoal,
   getPreferences, upsertPreference, deletePreference,
   getInferences, resolveInference,
-  getAgentMessages, insertAgentMessage, clearAgentMessages, getDomains,
+  getAgentMessages, insertAgentMessage, clearAgentMessages, getDomains, getRecentEvents,
   getConversationMessages, listConversations, createConversation, renameConversation, deleteConversation,
   listCheckpoints, getCheckpoint,
 } from './data/repository'
-import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory, AppSettings } from '../shared/types'
+import type { FocusSession, ChatMessage, ActivitySession, DailyStats, IntentCheckResult, AppCategory, AppSettings, AuthProvider } from '../shared/types'
 
 let engine: BlockingEngine | null = null
 let monitor: MonitorService | null = null
@@ -198,8 +202,62 @@ function sendMain(channel: string, ...args: unknown[]): void {
 
 // ── IPC initialization ────────────────────────────────────────────────────────
 
+// ── Sign-in gate ──────────────────────────────────────────────────────────────
+// Attentify is browsable signed-out — every view still renders — but any channel that
+// DOES something (spends AI credit, changes the machine, writes user data) needs an
+// account. Enforced here rather than by hiding buttons, because the renderer is not a
+// trust boundary and a UI-only gate drifts out of sync with the handlers it guards.
+//
+// Deliberately default-DENY: this lists what stays open, so a channel added later is
+// gated until someone decides otherwise. Open = reads, auth itself, window/app chrome,
+// and the few actions a signed-out user must still have (report a bug, take an update,
+// leave a block interstitial, change appearance).
+const OPEN_CHANNELS = new Set<string>([
+  // auth + account
+  'auth:get', 'auth:providers', 'auth:login', 'auth:signup', 'auth:logout', 'auth:oauth',
+  // reads
+  'store:get', 'activity:get', 'agent:get-history', 'alwayson:get', 'analytics:get',
+  'analytics:get-cards', 'apikey:get-status', 'blocking:elevation-status', 'break:status',
+  'checkpoints:list', 'cloud:get', 'compat:check', 'content-rules:get', 'context:list',
+  'conversations:list', 'conversations:messages', 'elevation:status', 'extension:status',
+  'goals:get', 'inferences:get', 'issue:list', 'preferences:get', 'safety:changelog',
+  'safety:status', 'startup:list', 'timesheet:get', 'update:check', 'update:status',
+  'usage:get', 'daemon:startup-status',
+  // chrome / environment
+  'app:version', 'daemon:platform', 'shell:open-external',
+  // Settings incl. the theme + diagnostics toggles: appearance is part of "looking".
+  // The system-changing settings are enforced on their own channels below, not here.
+  'store:set',
+  // must keep working signed-out
+  'issue:report', 'update:install', 'interstitial:hide', 'interstitial:proceed',
+  'agent:dismiss-proactive',
+  // Home IS the chat panel, which opens a conversation shell on mount — gating this
+  // would leave a signed-out user staring at a broken home screen. Only a local row;
+  // actually talking to the assistant is gated on chat:start.
+  'conversations:create',
+])
+
+class AuthRequiredError extends Error {
+  constructor(channel: string) {
+    super(`AUTH_REQUIRED:${channel}`)
+    this.name = 'AuthRequiredError'
+  }
+}
+
 export function initIpc(): void {
   const store = getStore()
+
+  // Wrap ipcMain.handle for the duration of registration so the gate is applied once, at
+  // a single choke point, instead of being repeated in ~50 handlers where one omission
+  // is a silent hole. Restored immediately after the handlers below are registered.
+  const originalHandle = ipcMain.handle.bind(ipcMain)
+  ipcMain.handle = ((channel: string, listener: (event: Electron.IpcMainInvokeEvent, ...args: unknown[]) => unknown) => {
+    if (OPEN_CHANNELS.has(channel)) return originalHandle(channel, listener)
+    return originalHandle(channel, (event, ...args) => {
+      if (!getAuthState().signedIn) throw new AuthRequiredError(channel)
+      return listener(event, ...args)
+    })
+  }) as typeof ipcMain.handle
 
   // Auto-detect actual elevation at startup — don't rely on stale stored value
   const actuallyElevated = checkElevation()
@@ -217,8 +275,9 @@ export function initIpc(): void {
   }
 
   // Auto-register startup daemon on first elevated run so future launches skip UAC
-  if (actuallyElevated && !isStartupDaemonRegistered()) {
-    registerStartupDaemon(process.execPath)
+  // (async + fire-and-forget so init never blocks on schtasks).
+  if (actuallyElevated) {
+    void isStartupDaemonRegistered().then((reg) => { if (!reg) void registerStartupDaemon(process.execPath) })
   }
 
   monitor = new MonitorService()
@@ -494,6 +553,13 @@ export function initIpc(): void {
     return { elevated, writable }
   })
 
+  // Full machine compatibility sweep (OS floor, architecture, elevation, hosts,
+  // PowerShell tracking probe, data folder). Surfaced in Settings → Compatibility.
+  ipcMain.handle('compat:check', async () => {
+    const { runPreflight } = await import('./preflight')
+    return runPreflight()
+  })
+
   // ── Sessions ──────────────────────────────────────────────────────────────
 
   ipcMain.handle('session:start', (_e, mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]) => {
@@ -615,6 +681,13 @@ export function initIpc(): void {
 
   ipcMain.on('chat:start', async (event, text: string, images?: { media_type: string; data: string }[], conversationId?: string) => {
     const sender = event.sender
+    // Streaming chat registers via ipcMain.on, so the handle-wrapper gate above cannot
+    // see it — gate it explicitly. This is the main way the assistant is used, and it
+    // spends AI credit, so it must not be reachable signed-out.
+    if (!getAuthState().signedIn) {
+      sender.send('chat:error', 'AUTH_REQUIRED')
+      return
+    }
     if (!agentService) {
       sender.send('chat:error', 'Agent not initialized')
       return
@@ -702,6 +775,19 @@ export function initIpc(): void {
   })
 
   ipcMain.handle('cloud:checkout', async (_e, email?: string) => startCheckout(email))
+
+  // ── Account authentication (email + password against the cloud backend) ──────
+  ipcMain.handle('auth:get', () => getAuthState())
+  ipcMain.handle('auth:signup', (_e, input: { email: string; password: string }) => authSignup(input?.email ?? '', input?.password ?? ''))
+  ipcMain.handle('auth:login', (_e, input: { email: string; password: string }) => authLogin(input?.email ?? '', input?.password ?? ''))
+  ipcMain.handle('auth:logout', async () => { await authLogout(); return { ok: true, auth: getAuthState() } })
+  ipcMain.handle('auth:providers', () => authProviders())
+  ipcMain.handle('auth:oauth', (_e, provider: AuthProvider) => authOauthLogin(provider))
+
+  // ── Auto-update ─────────────────────────────────────────────────────────────
+  ipcMain.handle('update:status', () => getUpdateStatus())
+  ipcMain.handle('update:check', () => checkForUpdates())
+  ipcMain.handle('update:install', () => installUpdate())
 
   ipcMain.handle('shell:open-external', (_e, url: string) => {
     if (typeof url === 'string' && /^https?:\/\//.test(url)) void shell.openExternal(url)
@@ -821,6 +907,35 @@ export function initIpc(): void {
 
   // App version (so the UI can show which build is installed)
   ipcMain.handle('app:version', () => app.getVersion())
+
+  // ── Bug reports / diagnostics ──────────────────────────────────────────────
+  ipcMain.handle('issue:report', (_e, input: { title?: string; description?: string; view?: string; severity?: string }) => {
+    const issue = reportIssue({
+      kind: 'bug_manual',
+      severity: input?.severity ?? 'medium',
+      title: (input?.title || 'Bug report').slice(0, 200),
+      description: (input?.description || '').slice(0, 4000),
+      view: input?.view,
+    })
+    return { ok: true, id: issue.id }
+  })
+  ipcMain.handle('issue:list', (_e, limit?: number) => listIssues(limit ?? 100))
+
+  // ── Activity feed: raw searches + browsing history + app activity ──────────
+  ipcMain.handle('activity:get', (_e, days?: number) => {
+    const win = Math.max(1, Math.min(days ?? 14, 90))
+    const since = Date.now() - win * 24 * 60 * 60 * 1000
+    const events = getRecentEvents(since, 2000)
+    const searches = events
+      .filter((e) => e.type === 'search_query' && e.title)
+      .map((e) => ({ ts: e.ts, query: e.title as string, url: e.url }))
+    const visits = events
+      .filter((e) => e.type === 'url_visit' && e.url)
+      .map((e) => ({ ts: e.ts, url: e.url as string, title: e.title }))
+    const tracker = monitor?.getTracker()
+    const sessions = tracker?.getSessions(since) ?? []
+    return { rangeDays: win, searches, visits, sessions: sessions.slice(-500) }
+  })
 
   // ── Startup (auto-run) management ──────────────────────────────────────────
   ipcMain.handle('startup:list', () => listStartupItems())
@@ -1086,22 +1201,25 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
 
   // ── Always-On (runs like an antivirus: starts at login, stays in the tray, and
   //    keeps enforcing blocks even when the window is closed) ──────────────────
-  ipcMain.handle('alwayson:get', () => ({
+  ipcMain.handle('alwayson:get', async () => ({
     enabled: getStore().settings.alwaysOn === true,
-    startupRegistered: isStartupDaemonRegistered(),
+    startupRegistered: await isStartupDaemonRegistered(),
   }))
 
-  ipcMain.handle('alwayson:set', (_e, enabled: boolean) => {
+  ipcMain.handle('alwayson:set', async (_e, enabled: boolean) => {
     const s = getStore()
     patchStore({ settings: { ...s.settings, alwaysOn: !!enabled } })
+    // Update UI state immediately; the (async) startup-task registration runs without
+    // blocking the event loop, so the app never freezes during the toggle.
     if (enabled) {
-      registerStartupDaemon(process.execPath)   // relaunch at login (elevated on Windows)
       engine?.protect()                          // make sure every protection layer is live now
+      await registerStartupDaemon(process.execPath).catch(() => false)   // relaunch at login (elevated on Windows)
     } else {
-      unregisterStartupDaemon()
+      await unregisterStartupDaemon().catch(() => false)
     }
-    debugLog('alwayson:set', { enabled, startupRegistered: isStartupDaemonRegistered() })
-    return { ok: true, enabled: !!enabled, startupRegistered: isStartupDaemonRegistered() }
+    const startupRegistered = await isStartupDaemonRegistered()
+    debugLog('alwayson:set', { enabled, startupRegistered })
+    return { ok: true, enabled: !!enabled, startupRegistered }
   })
 
   // ── Interstitial ──────────────────────────────────────────────────────────
@@ -1177,6 +1295,10 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
     enabledRules: contentRuleEngine?.getRules().filter((r) => r.enabled).length ?? 0,
     bypassScores: contentRuleEngine?.getAllBypassScores() ?? {},
   }))
+
+  // Registration is done — stop intercepting so nothing registered elsewhere (or later)
+  // is silently wrapped by this gate.
+  ipcMain.handle = originalHandle
 }
 
 export function startTracking(): void {

@@ -336,6 +336,15 @@ html.light .bg-grid {
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 
+/* ── Drill-down hit target — a clickable metric that darkens on hover ────────── */
+.drill-hit {
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 0.12s ease;
+}
+.drill-hit:hover { background-color: rgba(127, 130, 150, 0.12); }
+.drill-hit:active { background-color: rgba(127, 130, 150, 0.18); }
+
 /* ── Shimmer sweep on active elements ───────────────────────────────────────── */
 @keyframes shimmerSweep {
   0%   { background-position: -200% 0; }

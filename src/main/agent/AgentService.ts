@@ -10,6 +10,7 @@ import {
 } from '../data/repository'
 import { getStore } from '../store'
 import { canUseAi, recordUsage } from '../billing'
+import { reportIssue } from '../diagnostics/report'
 import type { ActivitySession } from '../../shared/types'
 
 // Sentinel error the renderer recognises to show the subscribe/upgrade prompt.
@@ -224,6 +225,8 @@ export class AgentService {
       const msg = insertAgentMessage({ role: 'assistant', content: cleaned, ts: Date.now(), session_id: conversationId })
       if (conversationId) touchConversation(conversationId)
       callbacks.onDone(msg)
+      // Self-improvement: detect (cheaply) if the user just hit product friction.
+      void this.maybeClassifyFriction(userText, cleaned, conversationId)
     } catch (err) {
       callbacks.onError(err instanceof Error ? err.message : String(err))
     }
@@ -278,6 +281,47 @@ export class AgentService {
     }
   }
 
+  // ── Self-improvement: detect product friction from a chat exchange ───────────
+  // Heuristic pre-filter (zero cost) → only if a correction/frustration signal is
+  // present do we spend a cheap classifier call. Logs an ai_friction issue so the whole
+  // log can later be reviewed to improve the product.
+  private lastFrictionCheck = 0
+  private static readonly FRICTION_HINT = /\b(no,?\s|not what|didn'?t (mean|ask|work|understand|catch|notice|detect|get)|that'?s (wrong|not)|you (missed|didn'?t|should|failed|keep)|already (told|said|asked|did)|why (didn'?t|can'?t|won'?t|is|does|do you)|still (not|doesn'?t|isn'?t|won'?t)|actually,?\s*i|i meant|wrong|incorrect|useless|doesn'?t (work|make sense)|not right|frustrat|annoying|come on|that isn'?t|isn'?t what|misunderstood)\b/i
+
+  private async maybeClassifyFriction(userText: string, assistantText: string, conversationId?: string): Promise<void> {
+    if (!this.client || !userText) return
+    if (!AgentService.FRICTION_HINT.test(userText)) return
+    const now = Date.now()
+    if (now - this.lastFrictionCheck < 15000) return   // throttle bursts
+    this.lastFrictionCheck = now
+    if (!canUseAi()) return
+    try {
+      const sys = `You review ONE exchange between a user and a focus assistant and detect PRODUCT FRICTION — a sign the app fell short of what the user expected. Categories:
+- missed-nuance: misread what the user meant.
+- detection-gap: failed to auto-detect/notice something the user expected it to.
+- wrong-action: did the wrong thing.
+- needs-clarification: had to ask because it couldn't infer.
+- other-friction: any other UX/logic shortfall.
+Reply with ONLY compact JSON, no prose: {"friction":<true|false>,"category":"<category or none>","note":"<=18 words on what fell short"}
+Only report REAL friction (a correction, frustration, or a clear gap). Ordinary helpful back-and-forth is NOT friction.`
+      const input = `User: ${userText.slice(0, 700)}\nAssistant: ${assistantText.slice(0, 700)}`
+      const raw = await this.complete(sys, input, 120)
+      const m = raw.match(/\{[\s\S]*\}/)
+      if (!m) return
+      const p = JSON.parse(m[0]) as { friction?: boolean; category?: string; note?: string }
+      if (p && p.friction) {
+        reportIssue({
+          kind: 'ai_friction',
+          severity: 'low',
+          category: String(p.category || 'other-friction').slice(0, 40),
+          title: 'AI friction detected in chat',
+          description: String(p.note || '').slice(0, 300),
+          context: { excerpt: input, conversationId },
+        })
+      }
+    } catch { /* best-effort */ }
+  }
+
   // ── Agentic loop (streaming + tool execution) ─────────────────────────────
 
   private async runLoop(
@@ -293,6 +337,12 @@ export class AgentService {
     // and can never persist on screen.
     let raw = ''
     let currentMessages = [...messages]
+    // Coalesce streaming updates: re-sanitizing the full text and pushing IPC on EVERY
+    // 2-4 char delta is O(n²) and starves the event loop (the app "freezes" while the AI
+    // types). Emit at most every EMIT_MS, plus a trailing flush per round, so the UI
+    // updates smoothly without blocking.
+    const EMIT_MS = 55
+    let lastEmit = 0
 
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++
@@ -306,12 +356,22 @@ export class AgentService {
         tools: TOOL_DEFINITIONS,
       })
 
+      let dirty = false
       for await (const event of stream) {
         if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
           raw += event.delta.text
-          callbacks.onChunk(sanitizeStreaming(raw))
+          const t = Date.now()
+          if (t - lastEmit >= EMIT_MS) {
+            callbacks.onChunk(sanitizeStreaming(raw))
+            lastEmit = t
+            dirty = false
+          } else {
+            dirty = true
+          }
         }
       }
+      // Flush the tail of this round so its full text shows before tools run / on finish.
+      if (dirty) { callbacks.onChunk(sanitizeStreaming(raw)); lastEmit = Date.now() }
 
       const finalMsg = await stream.finalMessage()
       recordUsage(model, finalMsg.usage?.input_tokens ?? 0, finalMsg.usage?.output_tokens ?? 0)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Shield, Zap, Bell, Key, CheckCircle, Sparkles, Sun, Moon, TrendingUp, ChevronRight, RotateCcw, History, AlertTriangle } from 'lucide-react'
+import { Shield, Zap, Bell, Key, CheckCircle, Sparkles, Sun, Moon, TrendingUp, ChevronRight, RotateCcw, History, AlertTriangle, RefreshCw, Cpu, XCircle } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
-import type { AppStore, UsageState, CloudState, ViewName, ChangeEntry } from '@shared/types'
+import type { AppStore, UsageState, CloudState, ViewName, ChangeEntry, UpdateStatus, CompatReport, CompatStatus } from '@shared/types'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -9,6 +9,16 @@ interface SettingsProps {
   store: AppStore
   onRefresh: () => void
   onNavigate?: (view: ViewName) => void
+}
+
+// Semantic status colors (Slate & Violet palette): emerald ok, amber degraded, coral broken.
+const COMPAT_COLOR: Record<CompatStatus, string> = { ok: '#34d399', warn: '#fbbf24', fail: '#f87171' }
+
+function CompatIcon({ status }: { status: CompatStatus }): React.ReactElement {
+  const color = COMPAT_COLOR[status]
+  if (status === 'ok') return <CheckCircle size={12} style={{ color, flexShrink: 0, marginTop: 1 }} />
+  if (status === 'warn') return <AlertTriangle size={12} style={{ color, flexShrink: 0, marginTop: 1 }} />
+  return <XCircle size={12} style={{ color, flexShrink: 0, marginTop: 1 }} />
 }
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }): React.ReactElement {
@@ -39,6 +49,22 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
   const [checkingOut, setCheckingOut] = useState(false)
   const [version, setVersion] = useState('')
   useEffect(() => { api.getAppVersion?.().then(setVersion).catch(() => {}) }, [])
+
+  const [update, setUpdate] = useState<UpdateStatus>({ state: 'idle' })
+  useEffect(() => {
+    api.getUpdateStatus?.().then(setUpdate).catch(() => {})
+    const off = api.onUpdateStatus?.((s) => setUpdate(s))
+    return () => { off?.() }
+  }, [])
+
+  // Compatibility — probed on mount so a broken machine surfaces without being asked.
+  const [compat, setCompat] = useState<CompatReport | null>(null)
+  const [compatBusy, setCompatBusy] = useState(false)
+  const runCompat = (): void => {
+    setCompatBusy(true)
+    api.runCompatCheck?.().then(setCompat).catch(() => {}).finally(() => setCompatBusy(false))
+  }
+  useEffect(() => { runCompat() }, [])
 
   // Safety & Recovery
   const [changeCount, setChangeCount] = useState<number | null>(null)
@@ -140,6 +166,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
 
+        {/* Account moved to the title-bar avatar (AccountMenu) — always on screen. */}
+
         {/* ── Appearance ────────────────────────────────────────────────────── */}
         <section>
           <SectionHeader icon={theme === 'dark' ? <Moon size={11} /> : <Sun size={11} />} label="Appearance" />
@@ -161,9 +189,50 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               {theme === 'dark' ? <><Sun size={13} /> Switch to light</> : <><Moon size={13} /> Switch to dark</>}
             </button>
           </div>
-          <p className="text-[10px] mt-2 text-right" style={{ color: colors.textDim }}>
-            Attentify{version ? ` v${version}` : ''}
-          </p>
+          {/* Diagnostics sharing */}
+          <div className="flex items-center justify-between p-4 rounded-lg mt-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="pr-3">
+              <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Share anonymized diagnostics</p>
+              <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+                Sends bug reports, crash/freeze captures and token usage to help fix issues. No passwords or keys. Beta.
+              </p>
+            </div>
+            <button
+              onClick={() => api.setStore({ settings: { ...store.settings, shareDiagnostics: store.settings.shareDiagnostics === false } }).then(onRefresh)}
+              className="flex-shrink-0 w-11 h-6 rounded-full transition-colors relative"
+              style={{ background: store.settings.shareDiagnostics === false ? colors.border : colors.accent }}
+              title="Toggle diagnostics sharing"
+            >
+              <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: store.settings.shareDiagnostics === false ? 2 : 22 }} />
+            </button>
+          </div>
+          {/* Updates */}
+          <div className="flex items-center justify-between p-4 rounded-lg mt-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+            <div className="pr-3">
+              <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Updates</p>
+              <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+                Attentify{version ? ` v${version}` : ''} · {
+                  update.state === 'ready' ? 'update ready — restart to install'
+                  : update.state === 'downloading' ? `downloading${typeof update.percent === 'number' ? ` ${update.percent}%` : '…'}`
+                  : update.state === 'available' ? 'update found — downloading'
+                  : update.state === 'checking' ? 'checking…'
+                  : update.state === 'error' ? 'check failed'
+                  : update.state === 'dev' ? 'updates active in the installed app'
+                  : 'up to date'
+                }
+              </p>
+            </div>
+            {update.state === 'ready' ? (
+              <button onClick={() => void api.installUpdate?.()} className="flex-shrink-0 px-3 py-2 rounded-lg text-[11px] font-medium" style={{ background: colors.accent, color: '#fff' }}>
+                Restart to update
+              </button>
+            ) : (
+              <button onClick={() => { setUpdate({ state: 'checking' }); api.checkForUpdate?.().then(setUpdate).catch(() => {}) }}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium" style={{ background: colors.accentBg, border: `1px solid ${colors.border}`, color: colors.accent }}>
+                <RefreshCw size={12} className={update.state === 'checking' ? 'animate-spin' : ''} /> Check now
+              </button>
+            )}
+          </div>
         </section>
 
         {/* ── Extra modules ─────────────────────────────────────────────────── */}
@@ -512,6 +581,68 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <p className="text-[9px] mt-3" style={{ color: 'rgba(251,191,36,0.6)' }}>
                 Run the app as Administrator once — it will register a Task Scheduler entry so future launches are automatically elevated without a UAC prompt.
               </p>
+            )}
+          </div>
+        </section>
+
+        {/* ── Compatibility ─────────────────────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={<Cpu size={11} />} label="Compatibility" />
+          <div
+            className="p-4 rounded-lg"
+            style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
+          >
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>This device</p>
+                <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: colors.textMuted }}>
+                  Checks that this PC can actually run every part of Attentify — so a capability
+                  that is silently unavailable shows up here instead of just looking broken.
+                </p>
+              </div>
+              <button
+                onClick={runCompat}
+                disabled={compatBusy}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all hover:brightness-110 disabled:opacity-60 flex-shrink-0"
+                style={{ background: 'rgba(99,102,241,0.10)', border: '1px solid rgba(99,102,241,0.30)', color: '#818cf8' }}
+              >
+                <RefreshCw size={11} className={compatBusy ? 'animate-spin' : ''} /> {compatBusy ? 'Checking…' : 'Re-check'}
+              </button>
+            </div>
+
+            {!compat ? (
+              <p className="text-[10px]" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
+                {compatBusy ? 'Running checks…' : 'No results yet.'}
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {compat.checks.map((c) => (
+                  <div
+                    key={c.id}
+                    className="flex items-start gap-2.5 p-2.5 rounded-md"
+                    style={{
+                      background: c.status === 'ok' ? 'transparent' : `${COMPAT_COLOR[c.status]}0f`,
+                      border: `1px solid ${c.status === 'ok' ? colors.border : `${COMPAT_COLOR[c.status]}40`}`
+                    }}
+                  >
+                    <CompatIcon status={c.status} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-medium" style={{ color: colors.textPrimary }}>{c.label}</p>
+                      <p
+                        className="text-[9px] mt-0.5 break-words"
+                        style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}
+                      >
+                        {c.detail}
+                      </p>
+                      {c.fix && (
+                        <p className="text-[9px] mt-1 leading-relaxed" style={{ color: COMPAT_COLOR[c.status] }}>
+                          {c.fix}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </section>

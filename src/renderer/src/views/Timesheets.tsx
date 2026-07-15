@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { Clock, RefreshCw, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react'
 import type { ActivitySession, AppCategory } from '@shared/types'
+import { MetricDrill, TableQuery, AskAIProvider } from '../components/MetricDrill'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -131,13 +132,21 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
   }
 
   const Stat = ({ label, value, color }: { label: string; value: string; color?: string }): React.ReactElement => (
-    <div className="flex flex-col gap-1 p-3.5 rounded-xl" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
-      <span className="text-[11px]" style={{ color: colors.textMuted }}>{label}</span>
-      <span className="text-[22px] font-semibold leading-none data-value" style={{ color: color ?? colors.textPrimary }}>{value}</span>
+    <div className="flex rounded-xl" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
+      <MetricDrill full width={300}
+        spec={{ title: label, subtitle: `${value} · week of ${weekLabel}`, askPrompt: `For the week of ${weekLabel}, my "${label}" is ${value}. What does that tell you and what should I change?` }}
+        render={
+          <div className="flex flex-col gap-1 p-3.5">
+            <span className="text-[11px]" style={{ color: colors.textMuted }}>{label}</span>
+            <span className="text-[22px] font-semibold leading-none data-value" style={{ color: color ?? colors.textPrimary }}>{value}</span>
+          </div>
+        }
+      />
     </div>
   )
 
   return (
+   <AskAIProvider value={onChatWith}>
     <div className="p-4 space-y-4 animate-fade-in max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -181,7 +190,10 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
         <>
           {/* Weekly grid — one row per day with a stacked category bar */}
           <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
-            <p className="text-[11px] font-medium mb-3" style={{ color: colors.textMuted }}>Daily breakdown — click a day for details</p>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-medium" style={{ color: colors.textMuted }}>Daily breakdown — click a day for details</p>
+              <TableQuery title="Daily breakdown" summary={days.map((d) => `${fmtDay(d.date)} ${fmtHM(d.total)}`).join(', ')} />
+            </div>
             <div className="space-y-1.5">
               {days.map((d) => {
                 const isToday = d.key === dayKey(Date.now())
@@ -222,13 +234,19 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
             <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>{fmtDay(selected.date)} — time entries</p>
-                <span className="text-[11px]" style={{ color: colors.textMuted }}>{fmt(selected.total)} total</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px]" style={{ color: colors.textMuted }}>{fmt(selected.total)} total</span>
+                  <TableQuery title={`${fmtDay(selected.date)} time entries`} summary={[...selected.byApp.entries()].sort((a, b) => b[1].ms - a[1].ms).slice(0, 6).map(([app, v]) => `${app} ${fmt(v.ms)}`).join(', ')} />
+                </div>
               </div>
               <TimeEntryTable rows={[...selected.byApp.entries()].map(([app, v]) => ({ app, ...v })).sort((a, b) => b.ms - a.ms)} total={selected.total} colors={colors} />
             </div>
           ) : (
             <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
-              <p className="text-[12px] font-medium mb-3" style={{ color: colors.textPrimary }}>Top apps this week</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Top apps this week</p>
+                <TableQuery title="Top apps this week" summary={weekApps.slice(0, 6).map((r) => `${r.app} ${fmt(r.ms)}`).join(', ')} />
+              </div>
               <TimeEntryTable rows={weekApps} total={weekTotal} colors={colors} />
             </div>
           )}
@@ -245,6 +263,7 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
         </>
       )}
     </div>
+   </AskAIProvider>
   )
 }
 

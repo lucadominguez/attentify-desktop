@@ -7,6 +7,7 @@
 // user-supplied key nor a Cloud subscription is metered.
 
 import { getStore, patchStore } from './store'
+import { recordModelUsage } from './data/repository'
 import { loadApiKey } from './keystore'
 import { BUNDLED_OPENROUTER_KEY, FREE_USAGE_LIMIT_USD, CLOUD_API_BASE, estimateCostUsd } from './config'
 import { debugLog } from './debug/logger'
@@ -56,9 +57,15 @@ export function canUseAi(): boolean {
  * metered — a user's own key and Cloud subscriptions are unmetered.
  */
 export function recordUsage(model: string, inputTokens: number, outputTokens: number): void {
-  if (hasOwnKey() || isSubscribed()) return
   if (!inputTokens && !outputTokens) return
   const cost = estimateCostUsd(model, inputTokens, outputTokens)
+
+  // Always record per-model token usage locally (for the admin panel's cost breakdown),
+  // regardless of whose key paid. Best-effort; never throws into the caller.
+  try { recordModelUsage(model, inputTokens, outputTokens, cost) } catch { /* ignore */ }
+
+  // Only the bundled free key is metered against the free allowance.
+  if (hasOwnKey() || isSubscribed()) return
   if (cost <= 0) return
   const prev = getStore().aiUsageUsd ?? 0
   patchStore({ aiUsageUsd: prev + cost })
