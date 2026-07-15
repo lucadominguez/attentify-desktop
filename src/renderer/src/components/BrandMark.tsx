@@ -1,10 +1,12 @@
 import React from 'react'
 import logoUrl from '../assets/logo.png'
 
-// The Attentify mark, the real brand logo (friendly robot). The source art sits on a
-// white field, so we render it inside a rounded tile: on the dark UI this reads as a
-// crisp app-icon badge rather than a raw white rectangle. Scales cleanly from the
-// titlebar (18px) to onboarding (160px).
+// The Attentify mark, the real brand logo (friendly robot).
+//
+// The art carries its own dark field and its corners are already rounded transparent by
+// scripts/make-robot-icon.mjs, so this no longer forces a white tile behind it. It used
+// to: the previous source sat on a white field and needed one to read as a badge. With
+// the current art a white tile would ring the dark icon.
 export default function BrandMark({
   size = 28,
   className,
@@ -24,9 +26,7 @@ export default function BrandMark({
         height: size,
         borderRadius: rounded ? Math.max(4, size * 0.22) : 0,
         overflow: 'hidden',
-        background: '#fff',
         flexShrink: 0,
-        boxShadow: rounded ? '0 0 0 1px rgba(255,255,255,0.06)' : 'none',
         ...style,
       }}
     >
