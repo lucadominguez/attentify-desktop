@@ -295,6 +295,17 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     return glass ? withGlass(base, glassOpacity) : base
   }, [theme, glass, glassOpacity])
 
+  // Hydrate from the store, which is what main reads when it creates the window. Without
+  // this the renderer and the window could disagree: panels glassy, window still opaque.
+  useEffect(() => {
+    const api = (window as unknown as { electronAPI?: { getStore?: () => Promise<{ settings?: { fullGlass?: boolean; glassOpacity?: number } }> } }).electronAPI
+    api?.getStore?.().then((st) => {
+      if (typeof st?.settings?.fullGlass === 'boolean') setGlass(st.settings.fullGlass)
+      const o = st?.settings?.glassOpacity
+      if (typeof o === 'number' && o >= 0.15 && o <= 0.9) setGlassOpacity(o)
+    }).catch(() => { /* keep the localStorage value */ })
+  }, [])
+
   useEffect(() => {
     applyCssVars(colors)
     document.documentElement.classList.toggle('light', theme === 'light')
@@ -309,6 +320,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     localStorage.setItem('pd-theme', theme)
     localStorage.setItem('pd-glass', glass ? '1' : '0')
     localStorage.setItem('pd-glass-opacity', String(glassOpacity))
+    const api = (window as unknown as { electronAPI?: { getStore?: () => Promise<Record<string, unknown>>; setStore?: (p: Record<string, unknown>) => Promise<unknown> } }).electronAPI
+    api?.getStore?.().then((st) => {
+      const cur = (st.settings ?? {}) as Record<string, unknown>
+      if (cur.fullGlass === glass && cur.glassOpacity === glassOpacity) return
+      return api.setStore?.({ settings: { ...cur, fullGlass: glass, glassOpacity } })
+    }).catch(() => { /* view pref; localStorage already has it */ })
   }, [theme, glass, glassOpacity, colors])
 
   const toggle = (): void => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))

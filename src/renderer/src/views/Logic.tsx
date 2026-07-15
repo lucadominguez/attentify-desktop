@@ -4,7 +4,7 @@ import {
   Check, X, Trash2, User, ArrowDown, Zap, RefreshCw,
 } from 'lucide-react'
 import type { HeuristicAlert, UserContextNote } from '@shared/types'
-import { MetricDrill, TableQuery, AskAIProvider, type DrillSpec } from '../components/MetricDrill'
+import { MetricDrill, TableQuery, AskAIProvider, useAskAI, type DrillSpec } from '../components/MetricDrill'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -86,6 +86,7 @@ function Connector(): React.ReactElement {
 // ── One inference rendered as a collapsible reasoning flow ──────────────────────
 function ReasoningChain({ inf, onResolve }: { inf: Inference; onResolve: (id: string, action: 'confirmed' | 'rejected') => void }): React.ReactElement {
   const { colors } = useTheme()
+  const askAI = useAskAI()
   const [open, setOpen] = useState(false)
   const kind = inf.type === 'domain' ? 'site' : 'app'
   return (
@@ -119,6 +120,19 @@ function ReasoningChain({ inf, onResolve }: { inf: Inference; onResolve: (id: st
                   style={{ background: colors.cardBg, color: colors.textMuted, border: `1px solid ${colors.border}` }}>
                   <X size={12} /> Not a distraction
                 </button>
+                {/* Confirm and reject were the only options: you could accept or refuse the
+                    AI's reasoning but never interrogate it. The reasoning is the whole
+                    point of this page, so it has to be answerable. */}
+                {askAI && (
+                  <button
+                    onClick={() => askAI(`On the Logic page you inferred that "${inf.value}" is likely a distraction ${kind}, at ${Math.round(inf.confidence * 100)}% confidence, because: ${inf.reasoning || 'it matches distraction patterns'}. Walk me through that reasoning. Is it right? If it is wrong, correct what you have learned about me.`)}
+                    className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-medium rounded-lg transition-all"
+                    style={{ background: colors.accentBg, color: colors.accent, border: `1px solid ${colors.borderMid}` }}
+                    title="Ask Attentify about this reasoning"
+                  >
+                    Ask
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -164,8 +178,34 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
   const [alerts, setAlerts] = useState<HeuristicAlert[]>([])
   const [distractors, setDistractors] = useState<{ app: string; ms: number }[]>([])
   const [input, setInput] = useState('')
+  const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  const selectedGoalTexts = useCallback(
+    () => goals.filter((g) => selectedGoals.has(g.id)).map((g) => g.text),
+    [goals, selectedGoals],
+  )
+
+  const askAboutGoals = useCallback(() => {
+    const picked = selectedGoalTexts()
+    if (!picked.length || !onChatWith) return
+    const list = picked.map((t) => `- ${t}`).join('\n')
+    onChatWith(picked.length === 1
+      ? `About my goal "${picked[0]}": how am I actually doing against it, and what should I change?`
+      : `About these goals:\n${list}\n\nHow am I doing against them, and what should I change? You can edit or clear any of them.`)
+    setSelectedGoals(new Set())
+  }, [selectedGoalTexts, onChatWith])
+
+  const deleteSelectedGoals = useCallback(async () => {
+    const ids = [...selectedGoals]
+    if (!ids.length) return
+    setSelectedGoals(new Set())
+    // Optimistic: the row goes now, and load() below reconciles with the truth.
+    setGoals((prev) => prev.filter((g) => !ids.includes(g.id)))
+    await Promise.all(ids.map((id) => api.clearGoal(id).catch(() => { /* gated when signed out */ })))
+    load()
+  }, [selectedGoals])
 
   const load = useCallback(() => {
     Promise.all([
@@ -309,11 +349,55 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
                   <div className="space-y-3">
                     {goals.length > 0 && (
                       <div>
-                        <p className="hud-label mb-1.5" style={{ color: colors.textMuted }}>Your goals</p>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <p className="hud-label" style={{ color: colors.textMuted }}>Your goals</p>
+                          {selectedGoals.size > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px]" style={{ color: colors.textMuted }}>{selectedGoals.size} selected</span>
+                              <button
+                                onClick={() => askAboutGoals()}
+                                className="text-[9px] px-1.5 py-0.5 rounded transition-all hover:brightness-110"
+                                style={{ border: `1px solid ${colors.borderMid}`, color: colors.accent }}
+                              >
+                                Ask about {selectedGoals.size === 1 ? 'it' : 'them'}
+                              </button>
+                              <button
+                                onClick={() => void deleteSelectedGoals()}
+                                className="text-[9px] px-1.5 py-0.5 rounded transition-all hover:brightness-110"
+                                style={{ border: `1px solid ${colors.negative}55`, color: colors.negative }}
+                              >
+                                Delete
+                              </button>
+                              <button onClick={() => setSelectedGoals(new Set())} className="text-[9px]" style={{ color: colors.textDim }}>Clear</button>
+                            </div>
+                          )}
+                        </div>
+                        {/* Goals were static chips: nothing to click, no way to remove one,
+                            no way to ask about them. They are the AI's instructions, so
+                            they should be the most editable thing on the page. */}
                         <div className="flex flex-wrap gap-1.5">
-                          {goals.map((g) => (
-                            <span key={g.id} className="text-[11px] px-2 py-1 rounded-lg" style={{ background: colors.accentBg, color: colors.textSecondary, border: `1px solid ${colors.border}` }}>{g.text}</span>
-                          ))}
+                          {goals.map((g) => {
+                            const sel = selectedGoals.has(g.id)
+                            return (
+                              <button
+                                key={g.id}
+                                onClick={() => setSelectedGoals((prev) => {
+                                  const next = new Set(prev)
+                                  if (next.has(g.id)) next.delete(g.id); else next.add(g.id)
+                                  return next
+                                })}
+                                title={sel ? 'Click to deselect' : 'Click to select, then ask or delete'}
+                                className="text-[11px] px-2 py-1 rounded-lg transition-all text-left"
+                                style={{
+                                  background: sel ? colors.accent : colors.accentBg,
+                                  color: sel ? '#fff' : colors.textSecondary,
+                                  border: `1px solid ${sel ? colors.accent : colors.border}`,
+                                }}
+                              >
+                                {g.text}
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
                     )}

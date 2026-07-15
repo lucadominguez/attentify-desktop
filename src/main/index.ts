@@ -144,6 +144,10 @@ function focusMainWindow(): void {
 
 function createMainWindow(): void {
   const iconPath = getIconPath()
+  // Read before creating: backgroundMaterial is only reliably honoured at construction,
+  // and a window created opaque will not become see-through just by being told to later.
+  const wantGlass = process.platform === 'win32' && getStore().settings?.fullGlass === true
+
   mainWin = new BrowserWindow({
     width: 980,
     height: 660,
@@ -152,7 +156,14 @@ function createMainWindow(): void {
     resizable: true,
     frame: false,
     titleBarStyle: 'hidden',
-    backgroundColor: '#020912',
+    // Acrylic composites the real desktop behind the window, but only where nothing
+    // paints over it, so the window must not carry an opaque colour. #00000000 needs
+    // transparent:true for its alpha to count (see the Electron docs on backgroundColor),
+    // and transparent:true cannot be combined with backgroundMaterial. So: opaque colour
+    // when off, and let the material own the background when on.
+    ...(wantGlass
+      ? { backgroundMaterial: 'acrylic' as const, backgroundColor: '#00000000' }
+      : { backgroundColor: '#020912' }),
     show: false,
     ...(iconPath ? { icon: iconPath } : {}),
     webPreferences: {
@@ -278,12 +289,24 @@ ipcMain.on('window:close', () => mainWin?.hide())
 // glass theme does. On Windows 10 this is a no-op and the app simply stays opaque, which
 // is why the call reports back rather than failing silently.
 ipcMain.handle('window:set-glass', (_e, enabled: boolean) => {
-  if (process.platform !== 'win32' || !mainWin) return { ok: false, reason: 'unsupported' }
+  // Persist first: the material is only reliably applied when the window is created, so
+  // the next launch is what guarantees the effect. Applying it live usually works too.
   try {
-    // The opaque backgroundColor would paint over the acrylic, so it has to go too.
+    const s = getStore()
+    patchStore({ settings: { ...s.settings, fullGlass: enabled } })
+  } catch { /* non-fatal */ }
+
+  if (process.platform !== 'win32' || !mainWin) return { ok: false, reason: 'unsupported' }
+
+  // Acrylic is Windows 11 22H2+ (build 22621). Below that it silently does nothing, so
+  // say so rather than leaving the user toggling a switch that cannot work.
+  const build = Number(require('os').release().split('.')[2] ?? 0)
+  if (build < 22621) return { ok: false, reason: 'needs-win11-22h2' }
+
+  try {
     mainWin.setBackgroundColor(enabled ? '#00000000' : '#020912')
     mainWin.setBackgroundMaterial(enabled ? 'acrylic' : 'none')
-    return { ok: true }
+    return { ok: true, applied: true }
   } catch (err) {
     return { ok: false, reason: err instanceof Error ? err.message : String(err) }
   }

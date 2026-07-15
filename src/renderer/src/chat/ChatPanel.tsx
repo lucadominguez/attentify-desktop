@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { X, Send, Shield, MessageSquare, Zap, Trash2, Paperclip, Plus, ChevronDown, RotateCcw, Check } from 'lucide-react'
+import { X, Send, Shield, MessageSquare, Zap, Trash2, Paperclip, Plus, ChevronDown, RotateCcw, Check, Copy, RefreshCw } from 'lucide-react'
 import type { Conversation } from '@shared/types'
 import { useTheme } from '../context/ThemeContext'
 import BrandMark from '../components/BrandMark'
@@ -83,11 +83,52 @@ function looksLikeDebug(content: string): boolean {
 
 // ── Minimal markdown renderer ─────────────────────────────────────────────────
 
+// Fenced code. renderMarkdown handled headers, bullets and rules but had no concept of
+// a code block at all, so code arrived as unstyled prose with the fences printed
+// literally. Code is verbatim, so it is pulled out before any inline rule runs.
+function CodeBlock({ code, lang }: { code: string; lang?: string }): React.ReactElement {
+  const { colors } = useTheme()
+  const [copied, setCopied] = React.useState(false)
+  return (
+    <div className="my-1.5 rounded-lg overflow-hidden group/code" style={{ border: `1px solid ${colors.glassEdge}` }}>
+      <div className="flex items-center justify-between px-2 py-1" style={{ background: colors.glassMid }}>
+        <span className="text-[8px] uppercase tracking-wider" style={{ color: colors.textDim }}>{lang || 'code'}</span>
+        <button
+          onClick={() => { void navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1200) }}
+          className="text-[9px] px-1.5 py-0.5 rounded transition-opacity opacity-0 group-hover/code:opacity-100"
+          style={{ color: colors.textMuted }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="px-2.5 py-2 overflow-x-auto" style={{ background: 'transparent', margin: 0 }}>
+        <code className="text-[10.5px] data-value" style={{ color: colors.textSecondary, whiteSpace: 'pre' }}>{code}</code>
+      </pre>
+    </div>
+  )
+}
+
 function renderMarkdown(text: string): React.ReactNode {
   const lines = text.split('\n')
   const elements: React.ReactNode[] = []
+  let fenceLang: string | undefined
+  let fenceBody: string[] | null = null
 
   lines.forEach((line, lineIdx) => {
+    const fenceMatch = line.match(/^\s*```(\w+)?\s*$/)
+    if (fenceMatch) {
+      if (fenceBody) {
+        elements.push(<CodeBlock key={lineIdx} code={fenceBody.join('\n')} lang={fenceLang} />)
+        fenceBody = null
+        fenceLang = undefined
+      } else {
+        fenceBody = []
+        fenceLang = fenceMatch[1]
+      }
+      return
+    }
+    if (fenceBody) { fenceBody.push(line); return }
+
     // Headers
     if (line.startsWith('### ')) {
       elements.push(<p key={lineIdx} className="font-semibold text-[11px] mt-2 mb-0.5">{renderInline(line.slice(4))}</p>)
@@ -145,6 +186,9 @@ function renderMarkdown(text: string): React.ReactNode {
     elements.push(<div key={lineIdx}>{renderInline(line)}</div>)
   })
 
+  // A fence that never closed is normal mid-stream: render it rather than dropping the
+  // code on the floor until the model finishes typing.
+  if (fenceBody) elements.push(<CodeBlock key="open-fence" code={(fenceBody as string[]).join('\n')} lang={fenceLang} />)
   return <>{elements}</>
 }
 
@@ -215,6 +259,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
   const welcomeMsg = (): Message[] => [{ id: 'welcome', role: 'assistant', content: WELCOME_TEXT, timestamp: Date.now() }]
 
   const [checkpointByMsg, setCheckpointByMsg] = useState<Record<string, { id: string; label?: string }>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null)
   const [restoringId, setRestoringId] = useState<string | null>(null)
   const [restoreNote, setRestoreNote] = useState<string | null>(null)
@@ -391,6 +436,13 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
     inputRef.current?.focus()
   }, [])
 
+  // Newest assistant reply: the only one Retry may replace. Re-running an older reply
+  // would fork the conversation, which is a different feature.
+  const lastAssistantId = React.useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) if (messages[i]!.role === 'assistant') return messages[i]!.id
+    return null
+  }, [messages])
+
   const sendMessage = useCallback(async (text: string): Promise<void> => {
     const atts = attachmentsRef.current
     if ((!text.trim() && atts.length === 0) || sending) return
@@ -433,6 +485,30 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
 
     api.chatStart(text.trim() || 'What do you see in this image?', atts.map((a) => ({ media_type: a.mediaType, data: a.data })), convId)
   }, [sending])
+
+  // Retry: drop the last reply and ask the same question again. The prompt is taken from
+  // the last user message rather than remembered separately, so it cannot drift out of
+  // sync with what is actually on screen.
+  const regenerate = useCallback(async (): Promise<void> => {
+    if (sending) return
+    let lastUser: Message | undefined
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i]!.role === 'user') { lastUser = messages[i]; break }
+    }
+    if (!lastUser?.content) return
+    // Remove the reply being replaced so the new one does not stack under it.
+    setMessages((prev) => {
+      const out = [...prev]
+      while (out.length && out[out.length - 1]!.role === 'assistant') out.pop()
+      return out
+    })
+    setSending(true)
+    const assistantId = crypto.randomUUID()
+    streamingIdRef.current = assistantId
+    setStreamingId(assistantId)
+    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: Date.now(), streaming: true }])
+    api.chatStart(lastUser.content, [], currentConvIdRef.current ?? undefined)
+  }, [messages, sending])
 
   // Read a File into an Attachment (data URL + base64 payload for the API).
   const addFiles = useCallback((files: FileList | File[]): void => {
@@ -612,6 +688,34 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
               )}
             </div>
             </div>
+            {/* Per-message actions. Copy and regenerate are table stakes in a chat and
+                were both missing; they appear on hover so they never add permanent
+                clutter to a conversation you are reading. */}
+            {msg.role === 'assistant' && !msg.streaming && msg.content && (
+              <div className="flex items-center gap-1 mt-1 pl-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => { void navigator.clipboard.writeText(msg.content); setCopiedId(msg.id); setTimeout(() => setCopiedId(null), 1200) }}
+                  className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md transition-colors hover:bg-white/5"
+                  style={{ color: copiedId === msg.id ? colors.positive : colors.textMuted }}
+                  title="Copy this reply"
+                >
+                  {copiedId === msg.id ? <Check size={10} /> : <Copy size={10} />}
+                  {copiedId === msg.id ? 'Copied' : 'Copy'}
+                </button>
+                {/* Only the newest reply can be regenerated: re-running an older one would
+                    fork the conversation, which is a different feature. */}
+                {msg.id === lastAssistantId && !sending && (
+                  <button
+                    onClick={() => void regenerate()}
+                    className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-md transition-colors hover:bg-white/5"
+                    style={{ color: colors.textMuted }}
+                    title="Ask again and replace this reply"
+                  >
+                    <RefreshCw size={10} /> Retry
+                  </button>
+                )}
+              </div>
+            )}
             {msg.role === 'user' && checkpointByMsg[msg.id] && (
               <div className="flex justify-end mt-1 pr-0.5">
                 <button

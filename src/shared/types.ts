@@ -156,6 +156,12 @@ export interface AppSettings {
   // Share anonymized diagnostics (bug reports, crashes/freezes, AI-friction signals,
   // token usage) with the developer to help fix issues. Default on during beta.
   shareDiagnostics?: boolean
+  /** Liquid glass: the window itself is see-through to the desktop (Windows 11 acrylic).
+   *  Lives in the store, not localStorage, because main must read it when it CREATES the
+   *  window: backgroundMaterial is only reliably applied at construction. */
+  fullGlass?: boolean
+  /** 0.15-0.9. How solid the glass tint is. */
+  glassOpacity?: number
 }
 
 export interface BreakMode {
