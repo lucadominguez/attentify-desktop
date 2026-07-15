@@ -242,12 +242,59 @@ export interface UserContextNote {
 
 // A saved, user-described analytics view. `spec` is the query the card recomputes
 // from the activity log every time the Analytics page loads, so the card stays live.
+// Where a card draws from. Activity is the tracked window log (the original and only
+// source); the rest are the AI's own working memory, which is what makes Logic
+// expressible as cards at all. The tools to MUTATE these already exist (add_goal,
+// set_preference, resolve_inference), only reading them as cards is new.
+export type CardSource = 'activity' | 'goals' | 'preferences' | 'inferences' | 'patterns' | 'schedules'
+
+// How a card renders.
+//
+// The first four are the original vocabulary. The rest exist because of a hard
+// constraint: every seeded card must be something the user could genuinely have asked
+// the AI to build. With only bar/line/table/number, the app's own default views
+// (the hour-of-week heatmap, the focused/distracted/idle bar, the today summary, the
+// ranked diagnostics) could never be reproduced, and "you could have generated this"
+// would be a lie. Growing the vocabulary is what keeps that promise true.
+export type CardViz =
+  | 'bar'       // ranked rows
+  | 'line'      // trend over hour/weekday
+  | 'table'     // detailed rows
+  | 'number'    // single headline figure
+  | 'heatmap'   // hour x weekday grid
+  | 'progress'  // parts of a whole, as one bar
+  | 'summary'   // headline figure + supporting breakdown
+  | 'ranked'    // ranked rows with baseline + impact columns
+  | 'list'      // plain items (goals, preferences, schedules)
+
+export type CardKind = 'data' | 'action'
+
+/** Which page a card lives on. Cards are the page; the page is just a canvas of them. */
+export type CardPage = 'analytics' | 'logic' | 'timesheets' | 'deep-focus' | 'scheduler'
+
 export interface AnalyticsQuerySpec {
+  /** Defaults to 'activity' when absent, so cards saved before sources existed still run. */
+  source?: CardSource
   rangeDays: number                                        // look-back window
   groupBy: 'app' | 'category' | 'domain' | 'hour' | 'weekday'
   metric: 'time' | 'sessions' | 'focus_ratio'
   distraction: 'all' | 'only' | 'exclude'                  // filter by distraction flag
   limit?: number
+}
+
+// A saved control, not a query. Deep Focus and Scheduler are control surfaces: "start a
+// locked 90-minute session" is an action, and no query card can express it. An action
+// card wraps a tool the agent already has, with its arguments pinned, so the user can
+// keep and re-run it exactly like they keep a metric.
+export interface CardAction {
+  /** Must name a real agent tool, so an action card is only ever a saved tool call. */
+  tool: 'start_focus_session' | 'stop_focus_session' | 'create_schedule' | 'remove_schedule'
+    | 'block_category' | 'block_domain' | 'unblock_domain' | 'add_goal'
+  params: Record<string, unknown>
+  /** Button text, e.g. "Start 90 min". */
+  label: string
+  /** Actions that change the machine should confirm first. */
+  confirm?: boolean
 }
 
 export interface StartupItem {
@@ -267,12 +314,29 @@ export interface Conversation {
   message_count?: number
 }
 
+// A card is the unit the whole app is built from. Every page is a canvas of these, and
+// the defaults that ship are seeds: real specs the AI genuinely would have produced, not
+// bespoke components wearing a card costume.
+//
+// Back-compat is deliberate. `kind`, `page` and `order` are all optional, so the cards a
+// user already has keep working and simply default to a data card on Analytics.
 export interface CustomAnalyticsCard {
   id: string
+  /** 'data' (a saved query) or 'action' (a saved control). Absent = 'data'. */
+  kind?: CardKind
   title: string
   description?: string
-  viz: 'bar' | 'number' | 'table' | 'line'
+  viz: CardViz
   spec: AnalyticsQuerySpec
+  /** Present only when kind === 'action'. */
+  action?: CardAction
+  /** Absent = 'analytics', which is where every pre-existing card lives. */
+  page?: CardPage
+  /** Drag-to-reorder position within its page. Absent sorts by createdAt. */
+  order?: number
+  /** True for cards Attentify ships with. They are ordinary specs and can be edited or
+   *  deleted like any other; the flag only marks what to re-seed for a fresh install. */
+  seeded?: boolean
   createdAt: number
 }
 
