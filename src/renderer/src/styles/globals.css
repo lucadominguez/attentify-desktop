@@ -381,3 +381,27 @@ html.light .bg-grid {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ── Full-glass experiment ───────────────────────────────────────────────────
+   Opt-in via Settings. The translucency comes from the theme tokens (see
+   withGlass in ThemeContext); this only supplies the blur, because
+   backdrop-filter cannot ride on a colour token.
+
+   Scoped to panel-shaped containers rather than "*": blur is GPU work and this
+   app runs 24/7, so blurring every div would cost battery for nothing. Turning
+   the toggle off removes the attribute and every rule below stops matching, so
+   the revert is total. */
+[data-glass="full"] .section-panel,
+[data-glass="full"] .rounded-xl,
+[data-glass="full"] .rounded-2xl,
+[data-glass="full"] .rounded-lg {
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+}
+/* Nested glass double-blurs and turns to mud; only the outermost pane frosts. */
+[data-glass="full"] .rounded-xl .rounded-lg,
+[data-glass="full"] .rounded-2xl .rounded-lg,
+[data-glass="full"] .rounded-lg .rounded-lg {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

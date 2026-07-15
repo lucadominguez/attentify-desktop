@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react'
 
 export type ThemeMode = 'dark' | 'light'
 
@@ -214,13 +214,38 @@ interface ThemeCtx {
   theme: ThemeMode
   colors: ThemeColors
   toggle: () => void
+  /** The full-glass experiment: every surface translucent, not just the overlays. */
+  glass: boolean
+  toggleGlass: () => void
 }
 
 const ThemeContext = createContext<ThemeCtx>({
   theme: 'dark',
   colors: DARK,
   toggle: () => {},
+  glass: false,
+  toggleGlass: () => {},
 })
+
+// The experiment, in one function.
+//
+// Full glass is ONE swap: the opaque surface tokens are replaced by the translucent
+// ones that already exist, and a CSS rule adds the blur (backdrop-filter cannot ride on
+// a colour token). Because every panel in the app reads cardBg/panelBg/inputBg from
+// here, that single swap reaches the whole app, and turning it off restores the exact
+// original values. That is what makes it genuinely revertible: there is no second
+// codebase to unwind, just a boolean.
+function withGlass(c: ThemeColors): ThemeColors {
+  return {
+    ...c,
+    panelBg: c.glassLow,
+    cardBg: c.glassMid,
+    inputBg: c.glassMid,
+    rowEven: 'transparent',
+    rowOdd: c.glassMid,
+    aiBubbleBg: c.glassMid,
+  }
+}
 
 export function ThemeProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -229,19 +254,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     // First run: follow the OS preference.
     try { return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark' } catch { return 'dark' }
   })
+  // localStorage, not the store: a look is a per-window view preference, and routing it
+  // through IPC would put it behind the sign-in gate.
+  const [glass, setGlass] = useState<boolean>(() => localStorage.getItem('pd-glass') === '1')
+
+  const colors = useMemo(() => {
+    const base = theme === 'dark' ? DARK : LIGHT
+    return glass ? withGlass(base) : base
+  }, [theme, glass])
 
   useEffect(() => {
-    const colors = theme === 'dark' ? DARK : LIGHT
     applyCssVars(colors)
     document.documentElement.classList.toggle('light', theme === 'light')
+    // Drives the blur rule in globals.css. Blur is GPU work on a 24/7 app, so it is
+    // opt-in and scoped to panels rather than applied to everything.
+    document.documentElement.dataset.glass = glass ? 'full' : 'off'
     localStorage.setItem('pd-theme', theme)
-  }, [theme])
+    localStorage.setItem('pd-glass', glass ? '1' : '0')
+  }, [theme, glass, colors])
 
   const toggle = (): void => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
-  const colors = theme === 'dark' ? DARK : LIGHT
+  const toggleGlass = (): void => setGlass((g) => !g)
 
   return (
-    <ThemeContext.Provider value={{ theme, colors, toggle }}>
+    <ThemeContext.Provider value={{ theme, colors, toggle, glass, toggleGlass }}>
       {children}
     </ThemeContext.Provider>
   )
