@@ -2019,7 +2019,12 @@ function CustomAnalyticsSection(): React.ReactElement {
   const [error, setError] = useState('')
 
   const loadCards = useCallback(() => {
-    api.getCustomCards().then(setCards).catch(() => setCards([]))
+    // Filter by page, or this canvas shows every card in the app: the Deep Focus and
+    // Scheduler controls would render here too. Cards saved before pages existed have no
+    // page and belong to Analytics, which matches the type's default.
+    api.getCustomCards()
+      .then((all) => setCards((all ?? []).filter((c) => (c.page ?? 'analytics') === 'analytics')))
+      .catch(() => setCards([]))
   }, [])
 
   useEffect(() => {

@@ -22,22 +22,18 @@ export function defaultCards(now = Date.now()): CustomAnalyticsCard[] {
 
   return [
     // ── Analytics ─────────────────────────────────────────────────────────────
+    // Four only, and deliberately one of each shape: two charts, a table and a graph.
+    // A wall of defaults buries the point that these are yours to change, and the page
+    // should read as a starting point rather than a finished dashboard.
     {
-      ...base, id: seedId('today'), kind: 'data', page: 'analytics', order: 0,
-      title: 'Today at a glance',
-      description: 'Tracked time today and the apps behind it',
-      viz: 'summary',
-      spec: { source: 'activity', rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all', limit: 4 },
+      ...base, id: seedId('distractions'), kind: 'data', page: 'analytics', order: 0,
+      title: 'Top distractions',
+      description: 'Where off-task time goes',
+      viz: 'bar',
+      spec: { source: 'activity', rangeDays: 7, groupBy: 'domain', metric: 'time', distraction: 'only', limit: 8 },
     },
     {
-      ...base, id: seedId('week-split'), kind: 'data', page: 'analytics', order: 1,
-      title: 'Where your week went',
-      description: 'Time split by category, last 7 days',
-      viz: 'progress',
-      spec: { source: 'activity', rangeDays: 7, groupBy: 'category', metric: 'time', distraction: 'all', limit: 5 },
-    },
-    {
-      ...base, id: seedId('heatmap'), kind: 'data', page: 'analytics', order: 2,
+      ...base, id: seedId('heatmap'), kind: 'data', page: 'analytics', order: 1,
       title: 'Focus heatmap',
       description: 'When you work, hour by weekday',
       // 14 days so the grid has enough to show a shape rather than a scatter.
@@ -45,49 +41,22 @@ export function defaultCards(now = Date.now()): CustomAnalyticsCard[] {
       spec: { source: 'activity', rangeDays: 14, groupBy: 'hour', metric: 'time', distraction: 'all' },
     },
     {
-      ...base, id: seedId('changed'), kind: 'data', page: 'analytics', order: 3,
-      title: 'What changed this week',
-      description: 'Ranked against the week before',
-      viz: 'ranked',
-      spec: { source: 'activity', rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 6 },
+      ...base, id: seedId('apps-table'), kind: 'data', page: 'analytics', order: 2,
+      title: 'Time per app',
+      description: 'Every app you touched, last 7 days',
+      viz: 'table',
+      spec: { source: 'activity', rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 10 },
     },
     {
-      ...base, id: seedId('distractions'), kind: 'data', page: 'analytics', order: 4,
-      title: 'Top distractions',
-      description: 'Where off-task time goes',
-      viz: 'bar',
-      spec: { source: 'activity', rangeDays: 7, groupBy: 'domain', metric: 'time', distraction: 'only', limit: 8 },
-    },
-    {
-      ...base, id: seedId('focus-hour'), kind: 'data', page: 'analytics', order: 5,
+      ...base, id: seedId('focus-hour'), kind: 'data', page: 'analytics', order: 3,
       title: 'Focus by hour',
       description: 'When you focus best across the day',
       viz: 'line',
       spec: { source: 'activity', rangeDays: 7, groupBy: 'hour', metric: 'focus_ratio', distraction: 'all' },
     },
 
-    // ── Timesheets ────────────────────────────────────────────────────────────
-    {
-      ...base, id: seedId('ts-apps'), kind: 'data', page: 'timesheets', order: 0,
-      title: 'Time per app',
-      description: 'Every app you touched, last 7 days',
-      viz: 'table',
-      spec: { source: 'activity', rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 15 },
-    },
-    {
-      ...base, id: seedId('ts-daily'), kind: 'data', page: 'timesheets', order: 1,
-      title: 'Daily breakdown',
-      description: 'Tracked time by day of week',
-      viz: 'bar',
-      spec: { source: 'activity', rangeDays: 7, groupBy: 'weekday', metric: 'time', distraction: 'all' },
-    },
-    {
-      ...base, id: seedId('ts-total'), kind: 'data', page: 'timesheets', order: 2,
-      title: 'Tracked this week',
-      description: 'Total time Attentify has seen',
-      viz: 'number',
-      spec: { source: 'activity', rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all' },
-    },
+    // Timesheets and Logic deliberately have NO seeds: those pages keep their own
+    // purpose-built views. Cards are not automatically the right answer everywhere.
 
     // ── Deep Focus (action cards: controls, not queries) ───────────────────────
     {
@@ -126,35 +95,7 @@ export function defaultCards(now = Date.now()): CustomAnalyticsCard[] {
     // ── Logic (the AI's working memory, not activity) ─────────────────────────
     // These read non-activity sources, resolved in main by cards/sources.ts rather than
     // aggregated by runAnalyticsQuery, which only understands the session log.
-    {
-      ...base, id: seedId('lg-goals'), kind: 'data', page: 'logic', order: 0,
-      title: 'What you told me to protect',
-      description: 'Your active goals',
-      viz: 'list',
-      spec: { source: 'goals', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 },
-    },
-    {
-      ...base, id: seedId('lg-prefs'), kind: 'data', page: 'logic', order: 1,
-      title: 'What I have learned',
-      description: 'Preferences picked up from how you work',
-      viz: 'list',
-      spec: { source: 'preferences', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 10 },
-    },
-    {
-      ...base, id: seedId('lg-inferences'), kind: 'data', page: 'logic', order: 2,
-      title: 'Waiting on your call',
-      description: 'Things I spotted but have not acted on',
-      viz: 'list',
-      spec: { source: 'inferences', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 },
-    },
-    {
-      ...base, id: seedId('lg-patterns'), kind: 'data', page: 'logic', order: 3,
-      title: 'Patterns in how you drift',
-      description: 'Behaviours detected over the last month',
-      viz: 'list',
-      spec: { source: 'patterns', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 },
-    },
-
+                
     // ── Scheduler ─────────────────────────────────────────────────────────────
     {
       ...base, id: seedId('sch-active'), kind: 'data', page: 'scheduler', order: 0,

@@ -55,8 +55,13 @@ export default function CardCanvas({
 
   if (!ordered.length && empty) return <>{empty}</>
 
+  // Masonry, not grid. A CSS grid sizes every row to its tallest card, so a heatmap next
+  // to a one-line number leaves a hole under the short one. Columns let each card take
+  // its natural height and flow into the gap. The tradeoff is column-major order (1,2 in
+  // the left column, 3,4 in the right), which is fine here: the canvas is short and the
+  // user sets the order by dragging anyway.
   return (
-    <div className={columns === 2 ? 'grid grid-cols-2 gap-2.5' : 'flex flex-col gap-2.5'}>
+    <div className={columns === 2 ? 'gap-2.5 [column-count:2] [column-gap:0.625rem]' : 'flex flex-col gap-2.5'}>
       {ordered.map((card) => (
         <div
           key={card.id}
@@ -65,6 +70,10 @@ export default function CardCanvas({
             outline: overId === card.id && dragId !== card.id ? '1px dashed currentColor' : 'none',
             outlineOffset: 3,
             borderRadius: 12,
+            // A card must never be split across a column break.
+            breakInside: 'avoid',
+            WebkitColumnBreakInside: 'avoid',
+            marginBottom: columns === 2 ? '0.625rem' : undefined,
           }}
         >
           <Card

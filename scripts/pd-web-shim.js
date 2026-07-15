@@ -417,89 +417,16 @@
     deleteUserContext: function () { return Promise.resolve({ ok: true }); },
     // Mirrors src/main/cards/seeds.ts exactly (generated), so the demo shows the same
     // pages the app ships rather than a parallel set that drifts.
+    // Mirrors src/main/cards/seeds.ts exactly (generated), so the demo shows the same
+    // pages the app ships rather than a parallel set that drifts.
     getCustomCards: function () { return Promise.resolve([
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-today",
-                "kind": "data",
-                "page": "analytics",
-                "order": 0,
-                "title": "Today at a glance",
-                "description": "Tracked time today and the apps behind it",
-                "viz": "summary",
-                "spec": {
-                      "source": "activity",
-                      "rangeDays": 1,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 4
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-week-split",
-                "kind": "data",
-                "page": "analytics",
-                "order": 1,
-                "title": "Where your week went",
-                "description": "Time split by category, last 7 days",
-                "viz": "progress",
-                "spec": {
-                      "source": "activity",
-                      "rangeDays": 7,
-                      "groupBy": "category",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 5
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-heatmap",
-                "kind": "data",
-                "page": "analytics",
-                "order": 2,
-                "title": "Focus heatmap",
-                "description": "When you work, hour by weekday",
-                "viz": "heatmap",
-                "spec": {
-                      "source": "activity",
-                      "rangeDays": 14,
-                      "groupBy": "hour",
-                      "metric": "time",
-                      "distraction": "all"
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-changed",
-                "kind": "data",
-                "page": "analytics",
-                "order": 3,
-                "title": "What changed this week",
-                "description": "Ranked against the week before",
-                "viz": "ranked",
-                "spec": {
-                      "source": "activity",
-                      "rangeDays": 7,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 6
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-distractions",
                 "kind": "data",
                 "page": "analytics",
-                "order": 4,
+                "order": 0,
                 "title": "Top distractions",
                 "description": "Where off-task time goes",
                 "viz": "bar",
@@ -514,11 +441,48 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
+                "id": "seed-heatmap",
+                "kind": "data",
+                "page": "analytics",
+                "order": 1,
+                "title": "Focus heatmap",
+                "description": "When you work, hour by weekday",
+                "viz": "heatmap",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 14,
+                      "groupBy": "hour",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784102009623,
+                "id": "seed-apps-table",
+                "kind": "data",
+                "page": "analytics",
+                "order": 2,
+                "title": "Time per app",
+                "description": "Every app you touched, last 7 days",
+                "viz": "table",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 10
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784102009623,
                 "id": "seed-focus-hour",
                 "kind": "data",
                 "page": "analytics",
-                "order": 5,
+                "order": 3,
                 "title": "Focus by hour",
                 "description": "When you focus best across the day",
                 "viz": "line",
@@ -532,62 +496,7 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-ts-apps",
-                "kind": "data",
-                "page": "timesheets",
-                "order": 0,
-                "title": "Time per app",
-                "description": "Every app you touched, last 7 days",
-                "viz": "table",
-                "spec": {
-                      "source": "activity",
-                      "rangeDays": 7,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 15
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-ts-daily",
-                "kind": "data",
-                "page": "timesheets",
-                "order": 1,
-                "title": "Daily breakdown",
-                "description": "Tracked time by day of week",
-                "viz": "bar",
-                "spec": {
-                      "source": "activity",
-                      "rangeDays": 7,
-                      "groupBy": "weekday",
-                      "metric": "time",
-                      "distraction": "all"
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-ts-total",
-                "kind": "data",
-                "page": "timesheets",
-                "order": 2,
-                "title": "Tracked this week",
-                "description": "Total time Attentify has seen",
-                "viz": "number",
-                "spec": {
-                      "source": "activity",
-                      "rangeDays": 7,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all"
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-df-pomodoro",
                 "kind": "action",
                 "page": "deep-focus",
@@ -613,7 +522,7 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-df-flow",
                 "kind": "action",
                 "page": "deep-focus",
@@ -639,7 +548,7 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-df-deep",
                 "kind": "action",
                 "page": "deep-focus",
@@ -665,7 +574,7 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-df-end",
                 "kind": "action",
                 "page": "deep-focus",
@@ -688,83 +597,7 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-lg-goals",
-                "kind": "data",
-                "page": "logic",
-                "order": 0,
-                "title": "What you told me to protect",
-                "description": "Your active goals",
-                "viz": "list",
-                "spec": {
-                      "source": "goals",
-                      "rangeDays": 31,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 8
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-lg-prefs",
-                "kind": "data",
-                "page": "logic",
-                "order": 1,
-                "title": "What I have learned",
-                "description": "Preferences picked up from how you work",
-                "viz": "list",
-                "spec": {
-                      "source": "preferences",
-                      "rangeDays": 31,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 10
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-lg-inferences",
-                "kind": "data",
-                "page": "logic",
-                "order": 2,
-                "title": "Waiting on your call",
-                "description": "Things I spotted but have not acted on",
-                "viz": "list",
-                "spec": {
-                      "source": "inferences",
-                      "rangeDays": 31,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 8
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
-                "id": "seed-lg-patterns",
-                "kind": "data",
-                "page": "logic",
-                "order": 3,
-                "title": "Patterns in how you drift",
-                "description": "Behaviours detected over the last month",
-                "viz": "list",
-                "spec": {
-                      "source": "patterns",
-                      "rangeDays": 31,
-                      "groupBy": "app",
-                      "metric": "time",
-                      "distraction": "all",
-                      "limit": 8
-                }
-          },
-          {
-                "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-sch-active",
                 "kind": "data",
                 "page": "scheduler",
@@ -783,7 +616,7 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-sch-workday",
                 "kind": "action",
                 "page": "scheduler",
@@ -820,7 +653,7 @@
           },
           {
                 "seeded": true,
-                "createdAt": 1784100484902,
+                "createdAt": 1784102009623,
                 "id": "seed-sch-evening",
                 "kind": "action",
                 "page": "scheduler",
