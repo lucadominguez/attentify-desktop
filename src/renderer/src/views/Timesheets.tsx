@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { Clock, RefreshCw, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react'
 import type { ActivitySession, AppCategory } from '@shared/types'
 import { MetricDrill, TableQuery, AskAIProvider } from '../components/MetricDrill'
+import PageCanvas from '../components/cards/PageCanvas'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -172,6 +173,10 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
           </button>
         </div>
       </div>
+
+      {/* The page is its cards. The hand-built week view stays below, but everything
+          above it is an ordinary spec the user could have asked for. */}
+      <PageCanvas page="timesheets" onChatWith={onChatWith} columns={2} emptyHint="How much time per app this week?" />
 
       {/* Summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

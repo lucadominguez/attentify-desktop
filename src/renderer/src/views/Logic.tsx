@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import type { HeuristicAlert, UserContextNote } from '@shared/types'
 import { MetricDrill, TableQuery, AskAIProvider, type DrillSpec } from '../components/MetricDrill'
+import PageCanvas from '../components/cards/PageCanvas'
 import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -262,6 +263,9 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
   return (
    <AskAIProvider value={onChatWith}>
     <div className="flex flex-col h-full">
+      {/* The AI's working memory, as cards. These read non-activity sources (goals,
+          preferences, inferences, patterns) resolved in main, not the session log. */}
+      <PageCanvas page="logic" onChatWith={onChatWith} columns={2} emptyHint="What have you learned about me?" />
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {/* Header */}

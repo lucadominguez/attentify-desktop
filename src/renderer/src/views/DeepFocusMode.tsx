@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Lock, Play, Square, Plus, X, ChevronRight } from 'lucide-react'
 import type { AppStore } from '@shared/types'
 import { useTheme } from '../context/ThemeContext'
+import PageCanvas from '../components/cards/PageCanvas'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -54,6 +55,10 @@ export default function DeepFocusMode({ store, onRefresh }: DeepFocusModeProps):
         </h1>
         <p className="text-sm mt-0.5" style={{ color: colors.textSecondary }}>Hardcore lockdown, blocks everything except your allowlist</p>
       </div>
+
+      {/* The page is its cards. These are saved controls, not a hardcoded preset list:
+          each one is a pinned tool call the user could have asked for. */}
+      <PageCanvas page="deep-focus" columns={2} emptyHint="Give me a locked 45 minute session" />
 
       {activeSession ? (
         <div

@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron'
 import { writeFile } from 'fs/promises'
 import { getStore, patchStore } from './store'
 import { mergeSeeds } from './cards/seeds'
+import { resolveSource } from './cards/sources'
 import {
   getEffectiveApiKey, getUsageState, getCloudState, setCloudLicense, clearCloudLicense,
   startCheckout, setUsageChangeCallback,
@@ -222,6 +223,7 @@ const OPEN_CHANNELS = new Set<string>([
   'checkpoints:list', 'cloud:get', 'compat:check', 'content-rules:get', 'context:list',
   'conversations:list', 'conversations:messages', 'elevation:status', 'extension:status',
   'goals:get', 'inferences:get', 'issue:list', 'preferences:get', 'safety:changelog',
+  'cards:items',
   'safety:status', 'startup:list', 'timesheet:get', 'update:check', 'update:status',
   'usage:get', 'daemon:startup-status',
   // chrome / environment
@@ -1039,6 +1041,16 @@ export function initIpc(): void {
   // ── Custom analytics cards (built via the AI "describe your analytics" tool) ──
   ipcMain.handle('analytics:get-cards', () => {
     return getStore().customAnalyticsCards ?? []
+  })
+
+  // Resolve a non-activity card's items (goals, preferences, inferences, patterns,
+  // schedules). Activity cards never come here: they aggregate in the renderer from the
+  // session log. Read-only, so it stays open for signed-out browsing alongside the seeds.
+  ipcMain.handle('cards:items', (_e, cardId: string) => {
+    const card = (getStore().customAnalyticsCards ?? []).find((c) => c.id === cardId)
+    if (!card) return { items: [] }
+    const source = card.spec.source ?? 'activity'
+    return { items: resolveSource(source, card.spec.limit ?? 10) }
   })
 
   // Run a saved action card. Takes an ID, never the action itself: the renderer must not

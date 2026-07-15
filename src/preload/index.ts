@@ -31,6 +31,8 @@ const api = {
     ipcRenderer.invoke('analytics:reorder-cards', orderedIds),
   runCardAction: (cardId: string): Promise<{ ok: boolean; error?: string; result?: unknown }> =>
     ipcRenderer.invoke('cards:run-action', cardId),
+  getCardItems: (cardId: string): Promise<{ items: { label: string; detail?: string }[] }> =>
+    ipcRenderer.invoke('cards:items', cardId),
 
   startSession: (mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]): Promise<FocusSession> =>
     ipcRenderer.invoke('session:start', mode, durationMs, allowlist),

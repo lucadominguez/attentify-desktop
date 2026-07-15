@@ -73,7 +73,7 @@
       var weekend = (dow === 0 || dow === 6);
       if (!weekend) {
         out.push(hsess(day, 9, 5, 'Code', 'api/handlers.rs', '', 'development', 55, false));
-        out.push(hsess(day, 10, 5, 'chrome', 'Tokio docs — tasks & scheduling', 'https://docs.rs/tokio', 'browser', 12, false));
+        out.push(hsess(day, 10, 5, 'chrome', 'Tokio docs: tasks & scheduling', 'https://docs.rs/tokio', 'browser', 12, false));
         out.push(hsess(day, 10, 22, 'chrome', 'reddit.com/r/rust', 'https://reddit.com/r/rust', 'social', 7, true));
         out.push(hsess(day, 10, 35, 'Code', 'api/handlers.rs', '', 'development', 46, false));
         out.push(hsess(day, 11, 25, 'Slack', '#engineering', '', 'communication', 13, false));
@@ -85,7 +85,7 @@
         out.push(hsess(day, 14, 35, 'Figma', 'Dashboard v2', '', 'productivity', 26, false));
         out.push(hsess(day, 15, 10, 'chrome', 'X / Home', 'https://x.com/home', 'social', 11, true));
         out.push(hsess(day, 15, 30, 'Code', 'api/router.rs', '', 'development', 48, false));
-        out.push(hsess(day, 16, 25, 'Google Docs', 'Design doc — v2 API', '', 'productivity', 22, false));
+        out.push(hsess(day, 16, 25, 'Google Docs', 'Design doc: v2 API', '', 'productivity', 22, false));
         out.push(hsess(day, 16, 50, 'Discord', '#dev-team', '', 'social', 12, true));
         if (day % 2 === 0) out.push(hsess(day, 21, 15, 'chrome', 'TikTok', 'https://tiktok.com', 'entertainment', 17, true));
         if (day % 3 === 0) out.push(hsess(day, 22, 5, 'chrome', 'Instagram', 'https://instagram.com', 'social', 13, true));
@@ -290,6 +290,16 @@
     },
     removeProcess: function (name) { store.blocklist.processes = store.blocklist.processes.filter(function (p) { return p.name !== name; }); return Promise.resolve(); },
     getElevationCheck: function () { return Promise.resolve({ elevated: true, writable: true }); },
+    getCardItems: function (id) {
+      var byPage = {
+        "seed-lg-goals": [{ label: "Ship the v2 API by Friday", detail: "set 2d ago" }, { label: "No social before noon", detail: "set 5d ago" }],
+        "seed-lg-prefs": [{ label: "reddit.com: distraction", detail: undefined }, { label: "youtube.com: allowed for work", detail: "weekdays" }],
+        "seed-lg-inferences": [{ label: "news.ycombinator.com", detail: "82% - visited 9 times while off-task" }],
+        "seed-lg-patterns": [{ label: "Afternoon micro-escapes", detail: "medium - today" }],
+        "seed-sch-active": [{ label: "Work hours focus", detail: "09:00-17:00 - 5 days" }],
+      };
+      return Promise.resolve({ items: byPage[id] || [] });
+    },
     runCardAction: function () { return Promise.resolve({ ok: true, result: { started: true } }); },
     reorderAnalyticsCards: function (ids) {
       var byId = {}; (store.customAnalyticsCards || []).forEach(function (c) { byId[c.id] = c; });
@@ -399,23 +409,455 @@
     },
     restoreCheckpoint: function () { return Promise.resolve({ ok: true, label: 'this point' }); },
     getUserContext: function () { return Promise.resolve([
-      { id: 'ctx1', text: "I'm a software engineer building a Rust API — coding is my main work.", ts: now - 2 * 24 * HOUR },
+      { id: 'ctx1', text: "I'm a software engineer building a Rust API. Coding is my main work.", ts: now - 2 * 24 * HOUR },
       { id: 'ctx2', text: 'YouTube is often work for me: I watch conference talks and tutorials.', ts: now - 24 * HOUR },
       { id: 'ctx3', text: 'Reddit r/rust and r/programming are research, not distraction.', ts: now - 5 * HOUR },
     ]); },
     addUserContext: function (text) { return Promise.resolve({ ok: true, note: { id: 'ctx-' + Date.now(), text: text, ts: Date.now() } }); },
     deleteUserContext: function () { return Promise.resolve({ ok: true }); },
+    // Mirrors src/main/cards/seeds.ts exactly (generated), so the demo shows the same
+    // pages the app ships rather than a parallel set that drifts.
     getCustomCards: function () { return Promise.resolve([
-      { id: 'card1', title: 'Social media by weekday', description: 'Off-task social time, grouped by day', viz: 'bar', order: 0, spec: { rangeDays: 7, groupBy: 'weekday', metric: 'time', distraction: 'only', limit: 7 }, createdAt: now - 2 * 24 * HOUR },
-      { id: 'card2', title: 'Focus ratio by hour', description: 'When you focus best across the day', viz: 'line', order: 1, spec: { rangeDays: 7, groupBy: 'hour', metric: 'focus_ratio', distraction: 'all' }, createdAt: now - 24 * HOUR },
-      { id: 'card3', title: 'Top apps this week', description: 'Where your time goes', viz: 'table', order: 2, spec: { rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 }, createdAt: now - 4 * HOUR },
-      // The grown vocabulary. These are the shapes the app's own default views need, so
-      // they must be expressible as ordinary specs, not bespoke components.
-      { id: 'card4', title: 'Focus heatmap', description: 'Hour by weekday, last 14 days', viz: 'heatmap', order: 3, seeded: true, spec: { rangeDays: 14, groupBy: 'hour', metric: 'time', distraction: 'all' }, createdAt: now - 3 * HOUR },
-      { id: 'card5', title: 'Where the week went', description: 'Time split by category', viz: 'progress', order: 4, seeded: true, spec: { rangeDays: 7, groupBy: 'category', metric: 'time', distraction: 'all', limit: 5 }, createdAt: now - 3 * HOUR },
-      { id: 'card6', title: 'Today at a glance', description: 'Tracked time and the apps behind it', viz: 'summary', order: 5, seeded: true, spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all', limit: 4 }, createdAt: now - 2 * HOUR },
-      { id: 'card7', title: 'What changed this week', description: 'Ranked against the week before', viz: 'ranked', order: 6, seeded: true, spec: { rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 6 }, createdAt: now - 2 * HOUR },
-      { id: 'card8', kind: 'action', title: 'Deep work block', description: 'A locked 90 minute session', viz: 'number', order: 7, seeded: true, action: { tool: 'start_focus_session', params: { mode: 'deep', duration_minutes: 90 }, label: 'Start 90 min', confirm: true }, spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all' }, createdAt: now - HOUR },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-today",
+                "kind": "data",
+                "page": "analytics",
+                "order": 0,
+                "title": "Today at a glance",
+                "description": "Tracked time today and the apps behind it",
+                "viz": "summary",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 1,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 4
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-week-split",
+                "kind": "data",
+                "page": "analytics",
+                "order": 1,
+                "title": "Where your week went",
+                "description": "Time split by category, last 7 days",
+                "viz": "progress",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "category",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 5
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-heatmap",
+                "kind": "data",
+                "page": "analytics",
+                "order": 2,
+                "title": "Focus heatmap",
+                "description": "When you work, hour by weekday",
+                "viz": "heatmap",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 14,
+                      "groupBy": "hour",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-changed",
+                "kind": "data",
+                "page": "analytics",
+                "order": 3,
+                "title": "What changed this week",
+                "description": "Ranked against the week before",
+                "viz": "ranked",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 6
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-distractions",
+                "kind": "data",
+                "page": "analytics",
+                "order": 4,
+                "title": "Top distractions",
+                "description": "Where off-task time goes",
+                "viz": "bar",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "domain",
+                      "metric": "time",
+                      "distraction": "only",
+                      "limit": 8
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-focus-hour",
+                "kind": "data",
+                "page": "analytics",
+                "order": 5,
+                "title": "Focus by hour",
+                "description": "When you focus best across the day",
+                "viz": "line",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "hour",
+                      "metric": "focus_ratio",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-ts-apps",
+                "kind": "data",
+                "page": "timesheets",
+                "order": 0,
+                "title": "Time per app",
+                "description": "Every app you touched, last 7 days",
+                "viz": "table",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 15
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-ts-daily",
+                "kind": "data",
+                "page": "timesheets",
+                "order": 1,
+                "title": "Daily breakdown",
+                "description": "Tracked time by day of week",
+                "viz": "bar",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "weekday",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-ts-total",
+                "kind": "data",
+                "page": "timesheets",
+                "order": 2,
+                "title": "Tracked this week",
+                "description": "Total time Attentify has seen",
+                "viz": "number",
+                "spec": {
+                      "source": "activity",
+                      "rangeDays": 7,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-df-pomodoro",
+                "kind": "action",
+                "page": "deep-focus",
+                "order": 0,
+                "title": "Pomodoro",
+                "description": "A standard 25 minute block",
+                "viz": "number",
+                "action": {
+                      "tool": "start_focus_session",
+                      "params": {
+                            "mode": "normal",
+                            "duration_minutes": 25
+                      },
+                      "label": "Start 25 min",
+                      "confirm": false
+                },
+                "spec": {
+                      "rangeDays": 1,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-df-flow",
+                "kind": "action",
+                "page": "deep-focus",
+                "order": 1,
+                "title": "Flow state",
+                "description": "A locked 90 minutes with no bypass",
+                "viz": "number",
+                "action": {
+                      "tool": "start_focus_session",
+                      "params": {
+                            "mode": "deep",
+                            "duration_minutes": 90
+                      },
+                      "label": "Start 90 min",
+                      "confirm": true
+                },
+                "spec": {
+                      "rangeDays": 1,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-df-deep",
+                "kind": "action",
+                "page": "deep-focus",
+                "order": 2,
+                "title": "Deep work",
+                "description": "A locked 3 hours. You cannot end this early.",
+                "viz": "number",
+                "action": {
+                      "tool": "start_focus_session",
+                      "params": {
+                            "mode": "deep",
+                            "duration_minutes": 180
+                      },
+                      "label": "Start 3 hours",
+                      "confirm": true
+                },
+                "spec": {
+                      "rangeDays": 1,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-df-end",
+                "kind": "action",
+                "page": "deep-focus",
+                "order": 3,
+                "title": "End session",
+                "description": "Stop a normal session. Deep sessions refuse until they expire.",
+                "viz": "number",
+                "action": {
+                      "tool": "stop_focus_session",
+                      "params": {},
+                      "label": "End now",
+                      "confirm": true
+                },
+                "spec": {
+                      "rangeDays": 1,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-lg-goals",
+                "kind": "data",
+                "page": "logic",
+                "order": 0,
+                "title": "What you told me to protect",
+                "description": "Your active goals",
+                "viz": "list",
+                "spec": {
+                      "source": "goals",
+                      "rangeDays": 31,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 8
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-lg-prefs",
+                "kind": "data",
+                "page": "logic",
+                "order": 1,
+                "title": "What I have learned",
+                "description": "Preferences picked up from how you work",
+                "viz": "list",
+                "spec": {
+                      "source": "preferences",
+                      "rangeDays": 31,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 10
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-lg-inferences",
+                "kind": "data",
+                "page": "logic",
+                "order": 2,
+                "title": "Waiting on your call",
+                "description": "Things I spotted but have not acted on",
+                "viz": "list",
+                "spec": {
+                      "source": "inferences",
+                      "rangeDays": 31,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 8
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-lg-patterns",
+                "kind": "data",
+                "page": "logic",
+                "order": 3,
+                "title": "Patterns in how you drift",
+                "description": "Behaviours detected over the last month",
+                "viz": "list",
+                "spec": {
+                      "source": "patterns",
+                      "rangeDays": 31,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 8
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-sch-active",
+                "kind": "data",
+                "page": "scheduler",
+                "order": 0,
+                "title": "Your schedules",
+                "description": "Blocks that turn on and off by themselves",
+                "viz": "list",
+                "spec": {
+                      "source": "schedules",
+                      "rangeDays": 31,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all",
+                      "limit": 10
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-sch-workday",
+                "kind": "action",
+                "page": "scheduler",
+                "order": 1,
+                "title": "Work hours focus",
+                "description": "Block social media 9 to 5, weekdays",
+                "viz": "number",
+                "action": {
+                      "tool": "create_schedule",
+                      "params": {
+                            "name": "Work hours focus",
+                            "days": [
+                                  1,
+                                  2,
+                                  3,
+                                  4,
+                                  5
+                            ],
+                            "start_time": "09:00",
+                            "end_time": "17:00",
+                            "categories": [
+                                  "social_media"
+                            ]
+                      },
+                      "label": "Add this schedule",
+                      "confirm": true
+                },
+                "spec": {
+                      "rangeDays": 1,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          },
+          {
+                "seeded": true,
+                "createdAt": 1784100484902,
+                "id": "seed-sch-evening",
+                "kind": "action",
+                "page": "scheduler",
+                "order": 2,
+                "title": "Wind down",
+                "description": "Block video and social from 10pm, every night",
+                "viz": "number",
+                "action": {
+                      "tool": "create_schedule",
+                      "params": {
+                            "name": "Wind down",
+                            "days": [
+                                  0,
+                                  1,
+                                  2,
+                                  3,
+                                  4,
+                                  5,
+                                  6
+                            ],
+                            "start_time": "22:00",
+                            "end_time": "06:00",
+                            "categories": [
+                                  "video",
+                                  "social_media"
+                            ]
+                      },
+                      "label": "Add this schedule",
+                      "confirm": true
+                },
+                "spec": {
+                      "rangeDays": 1,
+                      "groupBy": "app",
+                      "metric": "time",
+                      "distraction": "all"
+                }
+          }
     ]); },
     deleteCustomCard: function () { return Promise.resolve({ ok: true }); },
     buildAnalyticsCard: function () { return Promise.resolve({ ok: true, summary: 'Built a card from your description.' }); },

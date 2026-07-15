@@ -483,6 +483,7 @@ declare global {
       runCompatCheck: () => Promise<import('@shared/types').CompatReport>
       reorderAnalyticsCards: (orderedIds: string[]) => Promise<{ ok: boolean }>
       runCardAction: (cardId: string) => Promise<{ ok: boolean; error?: string; result?: unknown }>
+      getCardItems: (cardId: string) => Promise<{ items: { label: string; detail?: string }[] }>
       startSession: (mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]) => Promise<import('@shared/types').FocusSession>
       stopSession: (id: string) => Promise<void>
       sendMessage: (text: string) => Promise<{ reply: string; actions: unknown[] }>

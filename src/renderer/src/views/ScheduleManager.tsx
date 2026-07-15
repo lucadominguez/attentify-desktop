@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Calendar, Plus, Trash2, ToggleLeft, ToggleRight, Clock } from 'lucide-react'
 import type { AppStore, ScheduleRule } from '@shared/types'
 import { useTheme } from '../context/ThemeContext'
+import PageCanvas from '../components/cards/PageCanvas'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
@@ -70,6 +71,9 @@ export default function ScheduleManager({ store, onRefresh }: ScheduleManagerPro
           <Plus size={14} /> New schedule
         </button>
       </div>
+
+      {/* The page is its cards: schedules the AI created, and saved controls to add more. */}
+      <PageCanvas page="scheduler" columns={2} emptyHint="Block social media 9 to 5 on weekdays" />
 
       {creating && (
         <div className="card space-y-4">

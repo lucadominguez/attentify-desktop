@@ -123,9 +123,48 @@ export function defaultCards(now = Date.now()): CustomAnalyticsCard[] {
       spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all' },
     },
 
+    // ── Logic (the AI's working memory, not activity) ─────────────────────────
+    // These read non-activity sources, resolved in main by cards/sources.ts rather than
+    // aggregated by runAnalyticsQuery, which only understands the session log.
+    {
+      ...base, id: seedId('lg-goals'), kind: 'data', page: 'logic', order: 0,
+      title: 'What you told me to protect',
+      description: 'Your active goals',
+      viz: 'list',
+      spec: { source: 'goals', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 },
+    },
+    {
+      ...base, id: seedId('lg-prefs'), kind: 'data', page: 'logic', order: 1,
+      title: 'What I have learned',
+      description: 'Preferences picked up from how you work',
+      viz: 'list',
+      spec: { source: 'preferences', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 10 },
+    },
+    {
+      ...base, id: seedId('lg-inferences'), kind: 'data', page: 'logic', order: 2,
+      title: 'Waiting on your call',
+      description: 'Things I spotted but have not acted on',
+      viz: 'list',
+      spec: { source: 'inferences', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 },
+    },
+    {
+      ...base, id: seedId('lg-patterns'), kind: 'data', page: 'logic', order: 3,
+      title: 'Patterns in how you drift',
+      description: 'Behaviours detected over the last month',
+      viz: 'list',
+      spec: { source: 'patterns', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 },
+    },
+
     // ── Scheduler ─────────────────────────────────────────────────────────────
     {
-      ...base, id: seedId('sch-workday'), kind: 'action', page: 'scheduler', order: 0,
+      ...base, id: seedId('sch-active'), kind: 'data', page: 'scheduler', order: 0,
+      title: 'Your schedules',
+      description: 'Blocks that turn on and off by themselves',
+      viz: 'list',
+      spec: { source: 'schedules', rangeDays: 31, groupBy: 'app', metric: 'time', distraction: 'all', limit: 10 },
+    },
+    {
+      ...base, id: seedId('sch-workday'), kind: 'action', page: 'scheduler', order: 1,
       title: 'Work hours focus',
       description: 'Block social media 9 to 5, weekdays',
       viz: 'number',
@@ -137,7 +176,7 @@ export function defaultCards(now = Date.now()): CustomAnalyticsCard[] {
       spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all' },
     },
     {
-      ...base, id: seedId('sch-evening'), kind: 'action', page: 'scheduler', order: 1,
+      ...base, id: seedId('sch-evening'), kind: 'action', page: 'scheduler', order: 2,
       title: 'Wind down',
       description: 'Block video and social from 10pm, every night',
       viz: 'number',
