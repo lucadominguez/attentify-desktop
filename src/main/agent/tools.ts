@@ -13,8 +13,19 @@ import {
 } from '../data/repository'
 import { getStore, patchStore } from '../store'
 import { runAnalyticsQuery } from '../../shared/analyticsQuery'
-import type { AnalyticsQuerySpec, CustomAnalyticsCard, ScheduleRule } from '../../shared/types'
+import type { AnalyticsQuerySpec, CustomAnalyticsCard, ScheduleRule, CardPage, CardViz, CardAction } from '../../shared/types'
 import { randomUUID } from 'crypto'
+
+// Whitelists for what the model is allowed to save. The model picks from an enum in the
+// tool schema, but the schema is a hint and not a guarantee, so anything that reaches
+// the store is validated here. An action card in particular is a saved tool call, and
+// must only ever name a real tool.
+const VALID_VIZ: CardViz[] = ['bar', 'line', 'table', 'number', 'heatmap', 'progress', 'summary', 'ranked', 'list']
+const VALID_PAGES: CardPage[] = ['analytics', 'logic', 'timesheets', 'deep-focus', 'scheduler']
+const VALID_ACTION_TOOLS: CardAction['tool'][] = [
+  'start_focus_session', 'stop_focus_session', 'create_schedule', 'remove_schedule',
+  'block_category', 'block_domain', 'unblock_domain', 'add_goal',
+]
 
 // ── Category domain taxonomy (~200 domains) ────────────────────────────────────
 
@@ -378,20 +389,50 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   },
   {
     name: 'create_analytics_card',
-    description: `Save a custom analytics card to the user's Analytics page, built from a description of what they want to see. The card is recomputed live from tracked activity every time they open Analytics, so it stays current. Use this when the user describes an ongoing metric they want to keep an eye on. Pick the same query params as query_activity_data, and a viz: "bar" (ranked rows — best for app/category/domain), "line" (a trend graph — best for group_by hour or weekday), "table" (detailed rows with values), or "number" (a single headline total). Confirm to the user what you saved.`,
+    description: `Save a card to one of the user's pages, built from a description of what they want to see. Cards ARE the pages: everything Attentify ships is an ordinary card, so anything the user sees, they can rebuild, edit or delete. The card stores a query and recomputes live from tracked activity every time the page opens, so it stays current and costs nothing to view. Use this whenever the user describes an ongoing metric they want to keep an eye on. Pick the query params as for query_activity_data, plus a viz. Confirm to the user what you saved and which page it went to.`,
     input_schema: {
       type: 'object' as const,
       properties: {
         title: { type: 'string', description: 'Short card title, e.g. "Social media by weekday".' },
         description: { type: 'string', description: 'One-line explanation of what the card shows.' },
-        viz: { type: 'string', enum: ['bar', 'line', 'table', 'number'], description: 'How to render it. Use "line" for hour/weekday trends, "table" for detailed rows.' },
-        range_days: { type: 'number', description: 'Look-back window in days (1-31). Default 7.' },
+        viz: {
+          type: 'string',
+          enum: ['bar', 'line', 'table', 'number', 'heatmap', 'progress', 'summary', 'ranked'],
+          description: 'How to render it. "bar" = ranked rows, best for app/category/domain. "line" = a trend, best for group_by hour or weekday. "table" = detailed rows. "number" = one headline total. "heatmap" = an hour-by-weekday grid showing when something happens (ignores group_by and always grids day x hour; use a range_days of 14+ so the grid has data). "progress" = parts of one whole in a single bar, best for group_by category with a small limit. "summary" = a headline total plus the few rows behind it. "ranked" = rows with what CHANGED versus the previous equal-length window, best when the user asks what got better or worse.',
+        },
+        page: {
+          type: 'string',
+          enum: ['analytics', 'logic', 'timesheets', 'deep-focus', 'scheduler'],
+          description: 'Which page to pin it to. Defaults to "analytics". Use "timesheets" for time-per-app/day views.',
+        },
+        range_days: { type: 'number', description: 'Look-back window in days (1-31). Default 7. Use 14+ for heatmap.' },
         group_by: { type: 'string', enum: ['app', 'category', 'domain', 'hour', 'weekday'] },
         metric: { type: 'string', enum: ['time', 'sessions', 'focus_ratio'] },
         distraction: { type: 'string', enum: ['all', 'only', 'exclude'] },
         limit: { type: 'number' },
       },
       required: ['title', 'viz', 'group_by', 'metric'],
+    },
+  },
+  {
+    name: 'create_action_card',
+    description: `Pin a one-tap control to a page: a saved action the user can re-run, like "Start 90 min deep work" on Deep Focus or a recurring block on Scheduler. Use this when the user wants to KEEP a control rather than run something once (if they just want it done now, call the tool directly instead). The card is a saved call to one of your own tools with its arguments pinned, so it does exactly what you would have done. Confirm what you pinned and where.`,
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        title: { type: 'string', description: 'Short card title, e.g. "Deep work block".' },
+        description: { type: 'string', description: 'One-line explanation of what it does.' },
+        label: { type: 'string', description: 'Button text, e.g. "Start 90 min".' },
+        tool: {
+          type: 'string',
+          enum: ['start_focus_session', 'stop_focus_session', 'create_schedule', 'remove_schedule', 'block_category', 'block_domain', 'unblock_domain', 'add_goal'],
+          description: 'Which of your tools the button runs.',
+        },
+        params: { type: 'object', description: 'Arguments for that tool, pinned. Must match the tool\'s own schema.' },
+        page: { type: 'string', enum: ['analytics', 'logic', 'timesheets', 'deep-focus', 'scheduler'], description: 'Which page to pin it to.' },
+        confirm: { type: 'boolean', description: 'Ask before running. Default true for anything that changes the machine.' },
+      },
+      required: ['title', 'label', 'tool', 'page'],
     },
   },
   {
@@ -809,12 +850,17 @@ export async function executeTool(
 
     case 'create_analytics_card': {
       const spec = specFromInput(input)
+      const page = (VALID_PAGES.includes(input['page'] as CardPage) ? input['page'] : 'analytics') as CardPage
       const card: CustomAnalyticsCard = {
         id: randomUUID().slice(0, 8),
+        kind: 'data',
         title: (input['title'] as string) || 'Custom analytics',
         description: input['description'] as string | undefined,
-        viz: (['number', 'table', 'line', 'bar'].includes(input['viz'] as string) ? input['viz'] : 'bar') as CustomAnalyticsCard['viz'],
+        viz: (VALID_VIZ.includes(input['viz'] as CardViz) ? input['viz'] : 'bar') as CardViz,
+        page,
         spec,
+        // New cards land at the top of their page; the user can drag from there.
+        order: -Date.now(),
         createdAt: Date.now(),
       }
       const s = getStore()
@@ -823,10 +869,40 @@ export async function executeTool(
       const sessions = deps.tracker.getSessions(Date.now() - spec.rangeDays * 24 * 3600000)
       const res = runAnalyticsQuery(sessions, spec)
       return {
-        ok: true, card_id: card.id, title: card.title,
+        ok: true, card_id: card.id, title: card.title, page,
         preview: { total: res.total, unit: res.unit, top_rows: res.rows.slice(0, 5).map((r) => ({ label: r.label, value: r.value })) },
-        note: 'Saved to the Analytics page. It recomputes live whenever the user opens Analytics.',
+        note: `Saved to the ${page} page. It recomputes live whenever the user opens it.`,
       }
+    }
+
+    case 'create_action_card': {
+      const tool = input['tool'] as CardAction['tool']
+      if (!VALID_ACTION_TOOLS.includes(tool)) {
+        return { ok: false, error: `Unknown tool "${tool}". An action card can only pin one of: ${VALID_ACTION_TOOLS.join(', ')}.` }
+      }
+      const page = (VALID_PAGES.includes(input['page'] as CardPage) ? input['page'] : 'deep-focus') as CardPage
+      const card: CustomAnalyticsCard = {
+        id: randomUUID().slice(0, 8),
+        kind: 'action',
+        title: (input['title'] as string) || 'Action',
+        description: input['description'] as string | undefined,
+        // Unused for actions, but the field is required; the renderer branches on kind.
+        viz: 'number',
+        page,
+        action: {
+          tool,
+          params: (input['params'] as Record<string, unknown>) ?? {},
+          label: (input['label'] as string) || 'Run',
+          // Default to confirming: an action card is a one-tap change to the machine.
+          confirm: input['confirm'] === undefined ? true : Boolean(input['confirm']),
+        },
+        spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all' },
+        order: -Date.now(),
+        createdAt: Date.now(),
+      }
+      const s = getStore()
+      patchStore({ customAnalyticsCards: [card, ...(s.customAnalyticsCards ?? [])].slice(0, 24) })
+      return { ok: true, card_id: card.id, title: card.title, page, note: `Pinned to the ${page} page as a one-tap control.` }
     }
 
     case 'list_analytics_cards': {
