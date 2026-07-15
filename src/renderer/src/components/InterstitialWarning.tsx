@@ -46,19 +46,30 @@ export default function InterstitialWarning(): React.ReactElement {
     ? new Date(data.endsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
 
+  // Liquid glass: the window is transparent, so this is the only surface. Translucent
+  // enough that the page being blocked stays faintly visible behind it, which is the
+  // point. You can see what you were reaching for, and it is still out of reach.
   return (
     <div
       className="flex flex-col w-screen h-screen overflow-hidden select-none rounded-2xl"
       style={{
-        background: 'linear-gradient(160deg, #0d1e35 0%, #080f1e 100%)',
-        border: '1px solid rgba(255,107,53,0.25)',
+        background: 'linear-gradient(160deg, rgba(13,30,53,0.66) 0%, rgba(8,15,30,0.76) 100%)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        backdropFilter: 'blur(30px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(30px) saturate(160%)',
+        boxShadow: [
+          '0 28px 72px rgba(0,0,0,0.6)',
+          '0 0 0 1px rgba(248,113,113,0.28)',
+          'inset 0 1px 0 rgba(255,255,255,0.14)',
+          'inset 0 0 80px rgba(248,113,113,0.07)',
+        ].join(', '),
       }}
     >
       {/* Drag region / title bar strip */}
       <div className="titlebar-drag flex items-center justify-end h-7 px-3 flex-shrink-0">
         <button
           onClick={handleGoBack}
-          className="text-navy-600 hover:text-navy-400 transition-colors text-xs leading-none"
+          className="text-white/50 hover:text-white/75 transition-colors text-xs leading-none"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           ✕
@@ -72,26 +83,26 @@ export default function InterstitialWarning(): React.ReactElement {
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0"
             style={{
-              background: 'rgba(255,107,53,0.12)',
-              border: '1.5px solid rgba(255,107,53,0.35)',
-              boxShadow: '0 0 24px rgba(255,107,53,0.18)',
+              background: 'rgba(248,113,113,0.12)',
+              border: '1.5px solid rgba(248,113,113,0.35)',
+              boxShadow: '0 0 24px rgba(248,113,113,0.18)',
             }}
           >
-            <ShieldAlert size={26} className="text-accent-orange" />
+            <ShieldAlert size={26} style={{ color: "#f87171" }} />
           </div>
 
           <div>
             <h1 className="text-xl font-extrabold text-white leading-tight" style={{ letterSpacing: '-0.01em' }}>
               Attention hazard
             </h1>
-            <p className="text-navy-400 text-sm mt-1 leading-snug">
+            <p className="text-white/75 text-sm mt-1 leading-snug">
               Blocked{' '}
-              <span className="text-accent-orange font-semibold">{data?.blocked ?? '…'}</span>
-              {' '}You asked it to.
+              <span className="font-semibold" style={{ color: "#f87171" }}>{data?.blocked ?? '…'}</span>
+              . You asked it to.
             </p>
             {sessionEnd && (
-              <p className="text-navy-600 text-xs mt-1">
-                Focus session ends at <span className="text-navy-400">{sessionEnd}</span>
+              <p className="text-white/50 text-xs mt-1">
+                Focus session ends at <span className="text-white/75">{sessionEnd}</span>
               </p>
             )}
           </div>
@@ -101,8 +112,8 @@ export default function InterstitialWarning(): React.ReactElement {
         <div className="flex flex-col items-center gap-2 w-full">
           <button
             onClick={handleGoBack}
-            className="flex items-center gap-2 bg-accent-blue hover:bg-accent-blue-light text-white font-bold px-6 py-2.5 rounded-full text-sm transition-all w-full max-w-[220px] justify-center"
-            style={{ boxShadow: '0 0 20px rgba(33,150,243,0.25)' }}
+            className="flex items-center gap-2 text-white font-bold px-6 py-2.5 rounded-full text-sm transition-all w-full max-w-[220px] justify-center hover:brightness-110"
+            style={{ background: "#6366f1", boxShadow: "0 0 20px rgba(99,102,241,0.30)" }}
           >
             <ArrowLeft size={15} />
             Go back
@@ -110,13 +121,13 @@ export default function InterstitialWarning(): React.ReactElement {
 
           {/* Break options */}
           <div className="flex items-center gap-1.5 mt-1">
-            <Coffee size={10} className="text-navy-600" />
-            <span className="text-navy-700 text-[10px]">Take a break:</span>
+            <Coffee size={10} className="text-white/50" />
+            <span className="text-white/40 text-[10px]">Take a break:</span>
             {BREAK_OPTIONS.map((opt) => (
               <button
                 key={opt.ms}
                 onClick={() => void handleBreak(opt.ms)}
-                className="text-navy-600 hover:text-navy-300 text-[10px] transition-colors px-1.5 py-0.5 rounded"
+                className="text-white/50 hover:text-white/90 text-[10px] transition-colors px-1.5 py-0.5 rounded"
                 style={{ border: '1px solid rgba(255,255,255,0.06)' }}
               >
                 {opt.label}
@@ -125,21 +136,21 @@ export default function InterstitialWarning(): React.ReactElement {
           </div>
 
           {countdown !== null && !proceedReady ? (
-            <div className="flex items-center gap-1.5 text-navy-600 text-xs">
+            <div className="flex items-center gap-1.5 text-white/50 text-xs">
               <Clock size={11} />
               <span>Proceeding in {countdown}s…</span>
             </div>
           ) : proceedReady ? (
-            <button onClick={handleProceed} className="text-navy-500 hover:text-navy-300 text-xs transition-colors">
+            <button onClick={handleProceed} className="text-white/60 hover:text-white/90 text-xs transition-colors">
               Proceed to {data?.blocked ?? 'site'}
             </button>
           ) : (
-            <button onClick={handleProceedRequest} className="text-navy-700 hover:text-navy-500 text-xs transition-colors">
+            <button onClick={handleProceedRequest} className="text-white/40 hover:text-white/60 text-xs transition-colors">
               Proceed anyway (30s delay)
             </button>
           )}
 
-          <p className="text-navy-700 text-[10px]">The good algorithm is protecting you.</p>
+          <p className="text-white/40 text-[10px]">The good algorithm is protecting you.</p>
         </div>
       </div>
     </div>

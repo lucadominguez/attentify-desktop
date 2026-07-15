@@ -213,7 +213,13 @@ function createInterstitialWindow(): void {
     resizable: false,
     center: true,
     show: false,
-    backgroundColor: '#050d18',
+    // Transparent so the block warning reads as a pane of glass laid over whatever the
+    // user was about to open, rather than an opaque dialog that replaces it. The card's
+    // own rounded corners could never show against an opaque window colour. Safe here:
+    // frameless, non-resizable and centred, which is where Electron's transparent windows
+    // are well behaved on Windows.
+    transparent: true,
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,

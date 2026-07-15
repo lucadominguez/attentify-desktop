@@ -139,14 +139,28 @@ export default function OverlayCard(): React.ReactElement | null {
         pointerEvents: 'none',
       }}
     >
+      {/* Liquid glass. The window is already transparent (NotificationQueue sets
+          transparent:true + #00000000), so this floats directly on the user's desktop —
+          the AI present on the machine rather than a window that opened.
+          The blur was previously defeated: backdropFilter was set but the background sat
+          at 0.97 alpha, so nothing could show through it. The alpha is what makes it glass;
+          the blur only keeps whatever shows through from turning into noise behind text. */}
       <div
         style={{
           width: 400,
-          background: 'rgba(4,10,20,0.97)',
-          border: `1px solid ${cfg.border}`,
-          backdropFilter: 'blur(16px)',
-          WebkitBackdropFilter: 'blur(16px)',
-          boxShadow: `0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.04), inset 0 0 40px ${cfg.dimColor}`,
+          borderRadius: 18,
+          overflow: 'hidden',
+          background: `linear-gradient(160deg, rgba(10,18,34,0.62), rgba(4,10,20,0.72))`,
+          // Hairline edge, brightest at the top where light would catch it.
+          border: '1px solid rgba(255,255,255,0.10)',
+          backdropFilter: 'blur(28px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(28px) saturate(160%)',
+          boxShadow: [
+            '0 24px 64px rgba(0,0,0,0.55)',           // lift off the desktop
+            `0 0 0 1px ${cfg.border}`,                 // state colour, as an edge not a frame
+            'inset 0 1px 0 rgba(255,255,255,0.14)',    // top light catch
+            `inset 0 0 60px ${cfg.dimColor}`,          // state bleed from within
+          ].join(', '),
           pointerEvents: 'all',
           userSelect: 'none',
           animation: 'slideIn 0.22s cubic-bezier(0.34,1.56,0.64,1)',
