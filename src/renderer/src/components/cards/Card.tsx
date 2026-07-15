@@ -3,6 +3,7 @@ import { GripVertical, Trash2, Play } from 'lucide-react'
 import { useTheme } from '../../context/ThemeContext'
 import { useAskAI } from '../MetricDrill'
 import { runAnalyticsQuery, runHeatmapQuery, runRankedQuery } from '@shared/analyticsQuery'
+import { niceTicks, fmtTick } from './Axes'
 import type { ActivitySession, CustomAnalyticsCard } from '@shared/types'
 
 // The unit every page is built from.
@@ -34,22 +35,29 @@ const WEEKDAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 // ── viz: the grown vocabulary ─────────────────────────────────────────────────
 
+// Ranked rows. Every bar is directly labelled with its own value, so no axis is needed,
+// but the scale footer states what full width means: a bar with no reference is a ratio
+// with no denominator.
 function BarViz({ rows, unit }: { rows: { label: string; value: number; detail?: string }[]; unit: 'ms' | 'count' | 'percent' }): React.ReactElement {
   const { colors } = useTheme()
-  const max = Math.max(1, ...rows.map((r) => r.value))
+  const shown = rows.slice(0, 8)
+  const max = Math.max(1, ...shown.map((r) => r.value))
   return (
     <div className="flex flex-col gap-1.5">
-      {rows.slice(0, 8).map((r) => (
-        <div key={r.label} className="flex items-center gap-2">
+      {shown.map((r) => (
+        <div key={r.label} className="flex items-center gap-2" title={`${r.label}: ${fmtValue(r.value, unit)}${r.detail ? ` · ${r.detail}` : ''}`}>
           <span className="text-[10px] truncate capitalize" style={{ color: colors.textSecondary, width: 92 }}>{r.label}</span>
-          <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: colors.glassEdge }}>
-            <div style={{ width: `${(r.value / max) * 100}%`, height: '100%', background: colors.accent, borderRadius: 999 }} />
+          <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: colors.glassEdge }}>
+            <div style={{ width: `${(r.value / max) * 100}%`, height: '100%', background: colors.accent, borderRadius: 999, transition: 'width 0.3s ease' }} />
           </div>
           <span className="text-[10px] data-value flex-shrink-0" style={{ color: colors.textPrimary, width: 46, textAlign: 'right' }}>
             {fmtValue(r.value, unit)}
           </span>
         </div>
       ))}
+      <div className="flex justify-end pt-0.5" style={{ borderTop: `1px solid ${colors.glassEdge}` }}>
+        <span className="text-[8px] data-value" style={{ color: colors.textDim }}>full width = {fmtValue(max, unit)}</span>
+      </div>
     </div>
   )
 }
@@ -177,20 +185,86 @@ function RankedViz({ rows, unit, hasBaseline }: {
   )
 }
 
+// A line with no scale is a decoration. Real axes, nice round ticks, recessive grid,
+// and a hover layer, because an HTML chart IS interactive and should behave like it.
 function LineViz({ rows, unit }: { rows: { label: string; value: number }[]; unit: 'ms' | 'count' | 'percent' }): React.ReactElement {
   const { colors } = useTheme()
-  const max = Math.max(1, ...rows.map((r) => r.value))
-  const pts = rows.map((r, i) => `${(i / Math.max(1, rows.length - 1)) * 100},${40 - (r.value / max) * 36}`).join(' ')
+  const [hover, setHover] = React.useState<number | null>(null)
+  const H = 96, PAD_L = 34, PAD_B = 14
+  const ticks = niceTicks(Math.max(...rows.map((r) => r.value), 0), unit)
+  const max = ticks[ticks.length - 1] || 1
+  const plotH = H - PAD_B
+
+  const pts = rows.map((r, i) => ({ x: (i / Math.max(1, rows.length - 1)) * 100, y: plotH - (r.value / max) * (plotH - 4), r, i }))
+
+  // Axis text is HTML, never SVG. The plot uses preserveAspectRatio="none" to stretch to
+  // the card's width, and that scaling applies to glyphs too: putting <text> in there
+  // smears the labels into each other. Only the path lives in the stretched SVG.
+  const xLabels = rows.map((r) => r.label)
+  const xStep = Math.max(1, Math.ceil(xLabels.length / 5))
+
   return (
-    <div>
-      <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ width: '100%', height: 56 }}>
-        <polyline points={pts} fill="none" stroke={colors.accent} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+    <div style={{ position: 'relative', paddingLeft: PAD_L, paddingBottom: PAD_B }}>
+      {/* y ticks + gridlines */}
+      {ticks.map((t) => {
+        const pct = 100 - (t / max) * 100
+        return (
+          <div key={t} style={{ position: 'absolute', left: 0, right: 0, top: `calc(${pct}% - ${(pct / 100) * PAD_B}px)`, pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', left: PAD_L, right: 0, borderTop: `1px solid ${colors.glassEdge}` }} />
+            <span className="data-value" style={{
+              position: 'absolute', left: 0, top: -5, width: PAD_L - 5, textAlign: 'right',
+              fontSize: 8, color: colors.textDim,
+            }}>{fmtTick(t, unit)}</span>
+          </div>
+        )
+      })}
+
+      <svg viewBox={`0 0 100 ${plotH}`} preserveAspectRatio="none"
+        style={{ width: '100%', height: plotH, display: 'block' }}>
+        <polyline
+          points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
+          fill="none" stroke={colors.accent} strokeWidth={2}
+          vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round"
+        />
+        {hover !== null && pts[hover] && (
+          <circle cx={pts[hover]!.x} cy={pts[hover]!.y} r={2.5} fill={colors.accent}
+            stroke={colors.glassHigh} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        )}
       </svg>
-      <div className="flex justify-between">
-        <span className="text-[8px]" style={{ color: colors.textMuted }}>{rows[0]?.label}</span>
-        <span className="text-[8px]" style={{ color: colors.textMuted }}>{rows[rows.length - 1]?.label}</span>
+
+      {/* x ticks, thinned so they never collide */}
+      <div style={{ position: 'relative', height: PAD_B }}>
+        {xLabels.map((l, i) => {
+          if (i % xStep !== 0 && i !== xLabels.length - 1) return null
+          const pct = (i / Math.max(1, xLabels.length - 1)) * 100
+          return (
+            <span key={`${l}-${i}`} className="data-value" style={{
+              position: 'absolute', left: `${pct}%`,
+              transform: i === 0 ? 'none' : i === xLabels.length - 1 ? 'translateX(-100%)' : 'translateX(-50%)',
+              top: 2, fontSize: 8, color: colors.textDim, whiteSpace: 'nowrap',
+            }}>{l}</span>
+          )
+        })}
       </div>
-      <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted }}>peak {fmtValue(max, unit)}</p>
+
+      {/* Hit targets bigger than the marks. */}
+      <div style={{ position: 'absolute', left: PAD_L, right: 0, top: 0, height: plotH, display: 'flex' }}>
+        {rows.map((_, i) => (
+          <div key={i} style={{ flex: 1 }} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} />
+        ))}
+      </div>
+
+      {hover !== null && rows[hover] && (
+        <div className="rounded-md px-2 py-1 pointer-events-none" style={{
+          position: 'absolute', left: `calc(${PAD_L}px + ${(hover / Math.max(1, rows.length - 1)) * 100}%)`,
+          top: -2, transform: 'translate(-50%,-100%)',
+          background: colors.glassHigh, border: `1px solid ${colors.glassEdge}`,
+          backdropFilter: colors.blurSm, boxShadow: colors.elevLow, whiteSpace: 'nowrap', zIndex: 2,
+        }}>
+          <span className="text-[9px]" style={{ color: colors.textMuted }}>{rows[hover]!.label} </span>
+          <span className="text-[9px] data-value" style={{ color: colors.textPrimary }}>{fmtValue(rows[hover]!.value, unit)}</span>
+        </div>
+      )}
     </div>
   )
 }

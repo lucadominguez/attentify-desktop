@@ -73,6 +73,23 @@ export default function CardDetail({
     return []
   }, [data, items])
 
+  // The raw sessions this card's spec actually matched, filtered exactly the way
+  // runAnalyticsQuery filters them, so the list and the chart can never disagree.
+  const { raw, rawTotal } = useMemo(() => {
+    if (card.kind === 'action' || (card.spec.source ?? 'activity') !== 'activity') return { raw: [], rawTotal: 0 }
+    const cutoff = Date.now() - Math.max(1, card.spec.rangeDays) * 86400000
+    const matched = sessions.filter((s) => {
+      if (s.startTime < cutoff) return false
+      if (card.spec.distraction === 'only' && !s.isDistraction) return false
+      if (card.spec.distraction === 'exclude' && s.isDistraction) return false
+      return true
+    })
+    // Longest first: the sessions that actually moved the number come first. Capped so a
+    // month of tracking cannot render 9,000 rows into the DOM.
+    const sorted = [...matched].sort((a, b) => b.duration - a.duration)
+    return { raw: sorted.slice(0, 200), rawTotal: matched.length }
+  }, [card, sessions])
+
   const spec = card.spec
   const provenance = card.kind === 'action'
     ? `runs ${card.action?.tool}`
@@ -122,9 +139,9 @@ export default function CardDetail({
               <BigViz card={card} data={data} />
             </div>
 
-            {/* Everything underneath it. */}
+            {/* The aggregate the chart is drawn from. */}
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: colors.labelDim }}>Underlying data</p>
+              <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: colors.labelDim }}>Grouped by {card.spec.groupBy}</p>
               <p className="text-[9px] data-value" style={{ color: colors.textDim }}>{rows.length} rows</p>
             </div>
             {rows.length === 0 ? (
@@ -140,6 +157,47 @@ export default function CardDetail({
                   </div>
                 ))}
               </div>
+            )}
+
+            {/* The raw rows the aggregate is built from. "All the underlying data" means
+                the actual sessions, not just the grouped totals: the aggregate is already
+                a summary, and summarising a summary is not showing your work. */}
+            {raw.length > 0 && (
+              <>
+                <div className="flex items-center justify-between mb-1.5 mt-4">
+                  <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: colors.labelDim }}>Every session behind it</p>
+                  <p className="text-[9px] data-value" style={{ color: colors.textDim }}>
+                    {raw.length}{rawTotal > raw.length ? ` of ${rawTotal}` : ''} sessions
+                  </p>
+                </div>
+                <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${colors.glassEdge}` }}>
+                  <div className="flex items-center gap-3 px-3 py-1" style={{ background: colors.glassMid, borderBottom: `1px solid ${colors.glassEdge}` }}>
+                    <span className="text-[8px] uppercase tracking-wider" style={{ color: colors.textDim, width: 96 }}>when</span>
+                    <span className="text-[8px] uppercase tracking-wider" style={{ color: colors.textDim, width: 84 }}>app</span>
+                    <span className="text-[8px] uppercase tracking-wider flex-1" style={{ color: colors.textDim }}>what</span>
+                    <span className="text-[8px] uppercase tracking-wider" style={{ color: colors.textDim, width: 44, textAlign: 'right' }}>time</span>
+                  </div>
+                  {raw.map((s, i) => (
+                    <div key={s.id ?? i} className="flex items-center gap-3 px-3 py-1"
+                      style={{ background: i % 2 ? 'transparent' : colors.glassMid }}>
+                      <span className="text-[9.5px] data-value flex-shrink-0" style={{ color: colors.textDim, width: 96 }}>
+                        {new Date(s.startTime).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="text-[10px] truncate flex-shrink-0" style={{ color: colors.textSecondary, width: 84 }}>{s.app}</span>
+                      <span className="text-[10px] truncate flex-1" style={{ color: colors.textMuted }}>{s.title || s.url || ''}</span>
+                      <span className="text-[10px] data-value flex-shrink-0"
+                        style={{ color: s.isDistraction ? colors.negative : colors.textPrimary, width: 44, textAlign: 'right' }}>
+                        {fmtMs(s.duration)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {rawTotal > raw.length && (
+                  <p className="text-[9px] mt-1.5 text-center" style={{ color: colors.textDim }}>
+                    Showing the {raw.length} longest. Ask Attentify to see the rest.
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
