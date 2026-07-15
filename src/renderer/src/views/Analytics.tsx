@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import type { HeuristicAlert, ActivitySession, AppCategory, CustomAnalyticsCard } from '@shared/types'
 import { runAnalyticsQuery } from '@shared/analyticsQuery'
+import CardCanvas from '../components/cards/CardCanvas'
 import { detectPrivacyMode, privacyLabel, type PrivacyMode } from '@shared/privacyMode'
 import { MetricDrill, TableQuery, AskAIProvider, type DrillSpec, type DrillRow } from '../components/MetricDrill'
 import { useTheme } from '../context/ThemeContext'
@@ -2099,12 +2100,18 @@ function CustomAnalyticsSection(): React.ReactElement {
         </div>
       )}
 
-      {/* Saved cards */}
+      {/* Saved cards. A canvas the user owns: drag to reorder, ask about any of them. */}
       {cards.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-3">
-          {cards.map((card) => (
-            <CustomCard key={card.id} card={card} sessions={sessions} onDelete={() => void remove(card.id)} />
-          ))}
+        <div className="mt-3">
+          <CardCanvas
+            cards={cards}
+            sessions={sessions}
+            onReorder={(next) => {
+              setCards(next)
+              api.reorderAnalyticsCards?.(next.map((c) => c.id)).catch(() => { /* signed out: order is not persisted */ })
+            }}
+            onDelete={(id) => void remove(id)}
+          />
         </div>
       )}
     </div>

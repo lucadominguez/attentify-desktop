@@ -1029,6 +1029,17 @@ export function initIpc(): void {
     return getStore().customAnalyticsCards ?? []
   })
 
+  // Drag-to-reorder writes the user's order back onto the cards themselves, so it
+  // survives restarts rather than being implied by insertion order.
+  ipcMain.handle('analytics:reorder-cards', (_e, orderedIds: string[]) => {
+    const s = getStore()
+    const cards = s.customAnalyticsCards ?? []
+    const pos = new Map(orderedIds.map((id, i) => [id, i]))
+    const next = cards.map((c) => (pos.has(c.id) ? { ...c, order: pos.get(c.id)! } : c))
+    patchStore({ customAnalyticsCards: next })
+    return { ok: true }
+  })
+
   ipcMain.handle('analytics:delete-card', (_e, id: string) => {
     const s = getStore()
     patchStore({ customAnalyticsCards: (s.customAnalyticsCards ?? []).filter((c) => c.id !== id) })

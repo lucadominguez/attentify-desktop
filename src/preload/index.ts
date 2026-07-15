@@ -27,6 +27,8 @@ const api = {
     ipcRenderer.invoke('blocking:elevation-status'),
   runCompatCheck: (): Promise<import('../shared/types').CompatReport> =>
     ipcRenderer.invoke('compat:check'),
+  reorderAnalyticsCards: (orderedIds: string[]): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('analytics:reorder-cards', orderedIds),
 
   startSession: (mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]): Promise<FocusSession> =>
     ipcRenderer.invoke('session:start', mode, durationMs, allowlist),

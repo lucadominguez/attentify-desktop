@@ -290,6 +290,11 @@
     },
     removeProcess: function (name) { store.blocklist.processes = store.blocklist.processes.filter(function (p) { return p.name !== name; }); return Promise.resolve(); },
     getElevationCheck: function () { return Promise.resolve({ elevated: true, writable: true }); },
+    reorderAnalyticsCards: function (ids) {
+      var byId = {}; (store.customAnalyticsCards || []).forEach(function (c) { byId[c.id] = c; });
+      ids.forEach(function (id, i) { if (byId[id]) byId[id].order = i; });
+      return Promise.resolve({ ok: true });
+    },
     runCompatCheck: function () {
       return Promise.resolve({
         overall: 'ok',
@@ -400,9 +405,16 @@
     addUserContext: function (text) { return Promise.resolve({ ok: true, note: { id: 'ctx-' + Date.now(), text: text, ts: Date.now() } }); },
     deleteUserContext: function () { return Promise.resolve({ ok: true }); },
     getCustomCards: function () { return Promise.resolve([
-      { id: 'card1', title: 'Social media by weekday', description: 'Off-task social time, grouped by day', viz: 'bar', spec: { rangeDays: 7, groupBy: 'weekday', metric: 'time', distraction: 'only', limit: 7 }, createdAt: now - 2 * 24 * HOUR },
-      { id: 'card2', title: 'Focus ratio by hour', description: 'When you focus best across the day', viz: 'line', spec: { rangeDays: 7, groupBy: 'hour', metric: 'focus_ratio', distraction: 'all' }, createdAt: now - 24 * HOUR },
-      { id: 'card3', title: 'Top apps this week', description: 'Where your time goes', viz: 'table', spec: { rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 }, createdAt: now - 4 * HOUR },
+      { id: 'card1', title: 'Social media by weekday', description: 'Off-task social time, grouped by day', viz: 'bar', order: 0, spec: { rangeDays: 7, groupBy: 'weekday', metric: 'time', distraction: 'only', limit: 7 }, createdAt: now - 2 * 24 * HOUR },
+      { id: 'card2', title: 'Focus ratio by hour', description: 'When you focus best across the day', viz: 'line', order: 1, spec: { rangeDays: 7, groupBy: 'hour', metric: 'focus_ratio', distraction: 'all' }, createdAt: now - 24 * HOUR },
+      { id: 'card3', title: 'Top apps this week', description: 'Where your time goes', viz: 'table', order: 2, spec: { rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 8 }, createdAt: now - 4 * HOUR },
+      // The grown vocabulary. These are the shapes the app's own default views need, so
+      // they must be expressible as ordinary specs, not bespoke components.
+      { id: 'card4', title: 'Focus heatmap', description: 'Hour by weekday, last 14 days', viz: 'heatmap', order: 3, seeded: true, spec: { rangeDays: 14, groupBy: 'hour', metric: 'time', distraction: 'all' }, createdAt: now - 3 * HOUR },
+      { id: 'card5', title: 'Where the week went', description: 'Time split by category', viz: 'progress', order: 4, seeded: true, spec: { rangeDays: 7, groupBy: 'category', metric: 'time', distraction: 'all', limit: 5 }, createdAt: now - 3 * HOUR },
+      { id: 'card6', title: 'Today at a glance', description: 'Tracked time and the apps behind it', viz: 'summary', order: 5, seeded: true, spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all', limit: 4 }, createdAt: now - 2 * HOUR },
+      { id: 'card7', title: 'What changed this week', description: 'Ranked against the week before', viz: 'ranked', order: 6, seeded: true, spec: { rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 6 }, createdAt: now - 2 * HOUR },
+      { id: 'card8', kind: 'action', title: 'Deep work block', description: 'A locked 90 minute session', viz: 'number', order: 7, seeded: true, action: { tool: 'start_focus_session', params: { mode: 'deep', durationMs: 5400000 }, label: 'Start 90 min', confirm: true }, spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all' }, createdAt: now - HOUR },
     ]); },
     deleteCustomCard: function () { return Promise.resolve({ ok: true }); },
     buildAnalyticsCard: function () { return Promise.resolve({ ok: true, summary: 'Built a card from your description.' }); },

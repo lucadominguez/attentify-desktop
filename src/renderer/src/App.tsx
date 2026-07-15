@@ -481,6 +481,7 @@ declare global {
       removeProcess: (name: string) => Promise<void>
       getElevationCheck: () => Promise<{ elevated: boolean; writable: boolean }>
       runCompatCheck: () => Promise<import('@shared/types').CompatReport>
+      reorderAnalyticsCards: (orderedIds: string[]) => Promise<{ ok: boolean }>
       startSession: (mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]) => Promise<import('@shared/types').FocusSession>
       stopSession: (id: string) => Promise<void>
       sendMessage: (text: string) => Promise<{ reply: string; actions: unknown[] }>
