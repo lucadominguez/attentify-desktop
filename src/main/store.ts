@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'path'
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync, copyFileSync } from 'fs'
 import type { AppStore } from '../shared/types'
 
 const defaultSettings = {
@@ -59,26 +59,63 @@ function getStorePath(): string {
   return join(dir, 'state.json')
 }
 
+function hydrate(parsed: Partial<AppStore>): AppStore {
+  // Merge with defaults to handle new fields
+  return {
+    ...defaultStore,
+    ...parsed,
+    settings: { ...defaultSettings, ...(parsed.settings ?? {}) },
+  }
+}
+
 export function loadStore(): AppStore {
+  const path = getStorePath()
   try {
-    const path = getStorePath()
     if (!existsSync(path)) return { ...defaultStore }
-    const raw = readFileSync(path, 'utf-8')
-    const parsed = JSON.parse(raw)
-    // Merge with defaults to handle new fields
-    return {
-      ...defaultStore,
-      ...parsed,
-      settings: { ...defaultSettings, ...(parsed.settings ?? {}) },
+    return hydrate(JSON.parse(readFileSync(path, 'utf-8')))
+  } catch (err) {
+    // The old behaviour here was `return { ...defaultStore }`, which silently wiped
+    // everything the user had: every blocked domain, their sign-in, their settings,
+    // their cards. The next save then made that loss permanent. A file we cannot parse
+    // is a bug to investigate, not a signal to factory-reset someone's app.
+    console.error('[store] state file unreadable:', err)
+
+    // Prefer the last known-good snapshot over defaults.
+    try {
+      if (existsSync(`${path}.bak`)) {
+        const recovered = hydrate(JSON.parse(readFileSync(`${path}.bak`, 'utf-8')))
+        console.error('[store] recovered from .bak')
+        // Keep the unreadable file for diagnosis rather than overwriting it blind.
+        try { renameSync(path, `${path}.corrupt-${Date.now()}`) } catch { /* best effort */ }
+        return recovered
+      }
+    } catch (e2) {
+      console.error('[store] .bak also unreadable:', e2)
     }
-  } catch {
+
+    try { renameSync(path, `${path}.corrupt-${Date.now()}`) } catch { /* best effort */ }
     return { ...defaultStore }
   }
 }
 
 export function saveStore(store: AppStore): void {
+  const path = getStorePath()
   try {
-    writeFileSync(getStorePath(), JSON.stringify(store, null, 2), 'utf-8')
+    const json = JSON.stringify(store, null, 2)
+
+    // Atomic write. writeFileSync truncates the file and then writes into it, so an
+    // interrupted save (crash, power loss, kill) leaves a half-written file that cannot
+    // be parsed, and any reader that opens the file mid-write sees a torn copy. Writing
+    // to a temp file and renaming makes the swap atomic: readers see either the whole old
+    // file or the whole new one, never a fragment.
+    const tmp = `${path}.tmp`
+    writeFileSync(tmp, json, 'utf-8')
+
+    // Keep the previous good copy as .bak before swapping, so loadStore has something to
+    // recover from if the swap itself is interrupted.
+    try { if (existsSync(path)) copyFileSync(path, `${path}.bak`) } catch { /* best effort */ }
+
+    renameSync(tmp, path)
   } catch (e) {
     console.error('Failed to save store:', e)
   }
