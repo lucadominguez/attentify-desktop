@@ -27,7 +27,7 @@ export async function openDatabase(): Promise<Database> {
   runMigrations(_db)
 
   // Persist to disk on an interval, but only when dirty. sql.js has no incremental
-  // write — flushToDisk() serializes the ENTIRE database each time — so we keep the
+  // write — flushToDisk() serializes the ENTIRE database each time, so we keep the
   // cadence modest (10s) to avoid re-exporting a growing DB several times a second
   // under active tracking. Worst-case data loss on a hard crash is ~10s of events;
   // a clean quit always flushes (closeDatabase), and the event buffer batches writes.
@@ -74,7 +74,7 @@ export function closeDatabase(): void {
   _db = null
 }
 
-// ── Migrations (embedded — no filesystem dependency) ──────────────────────────
+// ── Migrations (embedded, no filesystem dependency) ──────────────────────────
 
 const MIGRATIONS: Record<string, string> = {
   '001_initial.sql': `

@@ -13,7 +13,7 @@ import {
 
 // Diagnostics + self-improvement pipeline. Everything (manual bug reports, auto crash /
 // freeze capture, AI-detected friction) is written to the local `issues` table with rich
-// captured context, and — when the user leaves diagnostics sharing on — uploaded to the
+// captured context, and, when the user leaves diagnostics sharing on — uploaded to the
 // Cloudflare backend so all beta users' issues + token usage land in one place.
 
 // Stable anonymous install id, so uploaded reports can be grouped per user without PII.
@@ -30,7 +30,7 @@ export function diagnosticsEnabled(): boolean {
   return getStore().settings?.shareDiagnostics !== false
 }
 
-// Snapshot of the app's state at the moment of an issue — the context that makes a
+// Snapshot of the app's state at the moment of an issue, the context that makes a
 // report actionable. Chat excerpt is trimmed and tool-call noise excluded upstream.
 export function captureContext(extra: Record<string, unknown> = {}): Record<string, unknown> {
   let recentLogs: unknown[] = []

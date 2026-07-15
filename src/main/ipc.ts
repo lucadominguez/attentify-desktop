@@ -108,7 +108,7 @@ Their stated reason: "${reason}"
 Evaluate if this is a legitimate, specific work-related need or if it sounds like rationalization/impulse.
 
 ALLOW: Clear, specific work purpose (e.g. "need to check a Twitter thread linked in a design document")
-ALLOW_TIMED: Plausible but vague reason — grant 10 minutes maximum
+ALLOW_TIMED: Plausible but vague reason, so grant 10 minutes maximum
 DENY: Vague, impulsive, or not work-related (e.g. "just want to check", "quickly look", "for a sec")
 
 Reply with exactly one word: ALLOW, ALLOW_TIMED, or DENY`
@@ -122,7 +122,7 @@ Reply with exactly one word: ALLOW, ALLOW_TIMED, or DENY`
     })
     const data = await res.json() as { response?: string }
     const verdict = (data.response ?? '').trim().toUpperCase()
-    if (verdict.includes('ALLOW_TIMED')) return { verdict: 'allow_timed', reason: 'Plausible but vague — 10 minutes granted', allowedMinutes: 10, ollamaUsed: true }
+    if (verdict.includes('ALLOW_TIMED')) return { verdict: 'allow_timed', reason: 'Plausible but vague, 10 minutes granted', allowedMinutes: 10, ollamaUsed: true }
     if (verdict.includes('ALLOW')) return { verdict: 'allow', reason: 'Purpose verified', ollamaUsed: true }
     return { verdict: 'deny', reason: 'Reason not specific enough for a work task', ollamaUsed: true }
   } catch {
@@ -132,7 +132,7 @@ Reply with exactly one word: ALLOW, ALLOW_TIMED, or DENY`
 
 function evaluateIntentRuleBased(site: string, reason: string): IntentCheckResult {
   const lower = reason.toLowerCase().trim()
-  if (reason.length < 8) return { verdict: 'deny', reason: 'Reason too vague — be specific about what you need.', ollamaUsed: false }
+  if (reason.length < 8) return { verdict: 'deny', reason: 'Reason too vague. Be specific about what you need.', ollamaUsed: false }
 
   const impulsive = ['just check', 'quickly', 'for a sec', 'one min', 'real quick', 'just look', 'wanna see', 'just wanna', 'bored', 'take a break']
   for (const kw of impulsive) {
@@ -203,7 +203,7 @@ function sendMain(channel: string, ...args: unknown[]): void {
 // ── IPC initialization ────────────────────────────────────────────────────────
 
 // ── Sign-in gate ──────────────────────────────────────────────────────────────
-// Attentify is browsable signed-out — every view still renders — but any channel that
+// Attentify is browsable signed-out — every view still renders, but any channel that
 // DOES something (spends AI credit, changes the machine, writes user data) needs an
 // account. Enforced here rather than by hiding buttons, because the renderer is not a
 // trust boundary and a UI-only gate drifts out of sync with the handlers it guards.
@@ -355,7 +355,7 @@ export function initIpc(): void {
   inferenceEngine.setBlockingMode(storedMode)
 
   // Initialize agent + URL guard + inference with the effective key. This is the
-  // user's own key if they pasted one, otherwise the bundled OpenRouter key — so AI
+  // user's own key if they pasted one, otherwise the bundled OpenRouter key, so AI
   // works out of the box. Spend against the bundled key is metered (see billing.ts).
   const effectiveKey = getEffectiveApiKey()
   agentService.init(effectiveKey)
@@ -426,11 +426,11 @@ export function initIpc(): void {
     const actions = a.domain
       ? [
           { label: 'Block it', type: 'block' as const, domain: a.domain },
-          { label: 'Ask AI', type: 'chat' as const, chatMsg: a.searchQuery ? `I searched "${a.searchQuery}" — should I be worried?` : `Tell me about my browsing pattern on ${a.domain}` },
+          { label: 'Ask AI', type: 'chat' as const, chatMsg: a.searchQuery ? `I searched "${a.searchQuery}". Should I be worried?` : `Tell me about my browsing pattern on ${a.domain}` },
           { label: 'Ignore', type: 'dismiss' as const },
         ]
       : [
-          { label: 'Ask AI', type: 'chat' as const, chatMsg: a.searchQuery ? `I searched "${a.searchQuery}" — is this a distraction?` : 'Am I getting distracted?' },
+          { label: 'Ask AI', type: 'chat' as const, chatMsg: a.searchQuery ? `I searched "${a.searchQuery}". Is this a distraction?` : 'Am I getting distracted?' },
           { label: 'Ignore', type: 'dismiss' as const },
         ]
     notificationQueue.push({
@@ -575,7 +575,7 @@ export function initIpc(): void {
     patchStore({ sessions: [session, ...s.sessions.map((sess) => ({ ...sess, active: false }))] })
     engine?.start()
 
-    // Deep Focus: actually enforce it — block the curated distraction set (minus the
+    // Deep Focus: actually enforce it, block the curated distraction set (minus the
     // allowlist) for the duration, and auto-end when the timer runs out.
     if (mode === 'deep') {
       const blocked = engine?.startDeepFocus(allowlist ?? [], durationMs) ?? 0

@@ -89,14 +89,14 @@ const PLATFORMS: Platform[] = [
 ]
 
 const TECHNIQUE_GLOSSARY: { term: string; explanation: string }[] = [
-  { term: 'Variable reward', explanation: 'Unpredictable positive outcomes (likes, new posts) trigger dopamine release — identical to slot machine mechanics.' },
+  { term: 'Variable reward', explanation: 'Unpredictable positive outcomes (likes, new posts) trigger dopamine release, i.e.tical to slot machine mechanics.' },
   { term: 'Infinite scroll', explanation: 'Removes natural stopping points. Without pagination, session length is bounded only by willpower.' },
   { term: 'Autoplay', explanation: 'Default continuation eliminates the active decision to keep watching. Most users never opt out.' },
   { term: 'FOMO loop', explanation: 'Fear Of Missing Out manufactured through social proof, trending labels, and time-limited content.' },
-  { term: 'Streak mechanics', explanation: 'Arbitrary progress counters that create loss aversion — users feel they\'ve "lost" something if they skip a day.' },
+  { term: 'Streak mechanics', explanation: 'Arbitrary progress counters that create loss aversion. Users feel they\'ve "lost" something if they skip a day.' },
   { term: 'Notification hooks', explanation: 'Push notifications trigger app opens even during focus. Each open extends average session by 4–7 minutes.' },
   { term: 'Social comparison', explanation: 'Curated highlight reels drive status anxiety, which increases engagement to seek validation.' },
-  { term: 'Outrage optimization', explanation: 'Content ranked by predicted engagement. Anger spreads 6× faster than positive content — so it gets surfaced more.' },
+  { term: 'Outrage optimization', explanation: 'Content ranked by predicted engagement. Anger spreads 6× faster than positive content, so it gets surfaced more.' },
 ]
 
 const RISK_COLOR: Record<string, string> = {

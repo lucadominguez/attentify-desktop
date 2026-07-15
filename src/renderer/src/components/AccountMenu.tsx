@@ -9,7 +9,7 @@ const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electr
 const PANEL_W = 320
 
 // The account entry point, always on screen rather than buried in Settings. Shows an
-// avatar — a generic person when signed out, or the account's initial once signed in —
+// avatar, a generic person when signed out, or the account's initial once signed in —
 // and opens a popover with the full sign-in surface (social providers + email/password)
 // or the signed-in account card.
 //

@@ -243,7 +243,7 @@ export async function runFocusScan(): Promise<ScanResult> {
       category: 'apps',
       severity: 'high',
       title: `${startupDistractors.length} distracting apps auto-start`,
-      description: `${startupDistractors.join(', ')} — these start automatically, embedding themselves in your session before you've made any conscious choice to open them.`,
+      description: `${startupDistractors.join(', ')}, these start automatically, embedding themselves in your session before you've made any conscious choice to open them.`,
       affectedItem: startupDistractors[0],
       fixAction: 'add-process-block',
     })

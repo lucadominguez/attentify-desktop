@@ -14,7 +14,7 @@ type Tab = 'analytics' | 'patterns'
 
 // Insights merges the old "Analytics" and "Patterns" surfaces behind one nav entry.
 // A single tab bar switches between the time/focus breakdown and the habit patterns
-// the daemon has noticed — they were previously two nav items covering the same
+// the daemon has noticed, they were previously two nav items covering the same
 // "understand my behaviour" job.
 export default function Insights({ heuristicAlerts, onChatWith }: InsightsProps): React.ReactElement {
   const { colors } = useTheme()
@@ -27,7 +27,7 @@ export default function Insights({ heuristicAlerts, onChatWith }: InsightsProps)
 
   return (
     <div className="flex flex-col h-full">
-      {/* Tab bar — the one shared header for both insight surfaces */}
+      {/* Tab bar, the one shared header for both insight surfaces */}
       <div
         className="flex items-center gap-1 px-4 pt-3 pb-2 flex-shrink-0"
         style={{ borderBottom: `1px solid ${colors.border}` }}

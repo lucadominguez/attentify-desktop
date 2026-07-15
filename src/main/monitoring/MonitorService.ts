@@ -217,7 +217,7 @@ while ($true) {
               this.emit('search', query)
             }
 
-            // AI-based guard (debounced — runs 6s after navigation settles)
+            // AI-based guard (debounced, runs 6s after navigation settles)
             this.urlGuard.onUrlChange(url, title)
           }
         }

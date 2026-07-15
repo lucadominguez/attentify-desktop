@@ -655,7 +655,7 @@ export function purgeOldData(retentionMs = 90 * 24 * 3600000): void {
   const cutoff = Date.now() - retentionMs
   getDb().run('DELETE FROM events WHERE ts < ?', [cutoff])
   getDb().run('DELETE FROM agent_messages WHERE ts < ?', [cutoff])
-  // Keep inferences and patterns — they're small and historically useful
+  // Keep inferences and patterns, they're small and historically useful
   markDirty()
 }
 

@@ -98,7 +98,7 @@ export default function IssueCard({ issue, onFix, onAskAI, fixing, fixed }: Issu
         )}
 
         {fixed && (
-          <p className="text-[11px]" style={{ color: '#34d399' }}>Fixed — protection applied</p>
+          <p className="text-[11px]" style={{ color: '#34d399' }}>Fixed. Protection applied</p>
         )}
       </div>
     </div>

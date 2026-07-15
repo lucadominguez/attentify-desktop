@@ -11,10 +11,10 @@ interface DeepFocusModeProps {
 }
 
 const PRESETS = [
-  { label: '25 min — Pomodoro', ms: 25 * 60 * 1000 },
-  { label: '90 min — Flow state', ms: 90 * 60 * 1000 },
-  { label: '3 hours — Deep work', ms: 3 * 60 * 60 * 1000 },
-  { label: '4 hours — Half-day', ms: 4 * 60 * 60 * 1000 },
+  { label: '25 min Pomodoro', ms: 25 * 60 * 1000 },
+  { label: '90 min Flow state', ms: 90 * 60 * 1000 },
+  { label: '3 hours Deep work', ms: 3 * 60 * 60 * 1000 },
+  { label: '4 hours Half-day', ms: 4 * 60 * 60 * 1000 },
 ]
 
 export default function DeepFocusMode({ store, onRefresh }: DeepFocusModeProps): React.ReactElement {
@@ -52,7 +52,7 @@ export default function DeepFocusMode({ store, onRefresh }: DeepFocusModeProps):
         <h1 className="font-bold text-xl flex items-center gap-2" style={{ color: colors.textPrimary }}>
           <Lock size={20} className="text-accent-amber" /> Deep Focus Mode
         </h1>
-        <p className="text-sm mt-0.5" style={{ color: colors.textSecondary }}>Hardcore lockdown — blocks everything except your allowlist</p>
+        <p className="text-sm mt-0.5" style={{ color: colors.textSecondary }}>Hardcore lockdown, blocks everything except your allowlist</p>
       </div>
 
       {activeSession ? (

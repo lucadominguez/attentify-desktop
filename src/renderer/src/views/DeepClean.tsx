@@ -102,7 +102,7 @@ function buildPlan(results: ScanResult): PlanStep[] {
   if (hasFeeds) {
     steps.push({
       id: 'feed-guard',
-      label: 'Enable Feed Guard — block all algorithmic feeds',
+      label: 'Enable Feed Guard, block all algorithmic feeds',
       description: FEED_GUARD.join(', '),
       tag: 'Feeds',
       tagColor: '#f87171',
@@ -302,7 +302,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
             <Zap size={28} className="text-accent-blue" />
           </div>
           <p className="font-bold text-base mb-1" style={{ color: colors.textPrimary }}>No scan run yet</p>
-          <p className="text-xs max-w-xs" style={{ color: colors.textSecondary }}>Scan your system to detect attention leaks — running apps, browsing history, notification overload, and more.</p>
+          <p className="text-xs max-w-xs" style={{ color: colors.textSecondary }}>Scan your system to detect attention leaks, running apps, browsing history, notification overload, and more.</p>
         </div>
       )}
 
@@ -322,7 +322,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
               )}
               <div>
                 <p className="text-sm font-bold" style={{ color: colors.textPrimary }}>
-                  {results.issueCount === 0 ? 'Clean — no issues found' : `${results.issueCount} attention leak${results.issueCount !== 1 ? 's' : ''} found`}
+                  {results.issueCount === 0 ? 'Clean, no issues found' : `${results.issueCount} attention leak${results.issueCount !== 1 ? 's' : ''} found`}
                 </p>
                 <p className="text-[9px]" style={{ color: colors.textSecondary }}>
                   {new Date(results.runAt).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
@@ -553,7 +553,7 @@ export default function DeepClean({ store, onChatWith }: DeepCleanProps): React.
                           <button
                             onClick={(e) => {
                               e.stopPropagation()
-                              onChatWith(`Help me fix this scan issue: ${issue.title} — ${issue.description}`)
+                              onChatWith(`Help me fix this scan issue: ${issue.title}: ${issue.description}`)
                             }}
                             className="text-[10px] hover:text-accent-blue transition-colors flex-shrink-0 ml-1" style={{ color: colors.textSecondary }}
                             title="Ask Attentify"
@@ -620,7 +620,7 @@ function StartupPanel(): React.ReactElement {
           <Cpu size={15} style={{ color: colors.accent }} />
           <div>
             <p className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>Startup apps</p>
-            <p className="text-[10px]" style={{ color: colors.textMuted }}>Stop apps from launching automatically at login — a faster, calmer boot.</p>
+            <p className="text-[10px]" style={{ color: colors.textMuted }}>Stop apps from launching automatically at login, a faster, calmer boot.</p>
           </div>
         </div>
         <button onClick={load} className="text-[10px] px-2 py-1 rounded-lg" style={{ border: `1px solid ${colors.border}`, color: colors.textMuted }}>Refresh</button>

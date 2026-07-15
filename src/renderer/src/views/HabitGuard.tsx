@@ -151,7 +151,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
             label: 'Distracted',
             value: totalTracked > 0 ? fmt(weekly.distractedTime) : '-',
             color: weekly.distractedTime > 3600000 ? '#f87171' : '#fbbf24',
-            tooltip: `${fmt(weekly.distractedTime)} spent on distracting apps this week${weekly.distractedTime > 3600000 ? ' — over 1 hour' : ''}`,
+            tooltip: `${fmt(weekly.distractedTime)} spent on distracting apps this week${weekly.distractedTime > 3600000 ? '. Over 1 hour' : ''}`,
           },
           {
             label: 'Block Events',
@@ -175,7 +175,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
       {/* Weekly verdict + ratio bar */}
       <div
         className="rounded-xl px-4 py-3 flex items-center gap-4"
-        title={`Weekly verdict: ${label} — ${Math.round(focusRatio)}% of tracked time was focused`}
+        title={`Weekly verdict: ${label}: ${Math.round(focusRatio)}% of tracked time was focused`}
         style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}
       >
         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -201,9 +201,9 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
 
       {/* Daily stacked bar chart */}
       <div className="rounded-xl p-3" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
-        <p className="text-[11px] font-semibold mb-3" style={{ color: colors.textPrimary }}>Daily Breakdown — Last 7 Days</p>
+        <p className="text-[11px] font-semibold mb-3" style={{ color: colors.textPrimary }}>Daily Breakdown, Last 7 Days</p>
         {dailyData.every((d) => d.focused === 0 && d.distracted === 0) ? (
-          <p className="text-[10px] text-center py-4" style={{ color: colors.textMuted }}>No data yet — activity tracker populates over time</p>
+          <p className="text-[10px] text-center py-4" style={{ color: colors.textMuted }}>No data yet, activity tracker populates over time</p>
         ) : (
           <div className="flex items-end gap-1.5" style={{ height: 72 }}>
             {dailyData.map((day) => {
@@ -256,7 +256,7 @@ export default function HabitGuard({ store: _store, onChatWith }: HabitGuardProp
                 <div
                   key={app}
                   className="flex items-center gap-3"
-                  title={`${app} — ${fmt(ms)} of distracted time this week (${totalPct}% of all tracked time)${i === 0 ? ' — your biggest attention drain' : ''}`}
+                  title={`${app}: ${fmt(ms)} of distracted time this week (${totalPct}% of all tracked time)${i === 0 ? ', your biggest attention drain' : ''}`}
                 >
                   <div className="flex items-center gap-1.5 w-28 flex-shrink-0">
                     {i === 0 ? <Zap size={10} className="text-accent-orange flex-shrink-0" /> : <span className="w-2.5 h-2.5 flex-shrink-0" />}

@@ -2,11 +2,11 @@
 //
 // When the user is on the Cloud tier, the desktop app streams a lightweight feed of
 // focus events (blocks, distractions, corrections) up to the Worker's /v1/analytics
-// endpoint. That's what powers the *website* dashboard — the same numbers the app
+// endpoint. That's what powers the *website* dashboard, the same numbers the app
 // shows locally, available from any browser after signing in.
 //
 // Design goals:
-//   • Zero cost for free users — nothing is sent unless cloudActive is true.
+//   • Zero cost for free users, nothing is sent unless cloudActive is true.
 //   • Privacy-light — only event type + domain + timestamp, never page content.
 //   • Robust — events are buffered in memory and flushed on an interval; a failed
 //     flush keeps the buffer (capped) so a brief outage doesn't lose data, and a

@@ -28,7 +28,7 @@ const SAFE_CATEGORIES = new Set(['development', 'productivity', 'system'])
 // These categories always use their full base confidence — never discounted for "no active goals".
 // adult/gambling/dating: obviously harmful; social_media/video_streaming: unambiguously distracting.
 // Without this, e.g. instagram (base 0.88) drops to max(0.55, 0.78) = 0.78 with no goals —
-// below the 0.85 auto-block threshold — and stays pending instead of auto-blocking.
+// below the 0.85 auto-block threshold, and stays pending instead of auto-blocking.
 const HARDBLOCK_CATEGORIES = new Set(['adult', 'gambling', 'dating', 'social_media', 'video_streaming'])
 const BROWSER_PROCESSES_SET = new Set(['chrome', 'firefox', 'msedge', 'brave', 'vivaldi', 'opera', 'arc', 'thorium', 'librewolf', 'waterfox', 'floorp'])
 

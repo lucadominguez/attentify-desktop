@@ -79,7 +79,7 @@ export class AgentService {
   // Build the system prompt: the large STATIC instructions FIRST, then the live data.
   // Keeping the static block + tools as a stable request prefix lets DeepSeek's automatic
   // server-side prefix caching kick in (the default model for most turns), cutting repeat
-  // input cost with zero behaviour change — and it's future-proof for explicit Anthropic
+  // input cost with zero behaviour change, and it's future-proof for explicit Anthropic
   // caching once the SDK exposes cache_control.
   private systemFor(ctx: SystemContext, _model: string): string {
     return `${STATIC_INSTRUCTIONS}\n\n${buildDynamicContext(ctx)}`
@@ -220,7 +220,7 @@ export class AgentService {
       // Persist assistant reply (sanitized — strips any tool-call markup the model
       // occasionally leaks as text when tool-use is proxied through OpenRouter). If the
       // model returned ONLY a tool-call blob (nothing left after scrubbing), show a
-      // short confirmation instead of an empty bubble — the tool already ran.
+      // short confirmation instead of an empty bubble, the tool already ran.
       const cleaned = sanitizeAssistantText(fullReply) || 'Done.'
       const msg = insertAgentMessage({ role: 'assistant', content: cleaned, ts: Date.now(), session_id: conversationId })
       if (conversationId) touchConversation(conversationId)
@@ -271,7 +271,7 @@ export class AgentService {
         topDistractionApp: null,
         recentSessions: [],
       }, model)
-      const meta = `The user typed this into the "build your own analytics" bar on their Analytics page: "${description}".\n\nBuild the most sensible custom analytics card for it. First call query_activity_data to compute the real numbers from their tracked activity, then call create_analytics_card to save a live card (pick a clear title, an appropriate viz — bar/line/table/number — and fitting group_by/metric/range/distraction). Do not ask any clarifying questions; make reasonable choices. Keep any text response to one short sentence.`
+      const meta = `The user typed this into the "build your own analytics" bar on their Analytics page: "${description}".\n\nBuild the most sensible custom analytics card for it. First call query_activity_data to compute the real numbers from their tracked activity, then call create_analytics_card to save a live card (pick a clear title, an appropriate viz — bar/line/table/number, and fitting group_by/metric/range/distraction). Do not ask any clarifying questions; make reasonable choices. Keep any text response to one short sentence.`
       const messages: MessageParam[] = [{ role: 'user', content: meta }]
       const noop = (): void => {}
       const summary = await this.runLoop(system, model, messages, { onChunk: noop, onToolUse: noop, onDone: noop, onError: noop })
@@ -311,7 +311,7 @@ export class AgentService {
     this.lastFrictionCheck = now
     if (!canUseAi()) return
     try {
-      const sys = `You review ONE exchange between a user and a focus assistant and detect PRODUCT FRICTION — a sign the app fell short of what the user expected. Categories:
+      const sys = `You review ONE exchange between a user and a focus assistant and detect PRODUCT FRICTION, a sign the app fell short of what the user expected. Categories:
 - missed-nuance: misread what the user meant.
 - detection-gap: failed to auto-detect/notice something the user expected it to.
 - wrong-action: did the wrong thing.
@@ -348,7 +348,7 @@ Only report REAL friction (a correction, frustration, or a clear gap). Ordinary 
     let rounds = 0
     // `raw` is the full, unsanitized assistant text across all tool rounds. On every
     // delta we send the SANITIZED full string (not the delta), and the renderer
-    // replaces its content — so any tool-call JSON that leaks as text is scrubbed live
+    // replaces its content, so any tool-call JSON that leaks as text is scrubbed live
     // and can never persist on screen.
     let raw = ''
     let currentMessages = [...messages]

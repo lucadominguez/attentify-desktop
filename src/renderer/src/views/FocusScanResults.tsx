@@ -104,7 +104,7 @@ export default function FocusScanResults({ results, onNavigate, onRefresh, onCha
       'installed-distractors': `I have ${results.installedDistractors.length} distracting apps installed (${results.installedDistractors.slice(0, 4).join(', ')}). Help me block them.`,
       'startup-distractors': `These apps auto-start with my computer: ${results.startupDistractors.join(', ')}. Block them during focus sessions.`,
       'recent-history': `I visited these distracting sites today: ${results.recentDistractingSites.slice(0, 5).join(', ')}. Block them for me.`,
-      'feed-guard': 'Block all algorithmic feeds — YouTube, Instagram, Twitter/X, TikTok, and Facebook.',
+      'feed-guard': 'Block all algorithmic feeds: YouTube, Instagram, Twitter/X, TikTok, and Facebook.',
       'extensions': `I have ${results.browserExtensionsFound} browser extensions. Help me identify and remove distracting ones.`,
       'notification-filter': 'Start a focus session to suppress desktop notifications.',
     }

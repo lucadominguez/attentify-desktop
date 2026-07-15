@@ -24,7 +24,7 @@ function checkOs(): CompatCheck {
       id: 'os',
       label: 'Operating system',
       status: 'warn',
-      detail: `${process.platform} — enforcement is Windows-only`,
+      detail: `${process.platform}. Enforcement is Windows-only`,
       fix: 'Blocking, firewall and browser policies do nothing here. Tracking still works.'
     }
   }
@@ -38,7 +38,7 @@ function checkOs(): CompatCheck {
       id: 'os',
       label: 'Operating system',
       status: 'fail',
-      detail: `${name} build ${build} — below the supported minimum (${MIN_WIN_BUILD})`,
+      detail: `${name} build ${build}, below the supported minimum (${MIN_WIN_BUILD})`,
       fix: 'Update to Windows 10 version 1809 or newer.'
     }
   }
@@ -64,13 +64,13 @@ function checkArch(): CompatCheck {
 
 function checkElevationStatus(): CompatCheck {
   if (checkElevation()) {
-    return { id: 'elevation', label: 'Administrator rights', status: 'ok', detail: 'Elevated — blocks are enforced' }
+    return { id: 'elevation', label: 'Administrator rights', status: 'ok', detail: 'Elevated, blocks are enforced' }
   }
   return {
     id: 'elevation',
     label: 'Administrator rights',
     status: 'warn',
-    detail: 'Not elevated — running in soft mode',
+    detail: 'Not elevated, running in soft mode',
     fix: 'Blocks are recorded but not enforced. Restart as administrator to enforce them.'
   }
 }
@@ -89,7 +89,7 @@ function checkHosts(): CompatCheck {
     }
   }
   if (verifyHostsWritable()) {
-    return { id: 'hosts', label: 'Hosts file', status: 'ok', detail: 'Writable — domain blocking works' }
+    return { id: 'hosts', label: 'Hosts file', status: 'ok', detail: 'Writable, domain blocking works' }
   }
   return {
     id: 'hosts',
@@ -160,14 +160,14 @@ function checkTracking(): Promise<CompatCheck> {
         }
         const [mode = '', ok = '0'] = String(stdout).trim().split('|')
         if (ok.trim() === '1') {
-          resolve({ id: 'tracking', label, status: 'ok', detail: `PowerShell ${mode.trim()} — foreground window readable` })
+          resolve({ id: 'tracking', label, status: 'ok', detail: `PowerShell ${mode.trim()}. Foreground window readable` })
           return
         }
         resolve({
           id: 'tracking',
           label,
           status: 'fail',
-          detail: `PowerShell is in ${mode.trim() || 'a restricted'} mode — cannot read the foreground window`,
+          detail: `PowerShell is in ${mode.trim() || 'a restricted'} mode, so it cannot read the foreground window`,
           fix: 'A security policy (AppLocker/WDAC) is blocking Add-Type. Activity would be recorded as permanently idle. Ask your administrator to allow Attentify.'
         })
       }

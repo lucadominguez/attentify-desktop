@@ -188,7 +188,7 @@ export default function Actions({ onChatWith, liveAutoBlocks = [] }: ActionsProp
               style={{ background: 'rgba(251,191,36,0.03)', border: '1px solid rgba(251,191,36,0.08)' }}
             >
               <CheckCircle size={13} style={{ color: 'rgba(251,191,36,0.3)' }} />
-              <p className="text-[10px]" style={{ color: colors.textMuted }}>No pending suggestions — AI hasn't flagged anything new.</p>
+              <p className="text-[10px]" style={{ color: colors.textMuted }}>No pending suggestions. AI hasn't flagged anything new.</p>
             </div>
           ) : (
             <div className="space-y-2">

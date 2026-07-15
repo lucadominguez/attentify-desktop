@@ -19,7 +19,7 @@ export function setUsageChangeCallback(cb: (usage: UsageState) => void): void {
   onChange = cb
 }
 
-/** True when the user has pasted their own API key — their own usage is never metered. */
+/** True when the user has pasted their own API key, their own usage is never metered. */
 export function hasOwnKey(): boolean {
   return !!loadApiKey()
 }
@@ -54,7 +54,7 @@ export function canUseAi(): boolean {
 
 /**
  * Record the estimated cost of a completed AI call. Only the bundled free key is
- * metered — a user's own key and Cloud subscriptions are unmetered.
+ * metered, a user's own key and Cloud subscriptions are unmetered.
  */
 export function recordUsage(model: string, inputTokens: number, outputTokens: number): void {
   if (!inputTokens && !outputTokens) return

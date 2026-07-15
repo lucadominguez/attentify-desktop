@@ -76,7 +76,7 @@ export function buildDynamicContext(ctx: SystemContext): string {
 
   const goalLines = ctx.goals.length > 0
     ? ctx.goals.map((g) => `  - ${g.text}${g.priority > 0 ? ` [priority ${g.priority}]` : ''}`).join('\n')
-    : '  (none set — ask the user what they are working on)'
+    : '  (none set, ask the user what they are working on)'
 
   const prefLines = ctx.preferences.length > 0
     ? ctx.preferences.slice(0, 10).map((p) => `  - ${p.key}: ${p.value} [${p.scope}]`).join('\n')
@@ -88,7 +88,7 @@ export function buildDynamicContext(ctx: SystemContext): string {
           ...ctx.activeBlocks.domains.map((d) => `  - domain: ${d}`),
           ...ctx.activeBlocks.processes.map((p) => `  - process: ${p}`),
         ].join('\n')
-      : '  (nothing blocked — the user is unprotected)'
+      : '  (nothing blocked, the user is unprotected)'
 
   const inferenceLines =
     ctx.pendingInferences.length > 0

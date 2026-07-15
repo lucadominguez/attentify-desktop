@@ -134,7 +134,7 @@ export default function ScheduleManager({ store, onRefresh }: ScheduleManagerPro
         <div className="card flex flex-col items-center py-10 text-center">
           <Clock size={40} className="mb-3" style={{ color: colors.textSecondary }} />
           <p className="font-semibold mb-1" style={{ color: colors.textPrimary }}>No schedules yet</p>
-          <p className="text-sm" style={{ color: colors.textSecondary }}>Create recurring focus blocks — e.g. block social media weekdays 9am–5pm</p>
+          <p className="text-sm" style={{ color: colors.textSecondary }}>Create recurring focus blocks, e.g. block social media weekdays 9am–5pm</p>
         </div>
       ) : (
         <div className="space-y-3">

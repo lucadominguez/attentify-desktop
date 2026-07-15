@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
-// The Activity page is the raw local log of what you did — but consolidated. Recording
+// The Activity page is the raw local log of what you did, but consolidated. Recording
 // every 15–60s window change is noise, so consecutive activity in the same app is merged
 // into one readable "session" (what you were doing, where, for how long, how many page
 // changes) that you can expand to see the underlying events. Everything stays on device.
@@ -155,7 +155,7 @@ export default function Activity({ onChatWith }: { onChatWith?: (msg: string) =>
 
   const merged = useMemo(() => mergeSessions(sessions), [sessions])
 
-  // Honest unit counts — each labelled with what it actually is.
+  // Honest unit counts, each labelled with what it actually is.
   const stats = useMemo(() => {
     const events = sessions.filter((s) => s.duration >= 3000).length
     const apps = new Set(merged.map((m) => m.app)).size
@@ -288,7 +288,7 @@ export default function Activity({ onChatWith }: { onChatWith?: (msg: string) =>
             </div>
           ) : rows.length === 0 ? (
             <p className="text-center text-[12px] py-12" style={{ color: colors.textMuted }}>
-              {sessions.length === 0 && searches.length === 0 ? 'No activity recorded yet — keep Attentify running and it fills in here.' : 'Nothing matches those filters.'}
+              {sessions.length === 0 && searches.length === 0 ? 'No activity recorded yet. Keep Attentify running and it fills in here.' : 'Nothing matches those filters.'}
             </p>
           ) : (
             groups.map((g) => (

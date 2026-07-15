@@ -299,8 +299,8 @@ export interface CloudState {
 
 // ── System compatibility ────────────────────────────────────────────────────────
 // 'ok'   — works as designed.
-// 'warn' — the app runs but a capability is degraded or unenforced.
-// 'fail' — a core capability cannot work on this machine.
+// 'warn', the app runs but a capability is degraded or unenforced.
+// 'fail', a core capability cannot work on this machine.
 export type CompatStatus = 'ok' | 'warn' | 'fail'
 
 export interface CompatCheck {

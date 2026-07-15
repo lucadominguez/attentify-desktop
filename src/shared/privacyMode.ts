@@ -3,7 +3,7 @@
 // Attentify tracks foreground time for every window, but for private / incognito /
 // Tor browser windows it deliberately CANNOT see the URL inside (the browser hides
 // the address bar from accessibility APIs, and Tor routes traffic opaquely). Rather
-// than silently mis-classify that time — or pretend we saw a URL we didn't — we
+// than silently mis-classify that time, or pretend we saw a URL we didn't — we
 // detect these windows from the one signal the OS still exposes: the window title
 // (and, for Tor, the process/executable name).
 //
@@ -28,7 +28,7 @@ export function detectPrivacyMode(app: string, title: string): PrivacyMode | nul
   const a = (app || '').toLowerCase()
   const t = (title || '').toLowerCase()
 
-  // Tor first — it is also a Firefox fork, so its "private" markers would otherwise
+  // Tor first, it is also a Firefox fork, so its "private" markers would otherwise
   // win; a Tor window is a strictly stronger signal than generic private browsing.
   if (a === 'tor' || a === 'torbrowser' || t.includes('tor browser')) return 'tor'
   if (t.includes('inprivate')) return 'inprivate'

@@ -95,7 +95,7 @@ function findSources(): Source[] {
     for (const file of chromiumProfiles(base)) sources.push({ browser, file, engine: 'chromium' })
   }
 
-  // Firefox family (Firefox, Waterfox, LibreFox, Pale Moon) — all use places.sqlite.
+  // Firefox family (Firefox, Waterfox, LibreFox, Pale Moon), all use places.sqlite.
   const ffBases = process.platform === 'darwin'
     ? [
         join(home, 'Library', 'Application Support', 'Firefox', 'Profiles'),
@@ -126,7 +126,7 @@ function findSources(): Source[] {
 interface RawVisit { url: string; title: string; ts: number }
 
 function readSource(src: Source, sinceMs: number, tmp: string): RawVisit[] {
-  // Copy first — the live DB is often locked by the running browser.
+  // Copy first, the live DB is often locked by the running browser.
   const copy = join(tmp, `${src.browser}-${Math.random().toString(36).slice(2)}.db`)
   try { copyFileSync(src.file, copy) } catch { return [] }
 

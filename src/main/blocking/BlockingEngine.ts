@@ -115,7 +115,7 @@ export class BlockingEngine extends EventEmitter {
   }
 
   // Apply all protection layers without starting the session poller.
-  // Safe to call multiple times — idempotent.
+  // Safe to call multiple times, i.e.potent.
   protect(): void {
     if (this.elevation !== 'full') return
     this.syncHostsFile()
@@ -264,7 +264,7 @@ export class BlockingEngine extends EventEmitter {
       refreshSiteBlocks(this.domains.map((d) => d.domain))
     }
 
-    // Always neutralise Tor Browser — it routes around all DNS and firewall rules
+    // Always neutralise Tor Browser, it routes around all DNS and firewall rules
     for (const proc of ['tor', 'torbrowser'] as const) {
       if (isProcessRunning(proc)) {
         killProcessByName(proc)

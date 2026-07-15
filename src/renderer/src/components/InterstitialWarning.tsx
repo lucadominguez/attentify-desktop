@@ -87,7 +87,7 @@ export default function InterstitialWarning(): React.ReactElement {
             <p className="text-navy-400 text-sm mt-1 leading-snug">
               Blocked{' '}
               <span className="text-accent-orange font-semibold">{data?.blocked ?? '…'}</span>
-              {' '}— you asked it to.
+              {' '}You asked it to.
             </p>
             {sessionEnd && (
               <p className="text-navy-600 text-xs mt-1">

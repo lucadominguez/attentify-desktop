@@ -96,7 +96,7 @@ export function processMessage(text: string, store: AppStore, tracking: Tracking
       const top = topDistractors(tracking)
       if (!top) {
         return {
-          reply: "No tracking data yet — activity tracking starts collecting data in the background. Check back in a few minutes, or run a Focus Scan for an immediate snapshot.",
+          reply: "No tracking data yet, activity tracking starts collecting data in the background. Check back in a few minutes, or run a Focus Scan for an immediate snapshot.",
           actions: [],
         }
       }

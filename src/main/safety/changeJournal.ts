@@ -6,8 +6,8 @@ import { app } from 'electron'
 // ─── Change journal ────────────────────────────────────────────────────────────
 // An append-only record of every system-level change Attentify makes (hosts-file
 // edits, firewall rules, browser DNS policies, login startup entries). Two purposes:
-//   1. Transparency — the user can see exactly what was done to their machine.
-//   2. Recovery — it underpins the one-click "Restore my system" action.
+//   1. Transparency, the user can see exactly what was done to their machine.
+//   2. Recovery, it underpins the one-click "Restore my system" action.
 //
 // Deliberately lightweight: each change is a single appended JSON line (one syscall,
 // no read/parse, no in-memory buffer). We never poll and never rewrite the file, so

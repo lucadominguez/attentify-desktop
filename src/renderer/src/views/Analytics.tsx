@@ -79,7 +79,7 @@ function fmt(ms: number): string {
   return `${s}s`
 }
 
-// Below this much tracked time, ratios and streaks are statistical noise — a "100%
+// Below this much tracked time, ratios and streaks are statistical noise, a "100%
 // focus score" off 8 minutes means nothing. We gate insight cards behind it and show
 // a "keep tracking" state instead, so the app never contradicts itself.
 const INSIGHT_MIN_MS = 20 * 60 * 1000
@@ -537,7 +537,7 @@ function AppBarChart({ rows }: { rows: AppRow[] }): React.ReactElement | null {
   if (top.length === 0) return null
   return (
     <div className="mb-3">
-      <p className="text-[9px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'rgba(99,102,241,0.45)' }}>Top Apps — Time Distribution</p>
+      <p className="text-[9px] font-semibold uppercase tracking-widest mb-2" style={{ color: 'rgba(99,102,241,0.45)' }}>Top Apps by Time Distribution</p>
       <div className="space-y-1.5">
         {top.map((row) => (
           <div
@@ -629,7 +629,7 @@ function TodaySummaryCard({ score, focusedMs, distractedMs, idleMs, distractionE
 
   return (
     <div className="section-panel p-4">
-      {/* Score + time — the two halves of the same story (each clickable for detail) */}
+      {/* Score + time, the two halves of the same story (each clickable for detail) */}
       <div className="flex items-start justify-between gap-4 mb-3">
         <MetricDrill spec={drills.score ?? { title: 'Focus score' }} width={320} className="px-2 py-1 -ml-2"
           render={
@@ -707,7 +707,7 @@ function TodaySummaryCard({ score, focusedMs, distractedMs, idleMs, distractionE
 
 interface Kpi { label: string; value: string; delta?: { text: string; good: boolean }; sub: string; drill?: DrillSpec }
 
-// One shared container, subtle vertical separators — not six cards. Each metric is
+// One shared container, subtle vertical separators, not six cards. Each metric is
 // clickable: it opens a drill-down with the detail behind the number + Ask AI.
 function KpiStrip({ items, onAskAI }: { items: Kpi[]; onAskAI?: (p: string) => void }): React.ReactElement {
   const { colors } = useTheme()
@@ -988,7 +988,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
   const todayDistractionEvents = todaySessions.filter((s) => s.isDistraction).length
   const todaySwitchRate = todayTracked > 0 ? Math.round(todaySessions.length / (todayTracked / 3600000)) : 0
   // Today-scoped aggregates so the TODAY section never shows week-long totals (which
-  // read as wrong — e.g. "15h today"). Weekly figures stay in the This Week section.
+  // read as wrong, e.g. "15h today"). Weekly figures stay in the This Week section.
   const todayAppRows = buildAppRows(todaySessions, todayTracked)
   const todayTopDistractor = todayAppRows.find((r) => r.isDistraction)
   const todayStreaks = computeStreaks(todaySessions)
@@ -1109,7 +1109,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
     },
   ]
 
-  // Ranked diagnostics — the four insight cards recast as a prioritized table.
+  // Ranked diagnostics, the four insight cards recast as a prioritized table.
   const PRI_ORDER: Record<Priority, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 }
   const rankRows: RankRow[] = []
   if (todayTracked > 0 && todaySwitchRate > 0) {
@@ -1187,7 +1187,7 @@ export default function Analytics({ onChatWith }: AnalyticsProps): React.ReactEl
       title={chip.tooltip}
     >
       <MetricDrill full width={300}
-        spec={chip.drill ?? { title: chip.label, subtitle: `${chip.value} · ${chip.sub}`, note: chip.tooltip, askPrompt: `Tell me about my ${chip.label.toLowerCase()} (${chip.value}) — what does it mean and how do I improve it?` }}
+        spec={chip.drill ?? { title: chip.label, subtitle: `${chip.value} · ${chip.sub}`, note: chip.tooltip, askPrompt: `Tell me about my ${chip.label.toLowerCase()} (${chip.value}). What does it mean and how do I improve it?` }}
         render={
           <div className="flex flex-col gap-1 p-3">
             <p className="text-base font-bold leading-none data-value" style={{ color: chip.color }}>
@@ -2030,7 +2030,7 @@ function CustomAnalyticsSection(): React.ReactElement {
     return () => { off?.() }
   }, [loadCards])
 
-  // Submit the description straight to the builder — no chat redirect, and the user
+  // Submit the description straight to the builder, no chat redirect, and the user
   // never sees the underlying instructions we send the model.
   const submit = async (): Promise<void> => {
     const q = desc.trim()
@@ -2058,7 +2058,7 @@ function CustomAnalyticsSection(): React.ReactElement {
         </div>
         <div className="min-w-0">
           <p className="text-[12px] font-semibold" style={{ color: colors.textPrimary }}>Build your own analytics</p>
-          <p className="text-[10px]" style={{ color: colors.textMuted }}>Describe any metric — Attentify computes it from your activity and pins it here, live.</p>
+          <p className="text-[10px]" style={{ color: colors.textMuted }}>Describe any metric. Attentify computes it from your activity and pins it here, live.</p>
         </div>
       </div>
 

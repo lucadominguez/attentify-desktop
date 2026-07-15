@@ -61,7 +61,7 @@ async function authRequest(path: string, body: Record<string, unknown>): Promise
     return { ok: true, auth: getAuthState() }
   } catch (e) {
     debugLog('auth:request-failed', { path, error: String(e) })
-    const msg = String(e).includes('timeout') ? 'Could not reach the server — check your connection.' : 'Something went wrong. Try again.'
+    const msg = String(e).includes('timeout') ? 'Could not reach the server, check your connection.' : 'Something went wrong. Try again.'
     return { ok: false, error: msg }
   }
 }

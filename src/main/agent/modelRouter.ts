@@ -41,7 +41,7 @@ export function isCacheable(model: string): boolean {
 // open-ended, reasoning-heavy, or nuanced request.
 
 // DEFAULT IS CHEAP (DeepSeek). Only genuinely deep / open-ended / planning / emotional
-// asks — the small slice where a frontier model's quality actually matters — escalate.
+// asks, the small slice where a frontier model's quality actually matters — escalate.
 // Deliberately narrow so the overwhelming majority of turns run on DeepSeek.
 const DEEP = /\b(figure out why|help me (figure|understand why|decide|plan|work out)|make (me )?a plan|come up with (a )?(plan|strateg|approach)|strateg(y|ise|ize)|analy[sz]e (my|the|why|how)|why (do|am|does|is|can'?t) (i|it|this|my)|(i(?:'m| am) )?(struggl|overwhelm|burn(t|ing) out|stuck|lost|anxious|depressed)|can'?t (focus|concentrate|stop|seem to)|think (this |it )?through|weigh (the |my )?(options|pros)|what should i do about|advice (on|about)|help me get (my|back)|root cause|why does the app|doesn'?t (make sense|understand))\b/i
 

@@ -12,7 +12,7 @@ export function AskAIProvider({ value, children }: { value?: (p: string) => void
 }
 export function useAskAI(): ((prompt: string) => void) | undefined { return useContext(AskAIContext) }
 
-// Drill-downs for key metrics. A metric is no longer just a number to look at — the
+// Drill-downs for key metrics. A metric is no longer just a number to look at, the
 // user can click it and get the detail behind it (the actual events, the breakdown)
 // plus a one-tap "Ask AI about this". Same idea as the build-your-own-analytics bar,
 // but attached directly to every headline figure.
@@ -137,7 +137,7 @@ export function DrilldownCard({ spec, onAskAI, close, children }: {
           <AskBox
             placeholder={`Ask about ${spec.title.toLowerCase()}…`}
             onSubmit={(q) => {
-              const prompt = q ? `Regarding "${spec.title}"${spec.subtitle ? ` (${spec.subtitle})` : ''} on my Analytics: ${q}` : (spec.askPrompt ?? `Tell me about "${spec.title}" — what stands out and what should I do?`)
+              const prompt = q ? `Regarding "${spec.title}"${spec.subtitle ? ` (${spec.subtitle})` : ''} on my Analytics: ${q}` : (spec.askPrompt ?? `Tell me about "${spec.title}" What stands out and what should I do?`)
               ask(prompt); close()
             }}
           />
@@ -173,7 +173,7 @@ function AskBox({ placeholder, onSubmit }: { placeholder: string; onSubmit: (q: 
   )
 }
 
-// One query affordance for a whole table or chart — a compact "Ask AI" button that
+// One query affordance for a whole table or chart, a compact "Ask AI" button that
 // opens a box to ask a free-text question about that table's data (per the request:
 // the table itself is queryable, not each cell).
 export function TableQuery({ title, summary, onAskAI, className }: {
@@ -210,7 +210,7 @@ export function TableQuery({ title, summary, onAskAI, className }: {
             <AskBox
               placeholder={`Ask about this table…`}
               onSubmit={(q) => {
-                const prompt = q ? `Regarding the "${title}" table${summary ? ` (${summary})` : ''}: ${q}` : `Analyze the "${title}" table${summary ? ` (${summary})` : ''} — what stands out and what should I change?`
+                const prompt = q ? `Regarding the "${title}" table${summary ? ` (${summary})` : ''}: ${q}` : `Analyze the "${title}" table${summary ? ` (${summary})` : ''} What stands out and what should I change?`
                 ask(prompt); close()
               }}
             />

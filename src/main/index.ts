@@ -31,7 +31,7 @@ if (process.platform === 'win32') {
   // Tell Chromium's network stack to use the same location for the HTTP disk cache
   app.commandLine.appendSwitch('disk-cache-dir', join(base, 'Cache', 'Network'))
 }
-// Disable GPU shader disk cache — it's unnecessary for an Electron app and can't
+// Disable GPU shader disk cache, it's unnecessary for an Electron app and can't
 // be easily relocated on Windows before the GPU process spawns.
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
 app.commandLine.appendSwitch('disable-shader-disk-cache')
@@ -126,7 +126,7 @@ function enforceSchedules(): void {
   for (const d of desiredDomains) if (!scheduleApplied.domains.has(d)) { try { engine.addDomain(d) } catch { /* soft mode */ } scheduleApplied.domains.add(d) }
   for (const p of desiredProcesses) if (!scheduleApplied.processes.has(p)) { try { engine.addProcess(p) } catch { /* soft mode */ } scheduleApplied.processes.add(p) }
 
-  // Lift blocks whose window ended — but never touch the user's own blocklist entries.
+  // Lift blocks whose window ended, but never touch the user's own blocklist entries.
   const userDomains = new Set(store.blocklist.domains.map((d) => d.domain))
   const userProcesses = new Set(store.blocklist.processes.map((p) => p.name))
   for (const d of [...scheduleApplied.domains]) if (!desiredDomains.has(d)) { if (!userDomains.has(d)) { try { engine.removeDomain(d) } catch { /* ignore */ } } scheduleApplied.domains.delete(d) }
@@ -340,7 +340,7 @@ app.whenReady().then(async () => {
     }
   }, 3000)
 
-  // Debug server — always on so agents can probe dev and prod builds
+  // Debug server, always on so agents can probe dev and prod builds
   startDebugServer({
     monitor: getMonitor,
     inference: getInferenceEngine,

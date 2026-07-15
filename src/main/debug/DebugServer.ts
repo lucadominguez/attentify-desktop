@@ -161,7 +161,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
     const body = await readBody(req) as Record<string, unknown>
 
     // Raw AI proxy for the browser extension (URL classifier, etc.). Does a single-shot
-    // completion WITHOUT persisting to the chat history or running tools — so the
+    // completion WITHOUT persisting to the chat history or running tools, so the
     // extension's internal prompts never leak into the user's conversation.
     if (path === '/ai/json' || path === '/ai/chat') {
       const svc = deps.agent()
@@ -196,7 +196,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
         } catch { /* ignore */ }
       }
 
-      return json(res, { ok: true, url: rawUrl, message: 'URL injected into inference pipeline — check /inferences for results' })
+      return json(res, { ok: true, url: rawUrl, message: 'URL injected into inference pipeline, check /inferences for results' })
     }
 
     if (path === '/inject/search') {
@@ -205,7 +205,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       const inf = deps.inference()
       if (!inf) return json(res, { error: 'inference engine not ready' }, 503)
       inf.analyzeSearchQuery(query)
-      return json(res, { ok: true, query, message: 'Search query injected — check /inferences for results' })
+      return json(res, { ok: true, query, message: 'Search query injected, check /inferences for results' })
     }
 
     if (path === '/inject/block') {
@@ -250,7 +250,7 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       const inf = deps.inference()
       if (!inf) return json(res, { error: 'inference engine not ready' }, 503)
       inf.runBackgroundSweep()
-      return json(res, { ok: true, message: 'Background sweep triggered — check /inferences shortly' })
+      return json(res, { ok: true, message: 'Background sweep triggered, check /inferences shortly' })
     }
 
     if (path === '/inject/session') {
@@ -441,13 +441,13 @@ const ROUTES = {
   'GET /monitor':           'monitor service state',
   'GET /agent/goals':       'active focus goals',
   'GET /agent/messages':    'agent conversation history (?limit=N)',
-  'POST /inject/url':       '{ url, title? } — run URL through inference pipeline',
-  'POST /inject/search':    '{ query } — run search query through inference',
+  'POST /inject/url':       '{ url, title? }, run URL through inference pipeline',
+  'POST /inject/search':    '{ query }, run search query through inference',
   'POST /inject/session':   '{ app, title, url?, duration?, isDistraction?, category?, count? } — inject N activity sessions for heuristic+inference testing',
   'POST /inject/chat':      '{ message } — send message to agent, returns response',
   'POST /inject/proactive': '{ app?, title?, url? } — simulate distraction session to trigger proactive intervention',
   'POST /inject/scan':      'run FocusScan and return results',
-  'POST /inject/block':     '{ domain } — add domain to blocklist',
+  'POST /inject/block':     '{ domain }, add domain to blocklist',
   'POST /inject/unblock':   '{ domain } — remove domain from blocklist',
   'POST /inject/sweep':               'trigger background inference sweep immediately',
   'POST /inject/break':               '{ action:"start"|"end", durationMs? } — control break mode',

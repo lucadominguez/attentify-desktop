@@ -44,8 +44,8 @@ const defaultStore: AppStore = {
 // C:\ProgramData\Attentify via app.setPath during startup, but that call happens
 // AFTER module imports are evaluated. If anything reads the store before setPath runs
 // (an eager load, or a side-effect in an imported module's constructor), it would read
-// from the *default* AppData path — where nothing exists → onboardingComplete:false →
-// onboarding shows — while later saves go to ProgramData. Reads and writes would target
+// from the *default* AppData path, where nothing exists → onboardingComplete:false →
+// onboarding shows, while later saves go to ProgramData. Reads and writes would target
 // different files and every launch would look like a fresh install. Hard-coding the path
 // here makes reads and writes deterministic regardless of setPath timing.
 function dataDir(): string {
@@ -89,7 +89,7 @@ export function saveStore(store: AppStore): void {
 // during startup, but ES module imports are evaluated before that line runs. An
 // eager loadStore() here would therefore read from the *default* AppData path
 // (where nothing exists → onboardingComplete:false) while later saves go to the
-// ProgramData path — so every launch looked like a fresh install. Deferring the
+// ProgramData path, so every launch looked like a fresh install. Deferring the
 // load until getStore() is first called (inside app.whenReady, after setPath)
 // keeps reads and writes pointed at the same file.
 let _store: AppStore | null = null

@@ -2,7 +2,7 @@
 // (main), and the chat UI (renderer) all scrub tool-call artifacts identically.
 //
 // Some models (especially proxied through OpenRouter) occasionally emit their tool
-// invocation as raw TEXT instead of a structured tool_use block — it shows up in chat
+// invocation as raw TEXT instead of a structured tool_use block, it shows up in chat
 // as "random code": XML <invoke>/<function_calls>, a ```json fence, or a bare
 // {"name": ...} object. We strip all of that so the user only ever sees prose.
 //

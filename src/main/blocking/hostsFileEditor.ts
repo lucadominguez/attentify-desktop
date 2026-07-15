@@ -5,7 +5,7 @@ import { platform } from 'process'
 import { recordChange } from '../safety/changeJournal'
 
 // Where the pristine, pre-Attentify copy of the hosts file is stashed the first time
-// we ever touch it — the anchor for a full system restore.
+// we ever touch it, the anchor for a full system restore.
 const BACKUP_DIR = platform === 'win32'
   ? join('C:\\ProgramData', 'Attentify', 'backups')
   : join(process.env.HOME ?? '.', '.attentify', 'backups')

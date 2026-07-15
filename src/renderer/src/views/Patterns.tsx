@@ -32,7 +32,7 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     icon: '⚡',
     definition: 'Compulsive cycling between applications at a rate incompatible with sustained cognitive work.',
     signatures: ['20+ window switches in 20 minutes', 'No single app held for more than 2–3 minutes', 'Switching accelerates under stress or boredom'],
-    mechanism: 'Each switch triggers a micro-dose of novelty — a low-intensity dopamine hit. The brain learns that switching relieves discomfort, reinforcing the behavior independent of any productive outcome.',
+    mechanism: 'Each switch triggers a micro-dose of novelty, a low-intensity dopamine hit. The brain learns that switching relieves discomfort, reinforcing the behavior independent of any productive outcome.',
     citation: 'Gloria Mark (UC Irvine): average cost of a distraction is 23 min to fully regain focus. Knowledge workers switch tasks every 3 min on average.',
     detectionCriteria: '> 20 switches in a 20-min window AND > 5 more than the previous check cycle.',
     severity: 'medium',
@@ -43,7 +43,7 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     icon: '🔄',
     definition: 'Returning to the same distraction site multiple times in a short window with no new information available.',
     signatures: ['5+ visits to the same domain in 20 minutes', 'Each visit is brief (under 2 min)', 'Visits cluster around boredom or cognitive load spikes'],
-    mechanism: 'Variable-reward conditioning — the same mechanism as slot machines. Refreshing Twitter/Reddit occasionally yields a novel post (reward), making every refresh feel potentially rewarding. The brain cannot resist.',
+    mechanism: 'Variable-reward conditioning, the same mechanism as slot machines. Refreshing Twitter/Reddit occasionally yields a novel post (reward), making every refresh feel potentially rewarding. The brain cannot resist.',
     citation: "BF Skinner's variable-ratio reinforcement schedule produces the highest and most resistant response rates of any conditioning paradigm.",
     detectionCriteria: '≥ 5 visits to the same distraction domain within 20 minutes.',
     severity: 'high',
@@ -55,7 +55,7 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     definition: 'Passive consumption of stimulating content (news, social feeds, video) after 11 PM, compromising sleep architecture.',
     signatures: ['Browser active after 23:00', 'Session length > 20 min', 'Content is emotionally activating (news, conflict, drama)'],
     mechanism: 'Blue light suppresses melatonin; stimulating content raises cortisol. The combination delays sleep onset and reduces deep-sleep stages. Tomorrow\'s executive function and attention are directly impaired.',
-    citation: 'Matthew Walker (2017): adults who sleep < 7h show 20–40% reduction in prefrontal cortex function — the area responsible for impulse control and focus.',
+    citation: 'Matthew Walker (2017): adults who sleep < 7h show 20–40% reduction in prefrontal cortex function, the area responsible for impulse control and focus.',
     detectionCriteria: 'Hour is 23:00–04:00, ≥ 3 browser sessions in the last 20 min, not already alerted in the last 30 min.',
     severity: 'high',
   },
@@ -87,7 +87,7 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     icon: '🔁',
     definition: 'Cycling robotically between 2–3 distraction apps with zero productive activity between them.',
     signatures: ['2–3 apps each visited 3+ times in 20 min', 'All are distraction-classified', 'No productive work interspersed', 'Cycling accelerates as each app fails to satisfy'],
-    mechanism: 'Each app fails to deliver a satisfying reward, so the brain immediately seeks another. This is structurally identical to compulsive checking rituals in OCD — the behavior is self-reinforcing because it temporarily relieves the anxiety of *not* checking.',
+    mechanism: 'Each app fails to deliver a satisfying reward, so the brain immediately seeks another. This is structurally identical to compulsive checking rituals in OCD, the behavior is self-reinforcing because it temporarily relieves the anxiety of *not* checking.',
     citation: 'Same neural circuits as OCD rituals: orbitofrontal cortex → striatum → thalamus loop (Saxena & Rauch, 2002).',
     detectionCriteria: '≥ 6 recent sessions, 2–3 apps each with ≥ 3 visits, all distraction, all sessions are in the top apps. Not alerted within 15 min.',
     severity: 'high',
@@ -96,10 +96,10 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     type: 'micro-escape',
     name: 'Micro-Escapes',
     icon: '💨',
-    definition: 'Sub-90-second bursts of distraction so brief they feel harmless — but collectively create continuous partial attention.',
+    definition: 'Sub-90-second bursts of distraction so brief they feel harmless, but collectively create continuous partial attention.',
     signatures: ['5+ distraction opens under 90 seconds in 10 minutes', 'Each visit is too short to consume anything', 'Triggered by discomfort at any cognitive difficulty'],
     mechanism: '"Continuous partial attention" (Linda Stone): present everywhere, focused nowhere. Even brief escapes break the cognitive thread of the current task. The brain learns that discomfort can always be interrupted, which raises the activation threshold for sustained effort.',
-    citation: 'Linda Stone (1997) coined "continuous partial attention" — later validated by fMRI studies showing disrupted default-mode network recovery after micro-interruptions.',
+    citation: 'Linda Stone (1997) coined "continuous partial attention", later validated by fMRI studies showing disrupted default-mode network recovery after micro-interruptions.',
     detectionCriteria: '≥ 5 distraction sessions under 90s in the last 10 min. Not alerted within 10 min.',
     severity: 'medium',
   },
@@ -109,7 +109,7 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     icon: '🔔',
     definition: 'High-frequency checking of communication apps driven by fear of missing messages, not actual communication need.',
     signatures: ['8+ checks/hour on messaging apps', 'Most checks result in zero new messages', 'Checking accelerates when a response is expected'],
-    mechanism: 'Fear of Missing Out is a manufactured anxiety — each notification badge is deliberately designed to create exactly this reflex. The checking behavior is rewarded intermittently (sometimes there *is* a message), making it extremely persistent.',
+    mechanism: 'Fear of Missing Out is a manufactured anxiety, each notification badge is deliberately designed to create exactly this reflex. The checking behavior is rewarded intermittently (sometimes there *is* a message), making it extremely persistent.',
     citation: 'Average knowledge worker checks email 74 times per day (McKinsey Global Institute, 2012). Slack users average 9 hours/day with the app open.',
     detectionCriteria: 'Communication apps (discord/slack/teams/telegram/etc.) at ≥ 8 sessions/hour in a 15-min window. Not alerted within 15 min.',
     severity: 'medium',
@@ -129,9 +129,9 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     type: 'phantom-checking',
     name: 'Phantom Checking',
     icon: '👻',
-    definition: 'App opens so brief they serve no purpose — the behavior is automatic, executed before any conscious decision is made.',
+    definition: 'App opens so brief they serve no purpose, the behavior is automatic, executed before any conscious decision is made.',
     signatures: ['4+ app opens under 30 seconds in 10 minutes', 'User closes app immediately each time', 'Often phone-mirror behavior (checking without knowing why)'],
-    mechanism: 'The checking motion has become decoupled from the intention to check. This is a conditioned reflex — the cue (boredom, stress, an idle moment) triggers the motor routine automatically. The decision comes after the action.',
+    mechanism: 'The checking motion has become decoupled from the intention to check. This is a conditioned reflex, the cue (boredom, stress, an idle moment) triggers the motor routine automatically. The decision comes after the action.',
     citation: 'Charles Duhigg "The Power of Habit": habits become automatic loops (cue → routine → reward) that operate below conscious awareness.',
     detectionCriteria: '≥ 4 app opens under 30 seconds in the last 10 min. Not alerted within 10 min.',
     severity: 'low',
@@ -140,7 +140,7 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     type: 'pre-task-avoidance',
     name: 'Pre-Task Avoidance',
     icon: '🚪',
-    definition: 'Distraction that occurs specifically in the window before starting a known important task — procrastination with a clear trigger.',
+    definition: 'Distraction that occurs specifically in the window before starting a known important task, procrastination with a clear trigger.',
     signatures: ['Distraction begins immediately after switching from a productive context', 'Duration tracks with task difficulty/aversion', 'Often involves "prep" tasks (email, reading) to feel productive'],
     mechanism: 'The anticipatory anxiety of starting a hard task is more aversive than the task itself. Distraction provides immediate relief. The brain learns: when a hard task is imminent, escape is available.',
     citation: 'Pychyl & Flett (2012): procrastination is primarily an emotion regulation strategy, not a time management failure.',
@@ -151,9 +151,9 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     type: 'news-anxiety',
     name: 'News Anxiety Loop',
     icon: '📰',
-    definition: 'Repeated checking of news aggregators driven by hypervigilance, not information need — consuming more news increases anxiety rather than reducing it.',
+    definition: 'Repeated checking of news aggregators driven by hypervigilance, not information need, consuming more news increases anxiety rather than reducing it.',
     signatures: ['4+ news/aggregator visits in 15 minutes', 'Visits trigger emotional activation, not resolution', 'Checking increases after distressing headlines'],
-    mechanism: 'News is optimized for threat salience — the brain\'s threat-detection system treats each headline as a potential survival concern. Checking resolves the immediate uncertainty but generates new anxiety (what else might be happening?), creating a loop.',
+    mechanism: 'News is optimized for threat salience, the brain\'s threat-detection system treats each headline as a potential survival concern. Checking resolves the immediate uncertainty but generates new anxiety (what else might be happening?), creating a loop.',
     citation: '74% of US adults say news causes stress, yet most check it multiple times daily (APA Stress in America, 2020).',
     detectionCriteria: '≥ 4 browser sessions on news domains in the last 15 min. Not alerted within 15 min.',
     severity: 'medium',
@@ -162,11 +162,11 @@ const PATTERN_TAXONOMY: PatternDef[] = [
     type: 'tab-anxiety',
     name: 'Tab Anxiety',
     icon: '🗂️',
-    definition: 'Accumulating large numbers of open browser tabs as a form of digital hoarding — each tab represents an unresolved intention.',
+    definition: 'Accumulating large numbers of open browser tabs as a form of digital hoarding, each tab represents an unresolved intention.',
     signatures: ['20+ open tabs across browser windows', 'Tabs are rarely revisited after opening', 'New tabs are opened faster than existing ones are closed'],
-    mechanism: 'Each open tab is a cognitive IOU — a promise to yourself that you\'ll return to it. The accumulation creates background anxiety and a constant sense of incompleteness. The tabs don\'t get read; they get shuffled.',
+    mechanism: 'Each open tab is a cognitive IOU, a promise to yourself that you\'ll return to it. The accumulation creates background anxiety and a constant sense of incompleteness. The tabs don\'t get read; they get shuffled.',
     citation: 'Tab hoarders report the same emotional profile as physical hoarders: anxiety at the thought of closing tabs, despite acknowledging they will never read most of them.',
-    detectionCriteria: 'Tab count monitoring. [Not yet auto-detected — requires browser extension integration]',
+    detectionCriteria: 'Tab count monitoring. [Not yet auto-detected, requires browser extension integration]',
     severity: 'low',
   },
 ]
@@ -306,7 +306,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
           <h2 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: colors.textPrimary }}>
             <Clock size={14} style={{ color: colors.textSecondary }} />
             Detected This Session
-            {recent.length === 0 && <span className="text-xs font-normal ml-1" style={{ color: colors.textSecondary }}>— none yet</span>}
+            {recent.length === 0 && <span className="text-xs font-normal ml-1" style={{ color: colors.textSecondary }}>none yet</span>}
           </h2>
           {recent.length > 0 ? (
             <div className="flex flex-col gap-1.5">
@@ -377,7 +377,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
             >
               <Eye size={20} className="mb-2" style={{ color: colors.textSecondary }} />
               <p className="text-xs" style={{ color: colors.textSecondary }}>No patterns detected yet this session.</p>
-              <p className="text-[10px] mt-1" style={{ color: colors.textSecondary }}>Patterns appear here as you work — Attentify watches quietly.</p>
+              <p className="text-[10px] mt-1" style={{ color: colors.textSecondary }}>Patterns appear here as you work. Attentify watches quietly.</p>
             </div>
           )}
         </section>
@@ -388,7 +388,7 @@ export default function Patterns({ heuristicAlerts, onChatWith }: PatternsProps)
             <Brain size={14} style={{ color: colors.textSecondary }} />
             Pattern Taxonomy
           </h2>
-          <p className="text-xs mb-3" style={{ color: colors.textSecondary }}>13 named attention pathologies — definitions, mechanisms, and detection criteria.</p>
+          <p className="text-xs mb-3" style={{ color: colors.textSecondary }}>13 named attention pathologies, definitions, mechanisms, and detection criteria.</p>
           <div className="flex flex-col gap-1.5">
             {PATTERN_TAXONOMY.map((pattern) => {
               const stats = patternStats.get(pattern.type)

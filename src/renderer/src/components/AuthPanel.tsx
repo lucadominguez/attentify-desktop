@@ -124,7 +124,7 @@ export default function AuthPanel({ onChange }: { onChange?: () => void }): Reac
     )
   }
 
-  // Signed out — social sign-in + sign in / create account
+  // Signed out, social sign-in + sign in / create account
   return (
     <div className="p-4 rounded-lg" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
       {providers.length > 0 && (

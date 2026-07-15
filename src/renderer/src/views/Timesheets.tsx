@@ -184,14 +184,14 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
       {weekTotal === 0 ? (
         <div className="rounded-xl p-6 text-center" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
           <p className="text-[13px]" style={{ color: colors.textSecondary }}>No time logged this week.</p>
-          <p className="text-[11px] mt-1" style={{ color: colors.textMuted }}>Keep Attentify running — your timesheet fills in as you work.</p>
+          <p className="text-[11px] mt-1" style={{ color: colors.textMuted }}>Keep Attentify running, your timesheet fills in as you work.</p>
         </div>
       ) : (
         <>
-          {/* Weekly grid — one row per day with a stacked category bar */}
+          {/* Weekly grid, one row per day with a stacked category bar */}
           <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-medium" style={{ color: colors.textMuted }}>Daily breakdown — click a day for details</p>
+              <p className="text-[11px] font-medium" style={{ color: colors.textMuted }}>Daily breakdown. Click a day for details</p>
               <TableQuery title="Daily breakdown" summary={days.map((d) => `${fmtDay(d.date)} ${fmtHM(d.total)}`).join(', ')} />
             </div>
             <div className="space-y-1.5">
@@ -233,7 +233,7 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
           {selected ? (
             <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>{fmtDay(selected.date)} — time entries</p>
+                <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>{fmtDay(selected.date)} time entries</p>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px]" style={{ color: colors.textMuted }}>{fmt(selected.total)} total</span>
                   <TableQuery title={`${fmtDay(selected.date)} time entries`} summary={[...selected.byApp.entries()].sort((a, b) => b[1].ms - a[1].ms).slice(0, 6).map(([app, v]) => `${app} ${fmt(v.ms)}`).join(', ')} />

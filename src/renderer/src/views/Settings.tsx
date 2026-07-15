@@ -166,7 +166,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
 
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-8">
 
-        {/* Account moved to the title-bar avatar (AccountMenu) — always on screen. */}
+        {/* Account moved to the title-bar avatar (AccountMenu), always on screen. */}
 
         {/* ── Appearance ────────────────────────────────────────────────────── */}
         <section>
@@ -178,7 +178,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
             <div>
               <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Theme</p>
               <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
-                {theme === 'dark' ? 'Dark — easier on the eyes at night' : 'Light — brighter for daytime'}
+                {theme === 'dark' ? 'Dark, easier on the eyes at night' : 'Light, brighter for daytime'}
               </p>
             </div>
             <button
@@ -213,9 +213,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Updates</p>
               <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
                 Attentify{version ? ` v${version}` : ''} · {
-                  update.state === 'ready' ? 'update ready — restart to install'
+                  update.state === 'ready' ? 'update ready, restart to install'
                   : update.state === 'downloading' ? `downloading${typeof update.percent === 'number' ? ` ${update.percent}%` : '…'}`
-                  : update.state === 'available' ? 'update found — downloading'
+                  : update.state === 'available' ? 'update found, downloading'
                   : update.state === 'checking' ? 'checking…'
                   : update.state === 'error' ? 'check failed'
                   : update.state === 'dev' ? 'updates active in the installed app'
@@ -249,7 +249,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>AlgoTrack</p>
                 <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
-                  See how algorithmic feeds pull you in — an optional side module.
+                  See how algorithmic feeds pull you in, an optional side module.
                 </p>
               </div>
               <ChevronRight size={14} style={{ color: colors.textMuted }} />
@@ -404,7 +404,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
             {cloud?.active ? (
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-bold" style={{ color: '#34d399' }}>Cloud active — unlimited AI</p>
+                  <p className="text-[11px] font-bold" style={{ color: '#34d399' }}>Cloud active, unlimited AI</p>
                   <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted }}>
                     {cloud.email ? `Subscribed as ${cloud.email}` : 'Subscription active'} · $5/mo
                   </p>
@@ -419,7 +419,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               </div>
             ) : usage?.hasOwnKey ? (
               <p className="text-[10px]" style={{ color: colors.textSecondary }}>
-                Using your own API key — usage is billed directly to you and is never metered here.
+                Using your own API key, usage is billed directly to you and is never metered here.
               </p>
             ) : (
               <>
@@ -440,7 +440,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                 </div>
                 <p className="text-[9px]" style={{ color: colors.textMuted }}>
                   {usage?.exhausted
-                    ? 'Your free AI credit is used up. Subscribe to Cloud for $5/mo to keep using AI features — or add your own key below.'
+                    ? 'Your free AI credit is used up. Subscribe to Cloud for $5/mo to keep using AI features, or add your own key below.'
                     : 'The app includes free AI to get you started. When it runs out, subscribe to Cloud ($5/mo) or add your own key.'}
                 </p>
                 <div className="flex items-center gap-2 pt-1">
@@ -473,7 +473,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                   </button>
                 </div>
                 {cloud?.license && !cloud.active && (
-                  <p className="text-[9px]" style={{ color: '#ff8866' }}>That license isn’t active yet — check your subscription or re-enter it.</p>
+                  <p className="text-[9px]" style={{ color: '#ff8866' }}>That license isn’t active yet, check your subscription or re-enter it.</p>
                 )}
               </>
             )}
@@ -493,7 +493,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                 style={{ background: hasKey ? '#34d399' : '#fbbf24', boxShadow: hasKey ? '0 0 6px #34d399' : '0 0 6px #fbbf24' }}
               />
               <span className="text-[10px]" style={{ color: hasKey ? '#34d399' : '#6366f1' }}>
-                {hasKey === null ? 'Checking...' : hasKey ? 'Your own API key configured' : 'Optional — AI already works via included free credit'}
+                {hasKey === null ? 'Checking...' : hasKey ? 'Your own API key configured' : 'Optional. AI already works via included free credit'}
               </span>
             </div>
 
@@ -562,8 +562,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                 <p className="text-[11px] font-bold" style={{ color: colors.textPrimary }}>Admin Privileges</p>
                 <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
                   {store.elevation === 'full'
-                    ? 'Running elevated — hosts-file domain blocking active.'
-                    : 'Not elevated — domain blocking requires admin rights.'}
+                    ? 'Running elevated, hosts-file domain blocking active.'
+                    : 'Not elevated, domain blocking requires admin rights.'}
                 </p>
               </div>
               <div
@@ -580,7 +580,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
             </div>
             {store.elevation !== 'full' && (
               <p className="text-[9px] mt-3" style={{ color: 'rgba(251,191,36,0.6)' }}>
-                Run the app as Administrator once — it will register a Task Scheduler entry so future launches are automatically elevated without a UAC prompt.
+                Run the app as Administrator once, it will register a Task Scheduler entry so future launches are automatically elevated without a UAC prompt.
               </p>
             )}
           </div>
@@ -597,7 +597,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>This device</p>
                 <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: colors.textMuted }}>
-                  Checks that this PC can actually run every part of Attentify — so a capability
+                  Checks that this PC can actually run every part of Attentify, so a capability
                   that is silently unavailable shows up here instead of just looking broken.
                 </p>
               </div>
@@ -660,8 +660,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <div className="flex-1 min-w-0">
                 <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Restore my system</p>
                 <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: colors.textMuted }}>
-                  Undo everything Attentify has changed on this device — hosts-file blocks, firewall
-                  rules, browser DNS policies and the login startup entry — returning it to how it was
+                  Undo everything Attentify has changed on this device, hosts-file blocks, firewall
+                  rules, browser DNS policies and the login startup entry, returning it to how it was
                   before. Every change is recorded, so nothing is guessed at.
                 </p>
                 <p className="text-[9px] mt-1.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
@@ -755,7 +755,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                         {c.category}
                       </span>
                       <span className="text-[10px] flex-1 min-w-0 truncate" style={{ color: colors.textPrimary }}>
-                        {c.action}{c.target ? `: ${c.target}` : ''}{c.detail && !c.target ? ` — ${c.detail}` : ''}
+                        {c.action}{c.target ? `: ${c.target}` : ''}{c.detail && !c.target ? `: ${c.detail}` : ''}
                       </span>
                       <span className="text-[9px] flex-shrink-0" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>
                         {new Date(c.ts).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

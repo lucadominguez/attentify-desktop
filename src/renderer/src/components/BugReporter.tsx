@@ -79,7 +79,7 @@ export default function BugReporter({
             {done ? (
               <div className="flex items-center gap-3 py-4">
                 <Check size={18} style={{ color: colors.positive }} />
-                <p className="text-[13px]" style={{ color: colors.textPrimary }}>Thanks — reported. It helps make Attentify better.</p>
+                <p className="text-[13px]" style={{ color: colors.textPrimary }}>Thanks, reported. It helps make Attentify better.</p>
               </div>
             ) : (
               <>

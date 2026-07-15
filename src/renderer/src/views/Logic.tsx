@@ -217,7 +217,7 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
       label: 'Goals', value: String(goals.length), color: goals.length ? colors.accent : colors.textMuted,
       drill: {
         title: 'Your goals', subtitle: `${goals.length} active`,
-        rows: goals.map((g) => ({ label: g.text })), empty: 'No goals set yet — tell the assistant what you want to achieve.',
+        rows: goals.map((g) => ({ label: g.text })), empty: 'No goals set yet, tell the assistant what you want to achieve.',
         askPrompt: 'What are my current goals and how well is my activity aligned with them?',
       },
     },
@@ -226,7 +226,7 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
       drill: {
         title: 'Learned about you', subtitle: `${prefs.length} preferences`,
         rows: prefs.slice(0, 14).map((p) => ({ label: p.key, sub: p.source === 'user' ? 'you told me' : 'inferred', value: p.value })),
-        empty: 'Nothing learned yet — this fills in as you use Attentify.',
+        empty: 'Nothing learned yet. This fills in as you use Attentify.',
         askPrompt: 'What have you learned about my habits and preferences so far?',
       },
     },
@@ -270,7 +270,7 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
               <Brain size={16} style={{ color: colors.accent }} />
               <div>
                 <h1 className="text-[14px] font-semibold" style={{ color: colors.textPrimary }}>Logic</h1>
-                <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>How Attentify reasons about your attention — and what it's working from.</p>
+                <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted, fontFamily: '"Share Tech Mono", monospace' }}>How Attentify reasons about your attention, and what it's working from.</p>
               </div>
             </div>
             <button onClick={load} className="p-1.5 rounded-lg" style={{ border: `1px solid ${colors.border}`, color: colors.textMuted }} title="Refresh">
@@ -304,7 +304,7 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
               <SectionHeader label="Context I'm using" sub={`${goals.length + prefs.length + context.length} items`} />
               <div className="section-panel p-3.5">
                 {goals.length === 0 && prefs.length === 0 && context.length === 0 ? (
-                  <p className="text-[11px]" style={{ color: colors.textMuted }}>Nothing yet. Set a goal in chat, or add context below — it sharpens my reasoning.</p>
+                  <p className="text-[11px]" style={{ color: colors.textMuted }}>Nothing yet. Set a goal in chat, or add context below, it sharpens my reasoning.</p>
                 ) : (
                   <div className="space-y-3">
                     {goals.length > 0 && (
@@ -390,7 +390,7 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void addContext() }}
               disabled={adding}
-              placeholder="Tell Attentify something to inform it — e.g. “Reddit is for work” or “I do night shifts”"
+              placeholder="Tell Attentify something to inform it, e.g. “Reddit is for work” or “I do night shifts”"
               className="flex-1 bg-transparent text-[12px] outline-none disabled:opacity-60"
               style={{ color: colors.textPrimary, caretColor: colors.accent }}
             />

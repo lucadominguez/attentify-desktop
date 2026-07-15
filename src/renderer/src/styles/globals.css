@@ -68,7 +68,7 @@ html.light .bg-grid {
   background-image: radial-gradient(rgba(0,100,180,0.08) 1px, transparent 1px);
 }
 
-/* ── HUD Panel — the cornerstone design element ────────────────────────────── */
+/* ── HUD Panel, the cornerstone design element ────────────────────────────── */
 /*   Adds glowing corner brackets (TL + BR) to any element via pseudo-elements */
 .hud-panel {
   position: relative;
@@ -151,7 +151,7 @@ html.light .bg-grid {
   @apply text-navy-400 hover:text-white text-sm transition-colors duration-200 underline underline-offset-2;
 }
 
-/* ── Sidebar items — theme-aware (adapt to light + dark) ─────────────────────── */
+/* ── Sidebar items, theme-aware (adapt to light + dark) ─────────────────────── */
 .sidebar-item {
   @apply flex items-center gap-3 px-4 py-2 rounded-none cursor-pointer transition-all duration-150 font-medium;
   font-size: 13px;
@@ -336,7 +336,7 @@ html.light .bg-grid {
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 
-/* ── Drill-down hit target — a clickable metric that darkens on hover ────────── */
+/* ── Drill-down hit target, a clickable metric that darkens on hover ────────── */
 .drill-hit {
   cursor: pointer;
   border-radius: 6px;

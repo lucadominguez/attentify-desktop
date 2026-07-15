@@ -112,7 +112,7 @@ export class HeuristicEngine {
       newAlerts.push({
         id: randomUUID(), type: 'long-session', severity: 'medium',
         title: `${Math.round(s.duration / 60000)}min lost to ${s.app}`,
-        description: `An unbroken ${Math.round(s.duration / 60000)}-minute session on ${s.app}. You're deep in the algorithmic feed now — the original intent is long gone.`,
+        description: `An unbroken ${Math.round(s.duration / 60000)}-minute session on ${s.app}. You're deep in the algorithmic feed now, the original intent is long gone.`,
         detectedAt: now, app: s.app, dismissed: false,
       })
     }
@@ -126,7 +126,7 @@ export class HeuristicEngine {
         newAlerts.push({
           id: randomUUID(), type: 'focus-drift', severity: 'medium',
           title: 'Focus drift detected',
-          description: 'You had a productive flow state — then drifted into distractions without a clear decision to stop. Attention residue research shows it takes 23 minutes to fully recover.',
+          description: 'You had a productive flow state, then drifted into distractions without a clear decision to stop. Attention residue research shows it takes 23 minutes to fully recover.',
           detectedAt: now, dismissed: false,
         })
       }
@@ -143,7 +143,7 @@ export class HeuristicEngine {
         newAlerts.push({
           id: randomUUID(), type: 'doom-loop', severity: 'high',
           title: `Doom loop: ${topApps.slice(0, 2).join(' → ')}`,
-          description: `Cycling between ${topApps.join(', ')} with no productive work in between. This cycling activates the same neural circuits as OCD rituals — the checking behavior is self-reinforcing.`,
+          description: `Cycling between ${topApps.join(', ')} with no productive work in between. This cycling activates the same neural circuits as OCD rituals, the checking behavior is self-reinforcing.`,
           detectedAt: now, dismissed: false,
         })
       }
@@ -171,7 +171,7 @@ export class HeuristicEngine {
       newAlerts.push({
         id: randomUUID(), type: 'notification-fomo', severity: 'medium',
         title: `Notification FOMO: ${topComm}`,
-        description: `${commRate} checks/hour on ${topComm}. Fear of missing conversations is a manufactured anxiety — each notification is designed to create exactly this reflex.`,
+        description: `${commRate} checks/hour on ${topComm}. Fear of missing conversations is a manufactured anxiety, each notification is designed to create exactly this reflex.`,
         detectedAt: now, app: topComm, dismissed: false,
       })
     }
@@ -183,7 +183,7 @@ export class HeuristicEngine {
       newAlerts.push({
         id: randomUUID(), type: 'video-rabbit-hole', severity: 'high',
         title: `Video rabbit hole: ${Math.round(videoMs / 60000)}min`,
-        description: `${Math.round(videoMs / 60000)} minutes in a video feed. Autoplay drives 70% of YouTube watch time — the content you're watching now was not what you came for.`,
+        description: `${Math.round(videoMs / 60000)} minutes in a video feed. Autoplay drives 70% of YouTube watch time, the content you're watching now was not what you came for.`,
         detectedAt: now, dismissed: false,
       })
     }
@@ -202,7 +202,7 @@ export class HeuristicEngine {
       newAlerts.push({
         id: randomUUID(), type: 'phantom-checking', severity: 'low',
         title: `${phantomCount} phantom checks in 10 minutes`,
-        description: `${phantomCount} quick switches to a distracting app lasting under 30 seconds each — checking without intent. The app opens before the decision is made.`,
+        description: `${phantomCount} quick switches to a distracting app lasting under 30 seconds each, checking without intent. The app opens before the decision is made.`,
         detectedAt: now, dismissed: false,
       })
     }
@@ -213,7 +213,7 @@ export class HeuristicEngine {
       newAlerts.push({
         id: randomUUID(), type: 'news-anxiety', severity: 'medium',
         title: 'News anxiety loop',
-        description: `${newsSessions.length} news/aggregator visits in 15 minutes. 74% of adults report news causes stress, yet keep checking — a textbook anxiety loop that perpetuates itself.`,
+        description: `${newsSessions.length} news/aggregator visits in 15 minutes. 74% of adults report news causes stress, yet keep checking, a textbook anxiety loop that perpetuates itself.`,
         detectedAt: now, dismissed: false,
       })
     }

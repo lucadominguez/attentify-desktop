@@ -9,7 +9,7 @@
 //
 // electron-updater only operates in a packaged build (app.isPackaged); in dev it is a
 // no-op. Windows silently applies an update only when the new installer is code-signed
-// with the same identity — so this is fully seamless once Azure signing is wired in.
+// with the same identity, so this is fully seamless once Azure signing is wired in.
 
 import { app } from 'electron'
 import electronUpdater from 'electron-updater'

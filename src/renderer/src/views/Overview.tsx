@@ -142,7 +142,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
   const sessionRemaining = activeSession?.endsAt ? Math.max(0, activeSession.endsAt - now) : null
   const activeSchedules = store.schedules.filter((s) => s.active)
 
-  // Suppress sub-minute sessions — a log full of "0m" rows is noise, not signal.
+  // Suppress sub-minute sessions, a log full of "0m" rows is noise, not signal.
   const loggedSessions = activitySessions.filter((s) => s.duration >= 60000)
   const visibleSessions = showAll ? loggedSessions : loggedSessions.slice(0, 40)
   const grouped = new Map<string, ActivitySession[]>()
@@ -174,7 +174,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
               <MessageSquare size={11} /> Ask AI
             </button>
           )}
-          {/* Passive status badge — not a control. Green (on) or a quiet neutral
+          {/* Passive status badge, not a control. Green (on) or a quiet neutral
               (idle); never red, since "idle" is not an error. */}
           <div
             className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium"
@@ -195,12 +195,12 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
       {store.elevation !== 'full' && (
         <div
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs"
-          title="Without admin rights, hosts-file edits cannot be made — site blocking is unavailable."
+          title="Without admin rights, hosts-file edits cannot be made, so site blocking is unavailable."
           style={{ background: 'rgba(255,107,53,0.08)', border: '1px solid rgba(255,107,53,0.2)' }}
         >
           <WifiOff size={12} className="text-accent-orange flex-shrink-0" />
           <span className="text-accent-orange font-semibold">Hosts-file blocking inactive</span>
-          <span className="ml-1" style={{ color: colors.textSecondary }}>— admin rights required to enforce site blocks</span>
+          <span className="ml-1" style={{ color: colors.textSecondary }}>admin rights required to enforce site blocks</span>
         </div>
       )}
 
@@ -215,7 +215,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
             icon: <Globe size={12} />,
             tooltip: store.blocklist.domains.length > 0
               ? `${store.blocklist.domains.length} domain${store.blocklist.domains.length > 1 ? 's' : ''} actively blocked`
-              : 'No sites blocked — add a domain below to start blocking',
+              : 'No sites blocked, add a domain below to start blocking',
           },
           {
             label: 'Apps Blocked',
@@ -305,7 +305,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
                 <div
                   key={d.domain}
                   className="flex items-center gap-1.5 px-2 py-1 rounded-md group hover:bg-white/[0.03] transition-colors"
-                  title={`${d.domain}${d.expiresAt ? ` — expires in ${formatExpiry(d.expiresAt)}` : ' — permanent block'}`}
+                  title={`${d.domain}${d.expiresAt ? `, expires in ${formatExpiry(d.expiresAt)}` : ', permanent block'}`}
                 >
                   <span className="text-[11px] font-medium truncate flex-1" style={{ color: colors.textPrimary }}>{d.domain}</span>
                   {d.expiresAt && (
@@ -324,7 +324,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
             )}
           </div>
 
-          {/* Tappable suggestions — a friendlier way to seed the blocklist than a
+          {/* Tappable suggestions, a friendlier way to seed the blocklist than a
               placeholder that reads like an entered value. */}
           <div className="flex flex-wrap gap-1">
             {DOMAIN_SUGGESTIONS
@@ -380,7 +380,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
                 <div
                   key={p.name}
                   className="flex items-center gap-1.5 px-2 py-1 rounded-md group hover:bg-white/[0.03] transition-colors"
-                  title={`${p.name}${p.expiresAt ? ` — expires in ${formatExpiry(p.expiresAt)}` : ' — permanent block'}`}
+                  title={`${p.name}${p.expiresAt ? `, expires in ${formatExpiry(p.expiresAt)}` : ', permanent block'}`}
                 >
                   <span className="text-[11px] font-medium truncate flex-1" style={{ color: colors.textPrimary }}>{p.name}</span>
                   {p.expiresAt && (
@@ -503,7 +503,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
         </div>
 
         {loggedSessions.length === 0 ? (
-          <p className="text-[10px] text-center py-6" style={{ color: colors.textSecondary }}>No activity recorded yet — tracking starts automatically in the background</p>
+          <p className="text-[10px] text-center py-6" style={{ color: colors.textSecondary }}>No activity recorded yet, tracking starts automatically in the background</p>
         ) : (
           <div className="space-y-3">
             {[...grouped.entries()].map(([dateLabel, sessions]) => (
@@ -514,7 +514,7 @@ export default function Overview({ store, onRefresh, onChatWith }: OverviewProps
                     const catColor = CAT_COLOR[s.category]
                     const title = cleanTitle(s.title, s.app)
                     const tooltipParts = [
-                      `${s.app} — ${s.category}`,
+                      `${s.app}: ${s.category}`,
                       title !== s.app ? `"${title}"` : '',
                       s.url ? `URL: ${s.url}` : '',
                       `Duration: ${formatMs(s.duration)}`,

@@ -3,7 +3,7 @@
 // Copy this file to `config.ts` and fill in BUNDLED_OPENROUTER_KEY before building.
 // `config.ts` is gitignored on purpose: it holds a live provider key that must NOT
 // be committed (GitHub secret-scanners and bots would drain it within minutes). The
-// key still ships inside the packaged app so new users get zero-setup AI — it's just
+// key still ships inside the packaged app so new users get zero-setup AI, it's just
 // never stored in source control.
 //
 // A bundled OpenRouter key powers the AI features so a new user needs zero setup.

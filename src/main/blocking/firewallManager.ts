@@ -71,7 +71,7 @@ export function removeFirewallRules(): void {
 // ── Per-site IP blocking ──────────────────────────────────────────────────────
 // Resolves the domain to its current IPs and adds firewall rules blocking
 // all HTTP/HTTPS traffic (TCP+UDP 80,443) to those IPs. This works even when
-// the browser resolves the domain via DoH — the TCP connection is refused at
+// the browser resolves the domain via DoH, the TCP connection is refused at
 // the Windows filtering layer before a byte is sent.
 
 export function blockSite(domain: string): void {

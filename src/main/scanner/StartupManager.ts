@@ -4,7 +4,7 @@ import { join, dirname, basename } from 'path'
 import { homedir } from 'os'
 import type { StartupItem } from '../../shared/types'
 
-// Lists and disables Windows startup (auto-run) entries — the "advanced" Deep Clean
+// Lists and disables Windows startup (auto-run) entries, the "advanced" Deep Clean
 // option for stopping apps from launching at login. Covers the two HKCU/HKLM "Run"
 // registry keys and the user's Startup folder. Disabling a registry entry removes the
 // value; disabling a Startup-folder shortcut moves it to a "Disabled" subfolder so it

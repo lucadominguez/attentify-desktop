@@ -71,7 +71,7 @@ export default function FocusBrowser({ store }: FocusBrowserProps): React.ReactE
         <Info size={15} className="flex-shrink-0 mt-0.5" style={{ color: colors.textSecondary }} />
         <p className="text-xs leading-relaxed" style={{ color: colors.textSecondary }}>
           Focus Browser activates your blocklist via the hosts file and starts a session timer.
-          Your default browser opens normally — the blocking happens at the network layer,
+          Your default browser opens normally, the blocking happens at the network layer,
           so it works in any browser.
           {store.elevation === 'soft' && ' Admin access is required for actual site blocking.'}
         </p>

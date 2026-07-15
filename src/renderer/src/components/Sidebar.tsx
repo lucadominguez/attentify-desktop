@@ -28,13 +28,13 @@ interface NavItem {
   desc: string   // plain-language tooltip so every menu item explains itself
 }
 
-// Primary features — the everyday surfaces of a focus app. Home is the chat-first
+// Primary features, the everyday surfaces of a focus app. Home is the chat-first
 // assistant (Attentify's core surface); the dashboard and analytics sit alongside it.
 const mainNav: NavItem[] = [
-  { id: 'home',         label: 'Assistant',  icon: <MessageSquare size={15} />, desc: 'Chat with Attentify — block sites, start focus, ask about your day' },
-  { id: 'analytics',    label: 'Analytics',  icon: <BarChart2 size={15} />, desc: 'Charts, patterns, alerts — and describe any custom analytics you want' },
-  { id: 'logic',        label: 'Logic',      icon: <Brain size={15} />,     desc: 'How Attentify reasons about you — and add your own context' },
-  { id: 'activity',     label: 'Activity',   icon: <ActivityIcon size={15} />, desc: 'Your searches, browsing and app activity — the raw log' },
+  { id: 'home',         label: 'Assistant',  icon: <MessageSquare size={15} />, desc: 'Chat with Attentify, block sites, start focus, ask about your day' },
+  { id: 'analytics',    label: 'Analytics',  icon: <BarChart2 size={15} />, desc: 'Charts, patterns, alerts, and describe any custom analytics you want' },
+  { id: 'logic',        label: 'Logic',      icon: <Brain size={15} />,     desc: 'How Attentify reasons about you, and add your own context' },
+  { id: 'activity',     label: 'Activity',   icon: <ActivityIcon size={15} />, desc: 'Your searches, browsing and app activity, the raw log' },
   { id: 'timesheets',   label: 'Timesheets', icon: <Clock size={15} />,     desc: 'Time logged per app and category, day by day' },
   { id: 'focus-shield', label: 'Protection', icon: <Shield size={15} />,    desc: 'Blocklists, feed blocks, and the activity log' },
   { id: 'deep-focus',   label: 'Deep Focus', icon: <Lock size={15} />,      desc: 'Lock out distractions for a set time' },
@@ -137,7 +137,7 @@ export default function Sidebar({
           <div
             className="flex-shrink-0 w-1.5 h-1.5 rounded-full"
             style={{ background: '#fbbf24', boxShadow: '0 0 6px #fbbf24' }}
-            title="Soft mode — limited protection"
+            title="Soft mode, limited protection"
           />
         )}
       </div>

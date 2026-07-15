@@ -114,7 +114,7 @@ export default function OverlayCard(): React.ReactElement | null {
   }, [])
 
   // Once a notification is actually in the DOM, tell main it's safe to reveal the
-  // window. Until this fires, main keeps the window hidden — so it can never appear
+  // window. Until this fires, main keeps the window hidden, so it can never appear
   // blank in the corner. useLayoutEffect runs after paint of this notification.
   React.useLayoutEffect(() => {
     if (notif) api.overlayShown?.(notif.id)

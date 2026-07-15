@@ -204,7 +204,7 @@ export class UrlGuardService {
       p.key.toLowerCase().includes('distract')
     ).slice(0, 5)
 
-    // Skip AI call if no goals and no avoid preferences — nothing to evaluate against
+    // Skip AI call if no goals and no avoid preferences, nothing to evaluate against
     if (goals.length === 0 && avoidPrefs.length === 0) return
 
     const goalText = goals.slice(0, 3).map((g) => g.text).join('; ')
@@ -243,7 +243,7 @@ Reply with a single JSON object (no markdown):
         this.fireAlert({ url, domain, title, category, message, searchQuery, timestamp: Date.now() })
       }
     } catch {
-      // Silent fail — this is a non-critical background check
+      // Silent fail, this is a non-critical background check
     }
   }
 

@@ -176,7 +176,7 @@ function renderInline(text: string): React.ReactNode {
 // Memoized message body: renderMarkdown is a pure function of `content`, so wrapping it
 // in React.memo means only the message whose content changed (i.e. the one currently
 // streaming) re-parses its markdown. Without this, every streaming update re-parsed
-// EVERY message in the conversation — a major cause of the "freeze while thinking".
+// EVERY message in the conversation, a major cause of the "freeze while thinking".
 const MessageBody = React.memo(function MessageBody({ content, clean }: { content: string; clean: boolean }): React.ReactElement {
   return <>{renderMarkdown(clean ? cleanForDisplay(content) : content)}</>
 })
@@ -359,9 +359,9 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
           id: crypto.randomUUID(),
           role: 'assistant',
           content: isPaywall
-            ? "You've used up your **$1 of free AI**. Subscribe to **Attentify Cloud** for **$5/month** to keep using the assistant — or add your own OpenRouter key in Settings (never metered)."
+            ? "You've used up your **$1 of free AI**. Subscribe to **Attentify Cloud** for **$5/month** to keep using the assistant, or add your own OpenRouter key in Settings (never metered)."
             : isAuth
-              ? 'Sign in to use the assistant — open the account button at the bottom of the sidebar.'
+              ? 'Sign in to use the assistant. Open the account button at the bottom of the sidebar.'
               : `Error: ${err}`,
           timestamp: Date.now(),
         },
@@ -460,7 +460,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
     setMessages([{
       id: 'welcome',
       role: 'assistant',
-      content: "History cleared. I'm Attentify, your focus assistant — tell me what you need to focus on.",
+      content: "History cleared. I'm Attentify, your focus assistant, tell me what you need to focus on.",
       timestamp: Date.now(),
     }])
   }, [confirmClear])
@@ -676,7 +676,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
             className="w-full py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 rounded-xl"
             style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.35)', color: '#34d399' }}
           >
-            {checkingOut ? 'Opening checkout…' : 'Subscribe — $5/month'}
+            {checkingOut ? 'Opening checkout…' : 'Subscribe for $5/month'}
           </button>
         </div>
       )}

@@ -56,7 +56,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
     api.requestElevation().then((status) => {
       setElevation(status as ElevationState)
       if (status === 'full') {
-        // Already admin (production UAC manifest fired before launch) — auto-advance
+        // Already admin (production UAC manifest fired before launch), auto-advance
         autoAdvanceRef.current = setTimeout(() => setStep('scanning'), 1800)
       }
     }).catch(() => setElevation('soft'))
@@ -104,7 +104,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
     setElevation('relaunching')
     try {
       await api.relaunchAsAdmin()
-      // App will quit and relaunch — nothing more to do
+      // App will quit and relaunch, nothing more to do
     } catch {
       setElevation('soft')
     }
@@ -228,13 +228,13 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
         {elevation === 'soft' && (
           <>
             <p className="text-sm leading-relaxed mb-4" style={{ color: colors.textSecondary }}>
-              Attentify needs administrator rights to edit your system's hosts file — this is how site blocking works at the network layer, before browsers even load the page.
+              Attentify needs administrator rights to edit your system's hosts file, this is how site blocking works at the network layer, before browsers even load the page.
             </p>
             <div className="w-full p-4 rounded-xl mb-6 text-left" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
               <p className="text-xs font-semibold mb-2 uppercase tracking-wider" style={{ color: colors.textSecondary }}>What admin access enables</p>
               <div className="space-y-1.5">
                 {[
-                  ['Hosts file blocking', 'Sinkhole blocked domains at the OS level — no browser workaround'],
+                  ['Hosts file blocking', 'Sinkhole blocked domains at the OS level, no browser workaround'],
                   ['DoH bypass prevention', 'Block DNS-over-HTTPS so browsers use system DNS'],
                   ['Process enforcement', 'Kill blocked apps during deep focus sessions'],
                 ].map(([title, desc]) => (
@@ -267,7 +267,7 @@ export default function Onboarding({ onComplete }: OnboardingProps): React.React
               )}
             </button>
             <p className="text-[11px]" style={{ color: colors.textMuted }}>
-              A UAC dialog will appear — click Yes to grant access
+              A UAC dialog will appear. Click Yes to grant access
             </p>
             <button
               onClick={() => setStep('scanning')}

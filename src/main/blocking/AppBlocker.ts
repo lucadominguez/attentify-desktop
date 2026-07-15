@@ -6,7 +6,7 @@ import { platform } from 'process'
  * Window-interception based app blocker.
  * Polls the foreground window at 750ms intervals. When a blocked app
  * is detected in the foreground, its window is immediately minimized
- * via ShowWindow(SW_MINIMIZE). The process is never terminated — all
+ * via ShowWindow(SW_MINIMIZE). The process is never terminated, all
  * state, files, and connections remain intact.
  */
 export class AppBlocker extends EventEmitter {

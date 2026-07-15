@@ -297,9 +297,9 @@
         checks: [
           { id: 'os', label: 'Operating system', status: 'ok', detail: 'Windows 11 (build 26100)' },
           { id: 'arch', label: 'Architecture', status: 'ok', detail: 'x64 (native)' },
-          { id: 'elevation', label: 'Administrator rights', status: 'ok', detail: 'Elevated — blocks are enforced' },
-          { id: 'hosts', label: 'Hosts file', status: 'ok', detail: 'Writable — domain blocking works' },
-          { id: 'tracking', label: 'Activity tracking', status: 'ok', detail: 'PowerShell FullLanguage — foreground window readable' },
+          { id: 'elevation', label: 'Administrator rights', status: 'ok', detail: 'Elevated. Blocks are enforced' },
+          { id: 'hosts', label: 'Hosts file', status: 'ok', detail: 'Writable. Domain blocking works' },
+          { id: 'tracking', label: 'Activity tracking', status: 'ok', detail: 'PowerShell FullLanguage. Foreground window readable' },
           { id: 'dataDir', label: 'Data folder', status: 'ok', detail: 'C:\\ProgramData\\Attentify' }
         ]
       });

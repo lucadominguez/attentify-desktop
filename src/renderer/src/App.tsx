@@ -310,7 +310,7 @@ export default function App(): React.ReactElement {
               <div className="flex items-center gap-2.5">
                 <Lock size={12} style={{ color: '#fbbf24' }} />
                 <span className="text-[11px]" style={{ color: colors.textSecondary }}>
-                  You&rsquo;re signed out. Look around freely — blocking, focus sessions and the
+                  You&rsquo;re signed out. Look around freely, blocking, focus sessions and the
                   assistant need an account.
                 </span>
               </div>
@@ -329,7 +329,7 @@ export default function App(): React.ReactElement {
                 <span className="text-[11px]" style={{ color: colors.textSecondary }}>
                   {update.state === 'ready'
                     ? <>Update{update.version ? ` ${update.version}` : ''} ready to install.</>
-                    : <>Downloading update{typeof update.percent === 'number' ? ` — ${update.percent}%` : '…'}</>}
+                    : <>Downloading update{typeof update.percent === 'number' ? `: ${update.percent}%` : '…'}</>}
                 </span>
               </div>
               {update.state === 'ready' && (

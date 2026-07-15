@@ -113,7 +113,7 @@ class NotificationQueue {
   }
 
   // Called from the 'overlay:ready' IPC once the React overlay has mounted and
-  // subscribed. Only now is it safe to flush a queued notification — and only now do we
+  // subscribed. Only now is it safe to flush a queued notification, and only now do we
   // know the renderer is alive to actually paint one.
   markReady(): void {
     if (this.windowReady) return
