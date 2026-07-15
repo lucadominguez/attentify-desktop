@@ -196,7 +196,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
   const [checkingOut, setCheckingOut] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
   const streamingIdRef = useRef<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -719,25 +719,42 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
           >
             <Paperclip size={14} />
           </button>
-          <input
+          {/* A textarea, not an input: a chat box you cannot write a paragraph in is the
+              single most obvious thing missing. Enter sends, Shift+Enter is a newline,
+              and it grows with the text up to a cap. It is also NOT disabled while the
+              assistant is answering, so you can compose your next message while it talks. */}
+          <textarea
             ref={inputRef}
-            type="text"
-            placeholder="Block Twitter for 2 hours…"
+            rows={1}
+            placeholder="Block Twitter for 2 hours…    (Shift+Enter for a new line)"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
+            onChange={(e) => {
+              setInput(e.target.value)
+              const el = e.target
+              el.style.height = 'auto'
+              el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (!sending) sendMessage(input)
+              }
+            }}
             onPaste={(e) => {
               const imgs = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
               if (imgs.length) { e.preventDefault(); addFiles(imgs) }
             }}
-            disabled={sending}
-            className="flex-1 text-xs px-3 py-2.5 rounded-xl outline-none transition-colors disabled:opacity-60"
-            style={{ background: colors.inputBg, border: `1px solid ${colors.border}`, color: colors.textPrimary }}
+            className="flex-1 text-xs px-3 py-2.5 rounded-xl outline-none transition-colors resize-none"
+            style={{
+              background: colors.inputBg, border: `1px solid ${colors.border}`,
+              color: colors.textPrimary, maxHeight: 160, lineHeight: 1.5,
+            }}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={(!input.trim() && attachments.length === 0) || sending}
-            className="w-9 h-9 flex items-center justify-center bg-accent-blue hover:bg-accent-blue-light disabled:opacity-40 rounded-xl transition-colors flex-shrink-0"
+            className="w-9 h-9 flex items-center justify-center disabled:opacity-40 rounded-xl transition-all hover:brightness-110 flex-shrink-0"
+            style={{ background: colors.accent }}
           >
             <Send size={14} className="text-white" />
           </button>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain } from 'electron'
+import { app, BrowserWindow, shell, Tray, Menu, nativeImage, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { existsSync, renameSync } from 'fs'
 import { execSync } from 'child_process'
@@ -267,6 +267,32 @@ ipcMain.on('window:close', () => mainWin?.hide())
 
 // Relaunch with admin privileges (Windows: UAC prompt; macOS: sudo relaunch)
 ipcMain.handle('elevation:relaunch-admin', () => {
+  // In dev this relaunch is actively harmful, so refuse it.
+  //
+  // `npm run dev` runs the Electron BINARY (node_modules/electron/dist/electron.exe) and
+  // serves the renderer from a dev server via ELECTRON_RENDERER_URL. Start-Process -Verb
+  // RunAs spawns a fresh elevated process that does NOT inherit that env var, so the new
+  // instance falls back to the renderer built into out/ — i.e. the last build, not the
+  // code you are editing. Then app.quit() kills the dev session. The net effect is that
+  // clicking "Enable protection" in dev closes your dev environment and opens a stale
+  // copy of the app, which is exactly what it looked like.
+  //
+  // Elevation belongs to the packaged app. In dev, relaunch the dev server from an
+  // elevated terminal instead.
+  if (!app.isPackaged) {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Not available in dev',
+      message: 'Relaunching as administrator is disabled in development.',
+      detail: 'It would start a fresh Electron process without the dev server, so you would '
+        + 'get the last build instead of the code you are editing, and this dev session would quit.\n\n'
+        + 'To test blocking with admin rights, close this and run "npm run dev" from a terminal '
+        + 'that is already running as administrator.',
+      buttons: ['OK'],
+    }).catch(() => { /* non-fatal */ })
+    return false
+  }
+
   try {
     if (process.platform === 'win32') {
       const exe = process.execPath.replace(/\\/g, '\\\\')

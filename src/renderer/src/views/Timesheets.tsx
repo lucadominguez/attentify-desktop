@@ -50,6 +50,8 @@ interface DayData {
   neutral: number
   byCategory: Map<AppCategory, number>
   byApp: Map<string, { ms: number; category: AppCategory; sessions: number }>
+  /** The day's real sessions, in order. A rollup cannot answer "what did I do at 2pm". */
+  entries: ActivitySession[]
 }
 
 function buildDays(sessions: ActivitySession[], weekStart: number): DayData[] {
@@ -58,7 +60,7 @@ function buildDays(sessions: ActivitySession[], weekStart: number): DayData[] {
     const date = new Date(weekStart + i * 86400000)
     days.push({
       key: dayKey(date.getTime()), date, total: 0, productive: 0, distracting: 0, neutral: 0,
-      byCategory: new Map(), byApp: new Map(),
+      byCategory: new Map(), byApp: new Map(), entries: [],
     })
   }
   const index = new Map(days.map((d) => [d.key, d]))
@@ -73,7 +75,10 @@ function buildDays(sessions: ActivitySession[], weekStart: number): DayData[] {
     const a = d.byApp.get(s.app) ?? { ms: 0, category: s.category, sessions: 0 }
     a.ms += s.duration; a.sessions += 1
     d.byApp.set(s.app, a)
+    d.entries.push(s)
   }
+  // Chronological: a timesheet is read down the day, not by size.
+  for (const d of days) d.entries.sort((a, b) => a.startTime - b.startTime)
   return days
 }
 
@@ -232,15 +237,67 @@ export default function Timesheets({ onChatWith }: TimesheetsProps): React.React
 
           {/* Selected-day time entries OR weekly per-app table */}
           {selected ? (
+            // This used to render selected.byApp: a per-app ROLLUP under a heading that
+            // said "time entries". Same aggregate as the weekly table, just filtered to a
+            // day, with no times and no titles. Clicking a day is a request for what you
+            // actually did, so show the real sessions, and keep the rollup below them.
             <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>{fmtDay(selected.date)} time entries</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px]" style={{ color: colors.textMuted }}>{fmt(selected.total)} total</span>
-                  <TableQuery title={`${fmtDay(selected.date)} time entries`} summary={[...selected.byApp.entries()].sort((a, b) => b[1].ms - a[1].ms).slice(0, 6).map(([app, v]) => `${app} ${fmt(v.ms)}`).join(', ')} />
+                  <span className="text-[11px]" style={{ color: colors.textMuted }}>
+                    {selected.entries.length} {selected.entries.length === 1 ? 'entry' : 'entries'} · {fmt(selected.total)} total
+                  </span>
+                  <TableQuery
+                    title={`${fmtDay(selected.date)} time entries`}
+                    summary={selected.entries.length
+                      ? `${selected.entries.length} sessions, ${fmt(selected.total)} tracked. ${[...selected.byApp.entries()].sort((a, b) => b[1].ms - a[1].ms).slice(0, 5).map(([app, v]) => `${app} ${fmt(v.ms)}`).join(', ')}`
+                      : 'No sessions tracked on this day.'}
+                  />
                 </div>
               </div>
-              <TimeEntryTable rows={[...selected.byApp.entries()].map(([app, v]) => ({ app, ...v })).sort((a, b) => b.ms - a.ms)} total={selected.total} colors={colors} />
+
+              {selected.entries.length === 0 ? (
+                <p className="text-[11px] py-6 text-center" style={{ color: colors.textMuted }}>
+                  Nothing tracked on this day.
+                </p>
+              ) : (
+                <>
+                  <div className="rounded-lg overflow-hidden mb-4" style={{ border: `1px solid ${colors.border}` }}>
+                    <div className="flex items-center gap-3 px-3 py-1.5" style={{ background: colors.rowEven, borderBottom: `1px solid ${colors.border}` }}>
+                      <span className="text-[8px] uppercase tracking-wider" style={{ color: colors.textDim, width: 92 }}>when</span>
+                      <span className="text-[8px] uppercase tracking-wider" style={{ color: colors.textDim, width: 92 }}>app</span>
+                      <span className="text-[8px] uppercase tracking-wider flex-1" style={{ color: colors.textDim }}>what</span>
+                      <span className="text-[8px] uppercase tracking-wider" style={{ color: colors.textDim, width: 48, textAlign: 'right' }}>time</span>
+                    </div>
+                    <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                      {selected.entries.map((e, i) => (
+                        <div key={e.id ?? i} className="flex items-center gap-3 px-3 py-1.5"
+                          style={{ background: i % 2 ? 'transparent' : colors.rowOdd }}>
+                          <span className="text-[9.5px] data-value flex-shrink-0" style={{ color: colors.textMuted, width: 92 }}>
+                            {new Date(e.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {' – '}
+                            {new Date(e.endTime || e.startTime + e.duration).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="text-[10.5px] truncate flex-shrink-0" style={{ color: colors.textSecondary, width: 92 }}>{e.app}</span>
+                          <span className="text-[10.5px] truncate flex-1" style={{ color: colors.textMuted }}>
+                            {e.title || e.url || <span style={{ color: colors.textDim }}>(no title)</span>}
+                          </span>
+                          <span className="text-[10.5px] data-value flex-shrink-0"
+                            style={{ color: e.isDistraction ? colors.negative : colors.textPrimary, width: 48, textAlign: 'right' }}>
+                            {fmt(e.duration)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <p className="text-[9px] font-bold uppercase tracking-widest mb-1.5" style={{ color: colors.labelDim }}>
+                    That day, by app
+                  </p>
+                  <TimeEntryTable rows={[...selected.byApp.entries()].map(([app, v]) => ({ app, ...v })).sort((a, b) => b.ms - a.ms)} total={selected.total} colors={colors} />
+                </>
+              )}
             </div>
           ) : (
             <div className="rounded-xl p-4" style={{ background: colors.cardBg, border: `1px solid ${colors.border}` }}>

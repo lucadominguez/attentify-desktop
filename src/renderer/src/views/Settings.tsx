@@ -37,7 +37,7 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
 }
 
 export default function SettingsView({ store, onRefresh, onNavigate }: SettingsProps): React.ReactElement {
-  const { colors, theme, toggle, glass, toggleGlass } = useTheme()
+  const { colors, theme, toggle, glass, toggleGlass, glassOpacity, setGlassOpacity } = useTheme()
   const currentMode = store.settings.blockingMode ?? 'auto'
   const [apiInput, setApiInput] = useState('')
   const [apiSaved, setApiSaved] = useState(false)
@@ -207,6 +207,30 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: glass ? 22 : 2 }} />
             </button>
           </div>
+
+          {/* Opacity is the whole character of glass, so it is the one thing worth a
+              slider. Only shown when glass is on: a control that does nothing is noise. */}
+          {glass && (
+            <div className="p-4 rounded-lg mt-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>Glass opacity</p>
+                <span className="text-[10px] data-value" style={{ color: colors.textMuted }}>{Math.round(glassOpacity * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0.15} max={0.9} step={0.05}
+                value={glassOpacity}
+                onChange={(e) => setGlassOpacity(Number(e.target.value))}
+                className="w-full"
+                style={{ accentColor: colors.accent }}
+                aria-label="Glass opacity"
+              />
+              <div className="flex justify-between mt-1">
+                <span className="text-[9px]" style={{ color: colors.textDim }}>See-through</span>
+                <span className="text-[9px]" style={{ color: colors.textDim }}>Solid</span>
+              </div>
+            </div>
+          )}
 
           {/* Diagnostics sharing */}
           <div className="flex items-center justify-between p-4 rounded-lg mt-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>

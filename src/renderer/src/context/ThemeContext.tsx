@@ -217,6 +217,9 @@ interface ThemeCtx {
   /** The full-glass experiment: every surface translucent, not just the overlays. */
   glass: boolean
   toggleGlass: () => void
+  /** 0.15 - 0.9. How solid the glass is; 0.5 is the tuned default. */
+  glassOpacity: number
+  setGlassOpacity: (v: number) => void
 }
 
 const ThemeContext = createContext<ThemeCtx>({
@@ -225,6 +228,8 @@ const ThemeContext = createContext<ThemeCtx>({
   toggle: () => {},
   glass: false,
   toggleGlass: () => {},
+  glassOpacity: 0.5,
+  setGlassOpacity: () => {},
 })
 
 // The experiment, in one function.
@@ -235,15 +240,36 @@ const ThemeContext = createContext<ThemeCtx>({
 // here, that single swap reaches the whole app, and turning it off restores the exact
 // original values. That is what makes it genuinely revertible: there is no second
 // codebase to unwind, just a boolean.
-function withGlass(c: ThemeColors): ThemeColors {
+/** Rewrite an rgba()'s alpha. The glass tokens are all rgba, so opacity is one knob. */
+function alpha(rgba: string, mul: number): string {
+  const m = rgba.match(/rgba?\(([^)]+)\)/)
+  if (!m) return rgba
+  const p = m[1]!.split(',').map((x) => x.trim())
+  const a = p.length > 3 ? Number(p[3]) : 1
+  // Clamped so the slider can never make text unreadable at one end or kill the effect
+  // at the other.
+  const next = Math.max(0.06, Math.min(0.97, a * mul))
+  return `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${next.toFixed(3)})`
+}
+
+function withGlass(c: ThemeColors, opacity: number): ThemeColors {
+  // opacity is the user's slider: 1 = the tuned default, <1 clearer, >1 more solid.
+  const k = opacity / 0.5
   return {
     ...c,
-    panelBg: c.glassLow,
-    cardBg: c.glassMid,
-    inputBg: c.glassMid,
+    // The main background is glass too, not just the panels sitting on it. Without this
+    // the app reads as normal panels on a solid page rather than as one pane of glass.
+    rootBg: alpha(c.glassLow, k * 0.8),
+    mainBg: 'transparent',
+    panelBg: alpha(c.glassLow, k),
+    cardBg: alpha(c.glassMid, k),
+    inputBg: alpha(c.glassMid, k),
     rowEven: 'transparent',
-    rowOdd: c.glassMid,
-    aiBubbleBg: c.glassMid,
+    rowOdd: alpha(c.glassMid, k),
+    aiBubbleBg: alpha(c.glassMid, k),
+    glassLow: alpha(c.glassLow, k),
+    glassMid: alpha(c.glassMid, k),
+    glassHigh: alpha(c.glassHigh, k),
   }
 }
 
@@ -257,11 +283,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   // localStorage, not the store: a look is a per-window view preference, and routing it
   // through IPC would put it behind the sign-in gate.
   const [glass, setGlass] = useState<boolean>(() => localStorage.getItem('pd-glass') === '1')
+  const [glassOpacity, setGlassOpacity] = useState<number>(() => {
+    const v = Number(localStorage.getItem('pd-glass-opacity'))
+    return Number.isFinite(v) && v >= 0.15 && v <= 0.9 ? v : 0.5
+  })
 
   const colors = useMemo(() => {
     const base = theme === 'dark' ? DARK : LIGHT
-    return glass ? withGlass(base) : base
-  }, [theme, glass])
+    return glass ? withGlass(base, glassOpacity) : base
+  }, [theme, glass, glassOpacity])
 
   useEffect(() => {
     applyCssVars(colors)
@@ -271,13 +301,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     document.documentElement.dataset.glass = glass ? 'full' : 'off'
     localStorage.setItem('pd-theme', theme)
     localStorage.setItem('pd-glass', glass ? '1' : '0')
-  }, [theme, glass, colors])
+    localStorage.setItem('pd-glass-opacity', String(glassOpacity))
+  }, [theme, glass, glassOpacity, colors])
 
   const toggle = (): void => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
   const toggleGlass = (): void => setGlass((g) => !g)
 
   return (
-    <ThemeContext.Provider value={{ theme, colors, toggle, glass, toggleGlass }}>
+    <ThemeContext.Provider value={{ theme, colors, toggle, glass, toggleGlass, glassOpacity, setGlassOpacity }}>
       {children}
     </ThemeContext.Provider>
   )
