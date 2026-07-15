@@ -290,6 +290,7 @@
     },
     removeProcess: function (name) { store.blocklist.processes = store.blocklist.processes.filter(function (p) { return p.name !== name; }); return Promise.resolve(); },
     getElevationCheck: function () { return Promise.resolve({ elevated: true, writable: true }); },
+    runCardAction: function () { return Promise.resolve({ ok: true, result: { started: true } }); },
     reorderAnalyticsCards: function (ids) {
       var byId = {}; (store.customAnalyticsCards || []).forEach(function (c) { byId[c.id] = c; });
       ids.forEach(function (id, i) { if (byId[id]) byId[id].order = i; });

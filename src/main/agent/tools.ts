@@ -22,7 +22,7 @@ import { randomUUID } from 'crypto'
 // must only ever name a real tool.
 const VALID_VIZ: CardViz[] = ['bar', 'line', 'table', 'number', 'heatmap', 'progress', 'summary', 'ranked', 'list']
 const VALID_PAGES: CardPage[] = ['analytics', 'logic', 'timesheets', 'deep-focus', 'scheduler']
-const VALID_ACTION_TOOLS: CardAction['tool'][] = [
+export const VALID_ACTION_TOOLS: CardAction['tool'][] = [
   'start_focus_session', 'stop_focus_session', 'create_schedule', 'remove_schedule',
   'block_category', 'block_domain', 'unblock_domain', 'add_goal',
 ]

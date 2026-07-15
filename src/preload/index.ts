@@ -29,6 +29,8 @@ const api = {
     ipcRenderer.invoke('compat:check'),
   reorderAnalyticsCards: (orderedIds: string[]): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('analytics:reorder-cards', orderedIds),
+  runCardAction: (cardId: string): Promise<{ ok: boolean; error?: string; result?: unknown }> =>
+    ipcRenderer.invoke('cards:run-action', cardId),
 
   startSession: (mode: 'normal' | 'deep', durationMs?: number, allowlist?: string[]): Promise<FocusSession> =>
     ipcRenderer.invoke('session:start', mode, durationMs, allowlist),

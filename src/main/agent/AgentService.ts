@@ -2,7 +2,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages'
 import { STATIC_INSTRUCTIONS, buildDynamicContext, type SystemContext } from './systemPrompt'
 import { resolveModel, chatTier } from './modelRouter'
-import { TOOL_DEFINITIONS, executeTool, type ToolDeps } from './tools'
+import { TOOL_DEFINITIONS, executeTool, VALID_ACTION_TOOLS, type ToolDeps } from './tools'
+import type { CustomAnalyticsCard } from '../../shared/types'
 import {
   insertAgentMessage, getAgentMessages, getConversationMessages, touchConversation,
   getActiveGoals, getPreferences, getInferences, getRecentEvents, insertCheckpoint,
@@ -276,6 +277,22 @@ export class AgentService {
       const noop = (): void => {}
       const summary = await this.runLoop(system, model, messages, { onChunk: noop, onToolUse: noop, onDone: noop, onError: noop })
       return { ok: true, summary: sanitizeAssistantText(summary) }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
+  // Run a saved action card. The card comes from the store (never from the renderer),
+  // so the tool name and params are the ones create_action_card already validated. The
+  // whitelist is re-checked here anyway: this is a path from a click straight to a tool
+  // call, and it should not depend on the store being trustworthy.
+  async runCardAction(card: CustomAnalyticsCard): Promise<{ ok: boolean; error?: string; result?: unknown }> {
+    const action = card.action
+    if (card.kind !== 'action' || !action) return { ok: false, error: 'Not an action card.' }
+    if (!VALID_ACTION_TOOLS.includes(action.tool)) return { ok: false, error: `"${action.tool}" is not a runnable tool.` }
+    try {
+      const result = await executeTool(action.tool, action.params ?? {}, this.deps)
+      return { ok: true, result }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }

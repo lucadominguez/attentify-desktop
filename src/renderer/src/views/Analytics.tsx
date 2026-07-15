@@ -2110,6 +2110,15 @@ function CustomAnalyticsSection(): React.ReactElement {
               setCards(next)
               api.reorderAnalyticsCards?.(next.map((c) => c.id)).catch(() => { /* signed out: order is not persisted */ })
             }}
+            onRun={(card) => {
+              // An action card is one tap from changing the machine, so anything marked
+              // confirm asks first. Only the id crosses the bridge; main resolves the
+              // action from the store.
+              if (card.action?.confirm && !window.confirm(`${card.action.label}?\n\n${card.description ?? card.title}`)) return
+              api.runCardAction?.(card.id)
+                .then((r) => { if (!r?.ok && r?.error) window.alert(r.error) })
+                .catch(() => { /* signed out: the gate already refused it */ })
+            }}
             onDelete={(id) => void remove(id)}
           />
         </div>

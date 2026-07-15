@@ -1029,6 +1029,19 @@ export function initIpc(): void {
     return getStore().customAnalyticsCards ?? []
   })
 
+  // Run a saved action card. Takes an ID, never the action itself: the renderer must not
+  // be able to name a tool or supply params, or a click would become an arbitrary tool
+  // call. The card is looked up in the store, where create_action_card already validated
+  // it, and AgentService re-checks the whitelist before executing.
+  ipcMain.handle('cards:run-action', async (_e, cardId: string) => {
+    if (!agentService) return { ok: false, error: 'Agent not initialized' }
+    const card = (getStore().customAnalyticsCards ?? []).find((c) => c.id === cardId)
+    if (!card) return { ok: false, error: 'Card not found' }
+    const res = await agentService.runCardAction(card)
+    if (res.ok) sendMain('store:refresh')
+    return res
+  })
+
   // Drag-to-reorder writes the user's order back onto the cards themselves, so it
   // survives restarts rather than being implied by insertion order.
   ipcMain.handle('analytics:reorder-cards', (_e, orderedIds: string[]) => {
