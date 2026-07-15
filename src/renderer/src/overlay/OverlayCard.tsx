@@ -153,8 +153,8 @@ export default function OverlayCard(): React.ReactElement | null {
           background: `linear-gradient(160deg, rgba(10,18,34,0.62), rgba(4,10,20,0.72))`,
           // Hairline edge, brightest at the top where light would catch it.
           border: '1px solid rgba(255,255,255,0.10)',
-          backdropFilter: 'blur(28px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(28px) saturate(160%)',
+          backdropFilter: 'blur(28px)',
+          WebkitBackdropFilter: 'blur(28px)',
           boxShadow: [
             '0 24px 64px rgba(0,0,0,0.55)',           // lift off the desktop
             `0 0 0 1px ${cfg.border}`,                 // state colour, as an edge not a frame

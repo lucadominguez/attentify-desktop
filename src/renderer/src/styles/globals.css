@@ -391,17 +391,18 @@ html.light .bg-grid {
    app runs 24/7, so blurring every div would cost battery for nothing. Turning
    the toggle off removes the attribute and every rule below stops matching, so
    the revert is total. */
+/* ONE blurred plane, not one per panel. Every backdrop-filter re-blurs what is already
+   blurred beneath it, so blurring each nested card compounded the desktop into a smear.
+   #root frosts; panels are only tint on top of it. */
+[data-glass="full"] #root {
+  backdrop-filter: var(--blur-md);
+  -webkit-backdrop-filter: var(--blur-md);
+}
+/* Belt and braces: nothing inside the app frosts again. */
 [data-glass="full"] .section-panel,
 [data-glass="full"] .rounded-xl,
 [data-glass="full"] .rounded-2xl,
 [data-glass="full"] .rounded-lg {
-  backdrop-filter: var(--blur-md);
-  -webkit-backdrop-filter: var(--blur-md);
-}
-/* Nested glass double-blurs and turns to mud; only the outermost pane frosts. */
-[data-glass="full"] .rounded-xl .rounded-lg,
-[data-glass="full"] .rounded-2xl .rounded-lg,
-[data-glass="full"] .rounded-lg .rounded-lg {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }

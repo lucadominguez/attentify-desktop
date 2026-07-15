@@ -106,9 +106,9 @@ const DARK: ThemeColors = {
   glassHigh:       'rgba(12,22,42,0.72)',
   glassEdge:       'rgba(255,255,255,0.10)',
   glassTopLight:   'inset 0 1px 0 rgba(255,255,255,0.12)',
-  blurSm:          'blur(10px) saturate(140%)',
-  blurMd:          'blur(20px) saturate(150%)',
-  blurLg:          'blur(30px) saturate(160%)',
+  blurSm:          'blur(12px)',
+  blurMd:          'blur(24px)',
+  blurLg:          'blur(36px)',
   elevLow:         '0 2px 10px rgba(0,0,0,0.30)',
   elevMid:         '0 10px 30px rgba(0,0,0,0.42)',
   elevHigh:        '0 24px 64px rgba(0,0,0,0.55)',
@@ -158,9 +158,9 @@ const LIGHT: ThemeColors = {
   glassHigh:       'rgba(255,255,255,0.82)',
   glassEdge:       'rgba(15,23,42,0.10)',
   glassTopLight:   'inset 0 1px 0 rgba(255,255,255,0.85)',
-  blurSm:          'blur(10px) saturate(130%)',
-  blurMd:          'blur(20px) saturate(140%)',
-  blurLg:          'blur(30px) saturate(150%)',
+  blurSm:          'blur(12px)',
+  blurMd:          'blur(24px)',
+  blurLg:          'blur(36px)',
   elevLow:         '0 2px 10px rgba(15,23,42,0.06)',
   elevMid:         '0 10px 30px rgba(15,23,42,0.10)',
   elevHigh:        '0 24px 64px rgba(15,23,42,0.16)',
@@ -252,26 +252,36 @@ function alpha(rgba: string, mul: number): string {
   return `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${next.toFixed(3)})`
 }
 
-function withGlass(c: ThemeColors, opacity: number): ThemeColors {
-  // opacity is the user's slider: 1 = the tuned default, <1 clearer, >1 more solid.
-  const k = opacity / 0.5
+// Glass is ONE neutral tint at one opacity, over a plain blur. Nothing else.
+//
+// The first attempt layered a tinted rootBg, differently-tinted panels, saturated blurs
+// and the coloured ambient wash on top of a see-through window. Every one of those is
+// defensible alone; together, over a live desktop, they read as a psychedelic smear
+// rather than glass. Cluely's look is restraint: you see your desktop, dimmed, through
+// one sheet of frosted dark.
+function withGlass(c: ThemeColors, opacity: number, dark: boolean): ThemeColors {
+  // The single sheet. Neutral near-black on dark, neutral white on light; the slider is
+  // the alpha directly, so what the user sets is what they get.
+  const sheet = (a: number): string => (dark
+    ? `rgba(8, 12, 20, ${Math.max(0.05, Math.min(0.95, a)).toFixed(3)})`
+    : `rgba(248, 250, 252, ${Math.max(0.05, Math.min(0.95, a)).toFixed(3)})`)
+
   return {
     ...c,
-    // The main background is glass too, not just the panels sitting on it. Without this
-    // the app reads as normal panels on a solid page rather than as one pane of glass.
-    // The page itself must be see-through, not just the panels. This is what lets the
-    // window's acrylic (and therefore the user's desktop) actually show through.
-    rootBg: alpha(c.glassLow, k * 0.55),
+    // Only ONE surface tints: the page. Panels sit on it with a barely-there lift, or
+    // each nested pane would darken the one behind it until nothing shows through.
+    rootBg: sheet(opacity),
     mainBg: 'transparent',
-    panelBg: alpha(c.glassLow, k),
-    cardBg: alpha(c.glassMid, k),
-    inputBg: alpha(c.glassMid, k),
+    panelBg: sheet(Math.min(0.95, opacity + 0.06)),
+    cardBg: sheet(Math.min(0.95, opacity + 0.04)),
+    inputBg: sheet(Math.min(0.95, opacity + 0.08)),
     rowEven: 'transparent',
-    rowOdd: alpha(c.glassMid, k),
-    aiBubbleBg: alpha(c.glassMid, k),
-    glassLow: alpha(c.glassLow, k),
-    glassMid: alpha(c.glassMid, k),
-    glassHigh: alpha(c.glassHigh, k),
+    rowOdd: sheet(Math.min(0.95, opacity + 0.03)),
+    aiBubbleBg: sheet(Math.min(0.95, opacity + 0.04)),
+    glassLow: sheet(Math.min(0.95, opacity + 0.02)),
+    glassMid: sheet(Math.min(0.95, opacity + 0.04)),
+    // Modals must stay readable: they are the one place the desktop should not show.
+    glassHigh: sheet(Math.min(0.96, opacity + 0.35)),
   }
 }
 
@@ -287,12 +297,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   const [glass, setGlass] = useState<boolean>(() => localStorage.getItem('pd-glass') === '1')
   const [glassOpacity, setGlassOpacity] = useState<number>(() => {
     const v = Number(localStorage.getItem('pd-glass-opacity'))
-    return Number.isFinite(v) && v >= 0.15 && v <= 0.9 ? v : 0.5
+    return Number.isFinite(v) && v >= 0.25 && v <= 0.9 ? v : 0.6
   })
 
   const colors = useMemo(() => {
     const base = theme === 'dark' ? DARK : LIGHT
-    return glass ? withGlass(base, glassOpacity) : base
+    return glass ? withGlass(base, glassOpacity, theme === 'dark') : base
   }, [theme, glass, glassOpacity])
 
   // Hydrate from the store, which is what main reads when it creates the window. Without
@@ -302,7 +312,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     api?.getStore?.().then((st) => {
       if (typeof st?.settings?.fullGlass === 'boolean') setGlass(st.settings.fullGlass)
       const o = st?.settings?.glassOpacity
-      if (typeof o === 'number' && o >= 0.15 && o <= 0.9) setGlassOpacity(o)
+      if (typeof o === 'number' && o >= 0.25 && o <= 0.9) setGlassOpacity(o)
     }).catch(() => { /* keep the localStorage value */ })
   }, [])
 

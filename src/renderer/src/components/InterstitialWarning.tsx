@@ -55,8 +55,8 @@ export default function InterstitialWarning(): React.ReactElement {
       style={{
         background: 'linear-gradient(160deg, rgba(13,30,53,0.66) 0%, rgba(8,15,30,0.76) 100%)',
         border: '1px solid rgba(255,255,255,0.10)',
-        backdropFilter: 'blur(30px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(30px) saturate(160%)',
+        backdropFilter: 'blur(30px)',
+        WebkitBackdropFilter: 'blur(30px)',
         boxShadow: [
           '0 28px 72px rgba(0,0,0,0.6)',
           '0 0 0 1px rgba(248,113,113,0.28)',
