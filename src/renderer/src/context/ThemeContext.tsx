@@ -259,7 +259,9 @@ function withGlass(c: ThemeColors, opacity: number): ThemeColors {
     ...c,
     // The main background is glass too, not just the panels sitting on it. Without this
     // the app reads as normal panels on a solid page rather than as one pane of glass.
-    rootBg: alpha(c.glassLow, k * 0.8),
+    // The page itself must be see-through, not just the panels. This is what lets the
+    // window's acrylic (and therefore the user's desktop) actually show through.
+    rootBg: alpha(c.glassLow, k * 0.55),
     mainBg: 'transparent',
     panelBg: alpha(c.glassLow, k),
     cardBg: alpha(c.glassMid, k),
@@ -299,6 +301,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     // Drives the blur rule in globals.css. Blur is GPU work on a 24/7 app, so it is
     // opt-in and scoped to panels rather than applied to everything.
     document.documentElement.dataset.glass = glass ? 'full' : 'off'
+    // CSS can only ever reveal the app's own background. Seeing the DESKTOP requires the
+    // native window to stop painting one, so ask main to switch the window material.
+    // Reports false on Windows 10 (acrylic is 11-only); the app just stays opaque there.
+    void (window as unknown as { electronAPI?: { setWindowGlass?: (v: boolean) => Promise<unknown> } })
+      .electronAPI?.setWindowGlass?.(glass)?.catch?.(() => { /* not supported here */ })
     localStorage.setItem('pd-theme', theme)
     localStorage.setItem('pd-glass', glass ? '1' : '0')
     localStorage.setItem('pd-glass-opacity', String(glassOpacity))

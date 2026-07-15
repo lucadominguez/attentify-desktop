@@ -417,3 +417,18 @@ html.light .bg-grid {
   padding-right: 0;
   gap: 0;
 }
+
+/* ── Seeing the desktop through the window ───────────────────────────────────
+   globals sets `html, body, #root { background-color: var(--root-bg) }`. That is
+   three stacked layers painting the SAME colour, which is invisible while the
+   colour is opaque and fatal once it is not: three passes of a 0.3 alpha compose
+   to roughly 0.66, so the window would look nearly solid no matter how far the
+   opacity slider was pushed.
+
+   Under glass, exactly one layer paints. html and body go fully transparent so
+   the window's acrylic (and the user's actual desktop behind it) is what shows,
+   and #root carries the single tint. */
+html[data-glass="full"],
+html[data-glass="full"] body {
+  background-color: transparent;
+}

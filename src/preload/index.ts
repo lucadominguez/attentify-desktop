@@ -29,6 +29,8 @@ const api = {
     ipcRenderer.invoke('compat:check'),
   reorderAnalyticsCards: (orderedIds: string[]): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('analytics:reorder-cards', orderedIds),
+  setWindowGlass: (enabled: boolean): Promise<{ ok: boolean; reason?: string }> =>
+    ipcRenderer.invoke('window:set-glass', enabled),
   runCardAction: (cardId: string): Promise<{ ok: boolean; error?: string; result?: unknown }> =>
     ipcRenderer.invoke('cards:run-action', cardId),
   getCardItems: (cardId: string): Promise<{ items: { label: string; detail?: string }[] }> =>

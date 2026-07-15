@@ -152,7 +152,7 @@ function createMainWindow(): void {
     resizable: true,
     frame: false,
     titleBarStyle: 'hidden',
-    backgroundColor: '#0a1628',
+    backgroundColor: '#020912',
     show: false,
     ...(iconPath ? { icon: iconPath } : {}),
     webPreferences: {
@@ -266,6 +266,29 @@ ipcMain.on('window:maximize', () => {
 ipcMain.on('window:close', () => mainWin?.hide())
 
 // Relaunch with admin privileges (Windows: UAC prompt; macOS: sudo relaunch)
+// Make the WINDOW itself see-through to the desktop.
+//
+// This is the part CSS cannot do. Translucent panels only ever show the app's own
+// background: to see the user's actual desktop through the app, the native window has to
+// stop painting an opaque background and let the OS composite behind it.
+//
+// setBackgroundMaterial('acrylic') is the Windows 11 way (22H2 / build 22621+), and it
+// blurs whatever is behind the window. It only shows through where nothing else paints
+// over it, so the renderer must ALSO drop to a translucent --root-bg, which is what the
+// glass theme does. On Windows 10 this is a no-op and the app simply stays opaque, which
+// is why the call reports back rather than failing silently.
+ipcMain.handle('window:set-glass', (_e, enabled: boolean) => {
+  if (process.platform !== 'win32' || !mainWin) return { ok: false, reason: 'unsupported' }
+  try {
+    // The opaque backgroundColor would paint over the acrylic, so it has to go too.
+    mainWin.setBackgroundColor(enabled ? '#00000000' : '#020912')
+    mainWin.setBackgroundMaterial(enabled ? 'acrylic' : 'none')
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 ipcMain.handle('elevation:relaunch-admin', () => {
   // In dev this relaunch is actively harmful, so refuse it.
   //

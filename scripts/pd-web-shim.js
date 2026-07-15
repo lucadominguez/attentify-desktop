@@ -300,6 +300,7 @@
       };
       return Promise.resolve({ items: byPage[id] || [] });
     },
+    setWindowGlass: function () { return Promise.resolve({ ok: false, reason: 'browser demo' }); },
     runCardAction: function () { return Promise.resolve({ ok: true, result: { started: true } }); },
     reorderAnalyticsCards: function (ids) {
       var byId = {}; (store.customAnalyticsCards || []).forEach(function (c) { byId[c.id] = c; });
