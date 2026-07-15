@@ -405,3 +405,20 @@ html.light .bg-grid {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+
+/* ── Collapsed sidebar ───────────────────────────────────────────────────────
+   The rail is 56px. .sidebar-item is built for a labelled row (px-4, gap-3,
+   text-left), so with the label removed the icon sits off-centre and the badge,
+   which is absolutely positioned relative to the row, lands on top of it. These
+   rules re-centre the icon and pin the badge to the corner instead. */
+.sidebar-collapsed .sidebar-item {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+  gap: 0;
+}
+.sidebar-collapsed .sidebar-item > span:not(:first-child) {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+}

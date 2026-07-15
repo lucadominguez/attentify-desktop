@@ -102,7 +102,7 @@ export default function Sidebar({
 
   return (
     <aside
-      className="flex flex-col flex-shrink-0 h-full overflow-hidden"
+      className={`flex flex-col flex-shrink-0 h-full overflow-hidden ${collapsed ? 'sidebar-collapsed' : ''}`}
       style={{
         width: collapsed ? 56 : 220,
         // glassLow: a large structural plane. It stays quiet so the ambient wash reads
@@ -197,10 +197,14 @@ export default function Sidebar({
         </div>
 
         <div className="mt-4">
-          <div className="px-4 mb-1.5 flex items-center gap-2">
-            <span className="hud-label">Utilities</span>
-            <div className="flex-1 h-px" style={{ background: colors.border }} />
-          </div>
+          {/* A section heading needs width the rail does not have; a 59px label in a
+              56px rail is what was spilling over the nav icons. */}
+          {!collapsed && (
+            <div className="px-4 mb-1.5 flex items-center gap-2">
+              <span className="hud-label">Utilities</span>
+              <div className="flex-1 h-px" style={{ background: colors.border }} />
+            </div>
+          )}
           {utilityNav.map(renderItem)}
         </div>
       </nav>
@@ -239,7 +243,7 @@ export default function Sidebar({
       <div className="flex-shrink-0 p-3" style={{ borderTop: `1px solid ${colors.border}` }}>
         <button
           onClick={() => onNavigate('home')}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-[12px] font-medium transition-all hover:brightness-110"
+          className={`w-full flex items-center justify-center py-2 rounded-lg text-[12px] font-medium transition-all hover:brightness-110 ${collapsed ? '' : 'gap-2'}`}
           style={{
             background: colors.accentBg,
             border: `1px solid ${colors.borderMid}`,
@@ -248,7 +252,8 @@ export default function Sidebar({
           title="Open the Attentify assistant"
         >
           <MessageSquare size={13} />
-          Ask Attentify
+          {/* The label wraps to two lines in a 56px rail; the icon carries it there. */}
+          {!collapsed && 'Ask Attentify'}
         </button>
       </div>
     </aside>

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { User } from 'lucide-react'
 import type { AuthState } from '@shared/types'
 import { useTheme } from '../context/ThemeContext'
@@ -74,18 +75,28 @@ export default function AccountMenu({
         {signedIn ? initial : <User size={variant === 'sidebar' ? 14 : 12} />}
       </button>
 
-      {open && (
+      {/* Portalled to <body> deliberately. The sidebar sets backdrop-filter, and a
+          backdrop-filter creates a containing block for position:fixed descendants, so
+          rendering the popover in place trapped it inside the sidebar's stacking context
+          and the main pane painted over it. MetricDrill portals for the same reason. */}
+      {open && createPortal(
         <>
           {/* click-away backdrop */}
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="fixed inset-0 z-[90]" onClick={() => setOpen(false)} />
           <div
-            className="fixed z-50"
+            className="fixed z-[91]"
             style={{ top: pos.top, left: pos.left, right: pos.right, width: PANEL_W }}
             onClick={(e) => e.stopPropagation()}
           >
             <div
               className="rounded-xl overflow-hidden"
-              style={{ background: colors.panelBg, border: `1px solid ${colors.borderMid}`, boxShadow: '0 12px 40px rgba(0,0,0,0.5)' }}
+              style={{
+                background: colors.glassHigh,
+                backdropFilter: colors.blurLg,
+                WebkitBackdropFilter: colors.blurLg,
+                border: `1px solid ${colors.glassEdge}`,
+                boxShadow: `${colors.elevHigh}, ${colors.glassTopLight}`,
+              }}
             >
               <div className="px-4 pt-3 pb-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: colors.textMuted }}>Account</p>
@@ -95,7 +106,8 @@ export default function AccountMenu({
               </div>
             </div>
           </div>
-        </>
+        </>,
+        document.body,
       )}
     </>
   )
