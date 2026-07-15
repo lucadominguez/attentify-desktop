@@ -415,7 +415,7 @@
       { id: 'card5', title: 'Where the week went', description: 'Time split by category', viz: 'progress', order: 4, seeded: true, spec: { rangeDays: 7, groupBy: 'category', metric: 'time', distraction: 'all', limit: 5 }, createdAt: now - 3 * HOUR },
       { id: 'card6', title: 'Today at a glance', description: 'Tracked time and the apps behind it', viz: 'summary', order: 5, seeded: true, spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all', limit: 4 }, createdAt: now - 2 * HOUR },
       { id: 'card7', title: 'What changed this week', description: 'Ranked against the week before', viz: 'ranked', order: 6, seeded: true, spec: { rangeDays: 7, groupBy: 'app', metric: 'time', distraction: 'all', limit: 6 }, createdAt: now - 2 * HOUR },
-      { id: 'card8', kind: 'action', title: 'Deep work block', description: 'A locked 90 minute session', viz: 'number', order: 7, seeded: true, action: { tool: 'start_focus_session', params: { mode: 'deep', durationMs: 5400000 }, label: 'Start 90 min', confirm: true }, spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all' }, createdAt: now - HOUR },
+      { id: 'card8', kind: 'action', title: 'Deep work block', description: 'A locked 90 minute session', viz: 'number', order: 7, seeded: true, action: { tool: 'start_focus_session', params: { mode: 'deep', duration_minutes: 90 }, label: 'Start 90 min', confirm: true }, spec: { rangeDays: 1, groupBy: 'app', metric: 'time', distraction: 'all' }, createdAt: now - HOUR },
     ]); },
     deleteCustomCard: function () { return Promise.resolve({ ok: true }); },
     buildAnalyticsCard: function () { return Promise.resolve({ ok: true, summary: 'Built a card from your description.' }); },

@@ -227,6 +227,9 @@ export interface AppStore {
   // AI assistant creates these via the create_analytics_card tool; the Analytics page
   // renders each one and recomputes it live from tracked activity.
   customAnalyticsCards?: CustomAnalyticsCard[]
+  /** Seed card ids the user deleted. Remembered so re-seeding on launch never
+   *  resurrects a default they threw away. */
+  dismissedSeedIds?: string[]
   // Free-text context the user added on the Logic page to inform the AI. Injected
   // verbatim into the system prompt so it shapes the assistant's reasoning.
   userContext?: UserContextNote[]

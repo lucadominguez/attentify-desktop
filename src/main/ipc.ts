@@ -2,6 +2,7 @@ import { ipcMain, dialog, shell, app, BrowserWindow as ElectronBrowserWindow } f
 import type { BrowserWindow } from 'electron'
 import { writeFile } from 'fs/promises'
 import { getStore, patchStore } from './store'
+import { mergeSeeds } from './cards/seeds'
 import {
   getEffectiveApiKey, getUsageState, getCloudState, setCloudLicense, clearCloudLicense,
   startCheckout, setUsageChangeCallback,
@@ -246,6 +247,17 @@ class AuthRequiredError extends Error {
 
 export function initIpc(): void {
   const store = getStore()
+
+  // Merge the shipped cards in on every launch, not just at install, so an existing user
+  // picks up new defaults too. Seeds the user deleted stay deleted (dismissedSeedIds),
+  // and their own cards are never touched or reordered. This runs in main rather than
+  // behind a gated channel, so the seeds are there for a signed-out user to look at.
+  {
+    const merged = mergeSeeds(store.customAnalyticsCards ?? [], store.dismissedSeedIds ?? [])
+    if (merged.length !== (store.customAnalyticsCards ?? []).length) {
+      patchStore({ customAnalyticsCards: merged })
+    }
+  }
 
   // Wrap ipcMain.handle for the duration of registration so the gate is applied once, at
   // a single choke point, instead of being repeated in ~50 handlers where one omission
@@ -1054,6 +1066,13 @@ export function initIpc(): void {
   })
 
   ipcMain.handle('analytics:delete-card', (_e, id: string) => {
+    // A deleted seed must stay deleted: mergeSeeds runs on every launch, so without
+    // this the default would quietly reappear and the card would feel undeletable.
+    const doomed = (getStore().customAnalyticsCards ?? []).find((c) => c.id === id)
+    if (doomed?.seeded) {
+      const prev = getStore().dismissedSeedIds ?? []
+      if (!prev.includes(id)) patchStore({ dismissedSeedIds: [...prev, id] })
+    }
     const s = getStore()
     patchStore({ customAnalyticsCards: (s.customAnalyticsCards ?? []).filter((c) => c.id !== id) })
     return { ok: true }
