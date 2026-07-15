@@ -36,6 +36,17 @@ export default function App(): React.ReactElement {
   const [breakMode, setBreakMode] = useState<{ endsAt: number; reason?: string } | null>(null)
   const [alwaysOn, setAlwaysOn] = useState(false)
   const [platform, setPlatform] = useState<'windows' | 'mac' | 'linux'>('windows')
+  // Sidebar collapse. Local, not in the store: it is a per-window view preference, and
+  // routing it through IPC would put a layout toggle behind the sign-in gate.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem('sidebarCollapsed') === '1',
+  )
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((v) => {
+      localStorage.setItem('sidebarCollapsed', v ? '0' : '1')
+      return !v
+    })
+  }, [])
 
   const { colors } = useTheme()
 
@@ -301,6 +312,8 @@ export default function App(): React.ReactElement {
       {/* Main layout */}
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapsed={toggleSidebar}
           currentView={view}
           onNavigate={handleNavigate}
           onChatOpen={() => setChatOpen(true)}

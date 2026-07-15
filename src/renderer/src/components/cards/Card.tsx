@@ -239,12 +239,14 @@ export interface CardProps {
   items?: { label: string; detail?: string }[]
   onDelete?: () => void
   onRun?: () => void
+  /** Clicking the card body opens its detail. */
+  onOpen?: () => void
   /** Drag-to-reorder wiring, supplied by CardCanvas. */
   dragHandlers?: React.HTMLAttributes<HTMLDivElement> & { draggable?: boolean }
   isDragging?: boolean
 }
 
-export default function Card({ card, sessions = [], items, onDelete, onRun, dragHandlers, isDragging }: CardProps): React.ReactElement {
+export default function Card({ card, sessions = [], items, onDelete, onRun, onOpen, dragHandlers, isDragging }: CardProps): React.ReactElement {
   const { colors } = useTheme()
   const askAI = useAskAI()
 
@@ -272,6 +274,10 @@ export default function Card({ card, sessions = [], items, onDelete, onRun, drag
   return (
     <div
       {...dragHandlers}
+      onClick={(e) => {
+        // Buttons inside the card own their clicks; only the body opens the detail.
+        if (onOpen && !(e.target as HTMLElement).closest('button')) onOpen()
+      }}
       className="rounded-xl p-3 group"
       style={{
         // glassMid: cards float on the app's backdrop, so the ambient state reads through.
@@ -280,6 +286,7 @@ export default function Card({ card, sessions = [], items, onDelete, onRun, drag
         WebkitBackdropFilter: colors.blurMd,
         border: `1px solid ${colors.glassEdge}`,
         boxShadow: isDragging ? colors.elevHigh : colors.elevLow,
+        cursor: onOpen ? 'pointer' : undefined,
         opacity: isDragging ? 0.6 : 1,
         transition: 'box-shadow 0.15s ease, opacity 0.15s ease',
       }}

@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import Card from './Card'
+import CardDetail from './CardDetail'
 import type { ActivitySession, CustomAnalyticsCard } from '@shared/types'
 
 // A page is a canvas of cards, not a hand-built layout. Order is the user's, so it is
@@ -34,6 +35,7 @@ export function sortCards(cards: CustomAnalyticsCard[]): CustomAnalyticsCard[] {
 export default function CardCanvas({
   cards, sessions = [], itemsByCard, onReorder, onDelete, onRun, empty, columns = 2,
 }: CardCanvasProps): React.ReactElement {
+  const [openId, setOpenId] = useState<string | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [overId, setOverId] = useState<string | null>(null)
 
@@ -82,6 +84,7 @@ export default function CardCanvas({
             items={itemsByCard?.[card.id]}
             onDelete={onDelete ? () => onDelete(card.id) : undefined}
             onRun={onRun ? () => onRun(card) : undefined}
+            onOpen={() => setOpenId(card.id)}
             isDragging={dragId === card.id}
             dragHandlers={{
               draggable: true,
@@ -94,6 +97,11 @@ export default function CardCanvas({
           />
         </div>
       ))}
+      {openId && (() => {
+        const c = ordered.find((x) => x.id === openId)
+        if (!c) return null
+        return <CardDetail card={c} sessions={sessions} items={itemsByCard?.[c.id]} onClose={() => setOpenId(null)} />
+      })()}
     </div>
   )
 }

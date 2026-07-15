@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import {
   Shield, Lock, Calendar, Zap, Clock, BarChart2, Brain, Activity as ActivityIcon,
-  MessageSquare, RefreshCw, ListChecks, Settings, Sun, Moon,
+  MessageSquare, RefreshCw, ListChecks, Settings, Sun, Moon, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import type { ViewName, FocusSession, ElevationStatus } from '@shared/types'
 import PresenceMark from './PresenceMark'
@@ -12,6 +12,9 @@ import { useTheme } from '../context/ThemeContext'
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
 
 interface SidebarProps {
+  /** Collapsed to an icon rail, to give the content more room. */
+  collapsed?: boolean
+  onToggleCollapsed?: () => void
   currentView: ViewName
   onNavigate: (view: ViewName) => void
   onChatOpen: () => void
@@ -49,6 +52,7 @@ const utilityNav: NavItem[] = [
 ]
 
 export default function Sidebar({
+  collapsed = false, onToggleCollapsed,
   currentView, onNavigate, onChatOpen, activeSession, elevation, alertCount = 0, pendingActionCount = 0,
 }: SidebarProps): React.ReactElement {
   const { colors, theme, toggle: toggleTheme } = useTheme()
@@ -78,7 +82,7 @@ export default function Sidebar({
         >
           {item.icon}
         </span>
-        <span className="flex-1">{item.label}</span>
+        {!collapsed && <span className="flex-1">{item.label}</span>}
         {badge && (
           <span
             className="flex-shrink-0 flex items-center justify-center text-[9px] font-bold rounded-full"
@@ -100,7 +104,7 @@ export default function Sidebar({
     <aside
       className="flex flex-col flex-shrink-0 h-full overflow-hidden"
       style={{
-        width: 220,
+        width: collapsed ? 56 : 220,
         // glassLow: a large structural plane. It stays quiet so the ambient wash reads
         // through it instead of competing with the content.
         background: colors.glassLow,
@@ -108,27 +112,30 @@ export default function Sidebar({
         WebkitBackdropFilter: colors.blurMd,
         borderRight: `1px solid ${colors.glassEdge}`,
         boxShadow: colors.glassTopLight,
-        transition: 'background 0.2s ease',
+        // One transition: a second `transition` key would silently replace the first.
+        transition: 'width 0.18s ease, background 0.2s ease',
       }}
     >
       {/* ── Logo ──────────────────────────────────────────────────────────── */}
       <div
-        className="flex items-center gap-2.5 px-4 flex-shrink-0"
+        className={`flex items-center flex-shrink-0 ${collapsed ? 'justify-center' : 'gap-2.5 px-4'}`}
         style={{ height: 56, borderBottom: `1px solid ${colors.border}` }}
       >
         {/* The AI's body: the real mark plus a state-coloured aura that breathes. It is
             an anchor here rather than a centrepiece, because a thing watching over you
-            is mostly still. */}
+            is mostly still. Collapsed, the mark alone still carries the presence. */}
         <PresenceMark size={26} />
 
-        <div className="min-w-0 flex-1">
-          <div
-            className="text-[15px] font-semibold leading-none"
-            style={{ color: colors.textPrimary, letterSpacing: '0.01em' }}
-          >
-            Attentify
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <div
+              className="text-[15px] font-semibold leading-none"
+              style={{ color: colors.textPrimary, letterSpacing: '0.01em' }}
+            >
+              Attentify
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Protection status dot */}
         {elevation === 'full' && activeSession && (
@@ -202,7 +209,7 @@ export default function Sidebar({
           Theme, bug report and account. These used to sit in a cluster in the title
           bar; they live here so the title bar is window chrome only. */}
       <div
-        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2"
+        className={`flex-shrink-0 flex items-center py-2 ${collapsed ? 'flex-col gap-1.5 px-0' : 'gap-1.5 px-3'}`}
         style={{ borderTop: `1px solid ${colors.border}` }}
       >
         <button
@@ -214,7 +221,17 @@ export default function Sidebar({
           {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
         </button>
         <BugReporter currentView={currentView} variant="sidebar" />
-        <div className="flex-1" />
+        {!collapsed && <div className="flex-1" />}
+        {onToggleCollapsed && (
+          <button
+            onClick={onToggleCollapsed}
+            className="flex items-center justify-center rounded transition-colors hover:bg-white/5"
+            style={{ width: 26, height: 26, color: colors.textMuted }}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar for more room'}
+          >
+            {collapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+          </button>
+        )}
         <AccountMenu variant="sidebar" />
       </div>
 
