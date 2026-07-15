@@ -39,6 +39,32 @@ export interface ThemeColors {
   aiBubbleBg: string
   aiBubbleBorder: string
   aiBubbleText: string
+
+  // ── Glass ───────────────────────────────────────────────────────────────────
+  // Translucency is what makes glass; blur only keeps what shows through from
+  // becoming noise behind text. Surfaces below MUST stay meaningfully transparent,
+  // or the blur costs GPU and buys nothing (which is exactly what the overlay did
+  // for months at 0.97 alpha).
+  //
+  // Three depths, used consistently:
+  //   glassLow  — the sidebar and other large structural planes
+  //   glassMid  — cards and panels floating on the app's backdrop
+  //   glassHigh — popovers and modals that float above everything
+  glassLow: string
+  glassMid: string
+  glassHigh: string
+  /** Hairline edge. Light catches the top of a pane, so pair with glassTopLight. */
+  glassEdge: string
+  /** inset highlight along the top edge */
+  glassTopLight: string
+  /** Blur radii, kept few on purpose: every blurred layer is GPU work in an app that runs 24/7. */
+  blurSm: string
+  blurMd: string
+  blurLg: string
+  /** Elevation shadows, tuned per theme (dark needs depth, light needs softness). */
+  elevLow: string
+  elevMid: string
+  elevHigh: string
 }
 
 const DARK: ThemeColors = {
@@ -74,6 +100,18 @@ const DARK: ThemeColors = {
   aiBubbleBg:      'rgba(4,11,22,0.97)',
   aiBubbleBorder:  'rgba(99,102,241,0.16)',
   aiBubbleText:    '#d0d0d0',
+
+  glassLow:        'rgba(6,14,28,0.55)',
+  glassMid:        'rgba(10,20,38,0.42)',
+  glassHigh:       'rgba(12,22,42,0.72)',
+  glassEdge:       'rgba(255,255,255,0.10)',
+  glassTopLight:   'inset 0 1px 0 rgba(255,255,255,0.12)',
+  blurSm:          'blur(10px) saturate(140%)',
+  blurMd:          'blur(20px) saturate(150%)',
+  blurLg:          'blur(30px) saturate(160%)',
+  elevLow:         '0 2px 10px rgba(0,0,0,0.30)',
+  elevMid:         '0 10px 30px rgba(0,0,0,0.42)',
+  elevHigh:        '0 24px 64px rgba(0,0,0,0.55)',
 }
 
 const LIGHT: ThemeColors = {
@@ -109,6 +147,23 @@ const LIGHT: ThemeColors = {
   aiBubbleBg:      'rgba(255,255,255,0.98)',
   aiBubbleBorder:  'rgba(0,0,0,0.1)',
   aiBubbleText:    '#1a1a1a',
+
+  // Light glass is not dark glass inverted. Frosted white over a light backdrop has
+  // far less contrast to work with, so the edge does the load-bearing separation (a
+  // soft dark hairline, not a bright rim) and the shadows are cool-tinted and soft
+  // rather than black and deep. Alphas sit higher than dark's for the same reason:
+  // text needs something to sit on.
+  glassLow:        'rgba(255,255,255,0.60)',
+  glassMid:        'rgba(255,255,255,0.52)',
+  glassHigh:       'rgba(255,255,255,0.82)',
+  glassEdge:       'rgba(15,23,42,0.10)',
+  glassTopLight:   'inset 0 1px 0 rgba(255,255,255,0.85)',
+  blurSm:          'blur(10px) saturate(130%)',
+  blurMd:          'blur(20px) saturate(140%)',
+  blurLg:          'blur(30px) saturate(150%)',
+  elevLow:         '0 2px 10px rgba(15,23,42,0.06)',
+  elevMid:         '0 10px 30px rgba(15,23,42,0.10)',
+  elevHigh:        '0 24px 64px rgba(15,23,42,0.16)',
 }
 
 // CSS variable names mirror the colors object keys (kebab-case)
@@ -128,6 +183,17 @@ function applyCssVars(c: ThemeColors): void {
   el.style.setProperty('--accent',            c.accent)
   el.style.setProperty('--accent-bg',         c.accentBg)
   el.style.setProperty('--accent-glow',       c.accentGlow)
+  el.style.setProperty('--glass-low',         c.glassLow)
+  el.style.setProperty('--glass-mid',         c.glassMid)
+  el.style.setProperty('--glass-high',        c.glassHigh)
+  el.style.setProperty('--glass-edge',        c.glassEdge)
+  el.style.setProperty('--glass-top-light',   c.glassTopLight)
+  el.style.setProperty('--blur-sm',           c.blurSm)
+  el.style.setProperty('--blur-md',           c.blurMd)
+  el.style.setProperty('--blur-lg',           c.blurLg)
+  el.style.setProperty('--elev-low',          c.elevLow)
+  el.style.setProperty('--elev-mid',          c.elevMid)
+  el.style.setProperty('--elev-high',         c.elevHigh)
   el.style.setProperty('--brand',             c.brand)
   el.style.setProperty('--positive',          c.positive)
   el.style.setProperty('--positive-bg',       c.positiveBg)

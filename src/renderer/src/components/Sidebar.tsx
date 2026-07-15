@@ -4,7 +4,7 @@ import {
   MessageSquare, RefreshCw, ListChecks, Settings, Sun, Moon,
 } from 'lucide-react'
 import type { ViewName, FocusSession, ElevationStatus } from '@shared/types'
-import BrandMark from './BrandMark'
+import PresenceMark from './PresenceMark'
 import BugReporter from './BugReporter'
 import AccountMenu from './AccountMenu'
 import { useTheme } from '../context/ThemeContext'
@@ -101,8 +101,13 @@ export default function Sidebar({
       className="flex flex-col flex-shrink-0 h-full overflow-hidden"
       style={{
         width: 220,
-        background: colors.panelBg,
-        borderRight: `1px solid ${colors.border}`,
+        // glassLow: a large structural plane. It stays quiet so the ambient wash reads
+        // through it instead of competing with the content.
+        background: colors.glassLow,
+        backdropFilter: colors.blurMd,
+        WebkitBackdropFilter: colors.blurMd,
+        borderRight: `1px solid ${colors.glassEdge}`,
+        boxShadow: colors.glassTopLight,
         transition: 'background 0.2s ease',
       }}
     >
@@ -111,10 +116,10 @@ export default function Sidebar({
         className="flex items-center gap-2.5 px-4 flex-shrink-0"
         style={{ height: 56, borderBottom: `1px solid ${colors.border}` }}
       >
-        {/* Attentify shield mark */}
-        <div className="flex-shrink-0 relative" style={{ width: 26, height: 26 }}>
-          <BrandMark size={26} />
-        </div>
+        {/* The AI's body: the real mark plus a state-coloured aura that breathes. It is
+            an anchor here rather than a centrepiece, because a thing watching over you
+            is mostly still. */}
+        <PresenceMark size={26} />
 
         <div className="min-w-0 flex-1">
           <div

@@ -16,6 +16,8 @@ import Timesheets from './views/Timesheets'
 import Logic from './views/Logic'
 import Activity from './views/Activity'
 import ChatPanel from './chat/ChatPanel'
+import AmbientWash from './components/AmbientWash'
+import { PresenceProvider } from './context/PresenceContext'
 import AuthPanel from './components/AuthPanel'
 import type { ViewName, AppStore, ScanResult, HeuristicAlert } from '@shared/types'
 import { Minus, Square, X, Coffee, Download, Lock } from 'lucide-react'
@@ -191,7 +193,14 @@ export default function App(): React.ReactElement {
   }
 
   return (
-    <div className="flex flex-col h-screen w-full overflow-hidden" style={{ background: colors.rootBg, transition: 'background 0.2s ease' }}>
+    <PresenceProvider
+      hasActiveSession={!!activeSession}
+      alertCount={activeAlertCount}
+      pendingCount={pendingActionCount}
+    >
+    <div className="flex flex-col h-screen w-full overflow-hidden relative" style={{ background: colors.rootBg, transition: 'background 0.2s ease' }}>
+      {/* The app's ambient response to your state. Behind everything, pointer-events:none. */}
+      <AmbientWash />
       {/* Custom title bar */}
       <div
         className="titlebar-drag flex items-center justify-between px-4 flex-shrink-0"
@@ -302,7 +311,9 @@ export default function App(): React.ReactElement {
         />
         <main
           className="flex-1 overflow-hidden relative flex flex-col"
-          style={{ background: colors.mainBg, transition: 'background 0.2s ease' }}
+          // Transparent on purpose: the ambient wash lives behind the whole app, so an
+          // opaque main plane would cover the one surface carrying the AI's state.
+          style={{ background: 'transparent', transition: 'background 0.2s ease' }}
         >
           {signedOut && (
             <div className="flex-shrink-0 flex items-center justify-between px-5 py-1.5"
@@ -451,6 +462,7 @@ export default function App(): React.ReactElement {
         </>
       )}
     </div>
+    </PresenceProvider>
   )
 }
 

@@ -357,3 +357,27 @@ html.light .bg-grid {
   50%       { opacity: 1;   transform: scale(1.4); }
 }
 .dot-pulse { animation: dotPulse 2s ease-in-out infinite; }
+
+/* ── Presence ────────────────────────────────────────────────────────────────
+   The aura behind the brand mark. The ONE thing in the app allowed to move, and
+   it barely does: a ~5s cycle at low amplitude reads as alive in peripheral
+   vision and disappears when looked at directly. An app that exists to protect
+   attention must not spend it, so nothing else loops. */
+@keyframes presenceBreathe {
+  0%, 100% { transform: scale(1);    opacity: 0.72; }
+  50%      { transform: scale(1.09); opacity: 1; }
+}
+.presence-breathe { animation: presenceBreathe 5s ease-in-out infinite; }
+
+/* ── Reduced motion ──────────────────────────────────────────────────────────
+   Respect the OS setting. Nothing here is load-bearing: the presence still reads
+   through colour and the ambient wash still shifts, they just stop moving. */
+@media (prefers-reduced-motion: reduce) {
+  .presence-breathe { animation: none; }
+  .dot-pulse { animation: none; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
