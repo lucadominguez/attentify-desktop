@@ -84,13 +84,19 @@ export default function Sidebar({
         </span>
         {!collapsed && <span className="flex-1">{item.label}</span>}
         {badge && (
+          // Collapsed, the badge cannot sit inline: there is no room beside the icon, so
+          // it rides the icon's top-right corner instead, like a notification dot.
           <span
-            className="flex-shrink-0 flex items-center justify-center text-[9px] font-bold rounded-full"
+            className={`flex items-center justify-center text-[9px] font-bold rounded-full ${collapsed ? 'absolute' : 'flex-shrink-0'}`}
             style={{
-              minWidth: 16, height: 16, padding: '0 4px',
-              background: `${badge.color}22`,
-              border: `1px solid ${badge.color}80`,
-              color: badge.color,
+              minWidth: collapsed ? 13 : 16,
+              height: collapsed ? 13 : 16,
+              padding: collapsed ? 0 : '0 4px',
+              fontSize: collapsed ? 8 : undefined,
+              ...(collapsed ? { top: 4, right: 8, lineHeight: 1 } : null),
+              background: collapsed ? badge.color : `${badge.color}22`,
+              border: `1px solid ${collapsed ? badge.color : `${badge.color}80`}`,
+              color: collapsed ? '#0a1020' : badge.color,
             }}
           >
             {badge.n > 9 ? '9+' : badge.n}
@@ -154,8 +160,27 @@ export default function Sidebar({
         )}
       </div>
 
-      {/* ── Elevation warning ─────────────────────────────────────────────── */}
-      {(elevation === 'soft' || elevation === 'unknown') && (
+      {/* ── Elevation warning ───────────────────────────────────────────────
+          A heading, a paragraph and a button cannot live in a 56px rail. Collapsed,
+          the warning becomes a single amber shield button with the same action and
+          the full text as its tooltip: same meaning, same one click, no crushing. */}
+      {collapsed && (elevation === 'soft' || elevation === 'unknown') && (
+        <button
+          onClick={handleRelaunch}
+          disabled={relaunching}
+          title="Blocking is disabled. Admin rights are required for site blocking. Click to relaunch as administrator."
+          className="mx-auto mt-2.5 flex-shrink-0 flex items-center justify-center rounded-lg transition-all disabled:opacity-60"
+          style={{
+            width: 32, height: 32,
+            background: 'rgba(251,191,36,0.10)',
+            border: '1px solid rgba(251,191,36,0.30)',
+            color: '#fbbf24',
+          }}
+        >
+          {relaunching ? <RefreshCw size={13} className="animate-spin" /> : <Shield size={13} />}
+        </button>
+      )}
+      {!collapsed && (elevation === 'soft' || elevation === 'unknown') && (
         <div
           className="mx-3 mt-2.5 flex-shrink-0 rounded-lg"
           style={{

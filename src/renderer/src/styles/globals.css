@@ -417,8 +417,3 @@ html.light .bg-grid {
   padding-right: 0;
   gap: 0;
 }
-.sidebar-collapsed .sidebar-item > span:not(:first-child) {
-  position: absolute;
-  top: 3px;
-  right: 6px;
-}
