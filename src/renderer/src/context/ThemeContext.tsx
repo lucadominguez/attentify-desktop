@@ -232,6 +232,25 @@ const ThemeContext = createContext<ThemeCtx>({
   setGlassOpacity: () => {},
 })
 
+// ── ARCHIVED: the full-glass experiment ──────────────────────────────────────
+//
+// Shelved 2026-07-15 at the user's request, not deleted. The mechanism works (the
+// window really does go see-through via Windows 11 acrylic; see window:set-glass in
+// main/index.ts), but the look was not worth keeping yet.
+//
+// To bring it back: set this true and restore the toggle + opacity slider in
+// views/Settings.tsx (see the commit that archived this). The tokens, withGlass(),
+// the CSS in globals.css and the native acrylic path all remain wired.
+//
+// What was learned, so it is not re-discovered the hard way:
+//   • saturate() on a blur of the desktop smears colour everywhere. Never use it.
+//   • Only ONE plane may carry backdrop-filter; nested blurs compound into mush.
+//   • Coloured ambient washes and a see-through window do not mix.
+//   • Below ~0.25 alpha the desktop reads through the text.
+//   • backgroundMaterial is only reliably applied when the window is CREATED, so the
+//     pref must live in the store where main can read it at construction.
+const GLASS_EXPERIMENT_ENABLED = false
+
 // The experiment, in one function.
 //
 // Full glass is ONE swap: the opaque surface tokens are replaced by the translucent
@@ -294,7 +313,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   })
   // localStorage, not the store: a look is a per-window view preference, and routing it
   // through IPC would put it behind the sign-in gate.
-  const [glass, setGlass] = useState<boolean>(() => localStorage.getItem('pd-glass') === '1')
+  const [glass, setGlass] = useState<boolean>(() => GLASS_EXPERIMENT_ENABLED && localStorage.getItem('pd-glass') === '1')
   const [glassOpacity, setGlassOpacity] = useState<number>(() => {
     const v = Number(localStorage.getItem('pd-glass-opacity'))
     return Number.isFinite(v) && v >= 0.25 && v <= 0.9 ? v : 0.6
@@ -310,7 +329,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   useEffect(() => {
     const api = (window as unknown as { electronAPI?: { getStore?: () => Promise<{ settings?: { fullGlass?: boolean; glassOpacity?: number } }> } }).electronAPI
     api?.getStore?.().then((st) => {
-      if (typeof st?.settings?.fullGlass === 'boolean') setGlass(st.settings.fullGlass)
+      if (GLASS_EXPERIMENT_ENABLED && typeof st?.settings?.fullGlass === 'boolean') setGlass(st.settings.fullGlass)
       const o = st?.settings?.glassOpacity
       if (typeof o === 'number' && o >= 0.25 && o <= 0.9) setGlassOpacity(o)
     }).catch(() => { /* keep the localStorage value */ })
@@ -339,7 +358,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   }, [theme, glass, glassOpacity, colors])
 
   const toggle = (): void => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
-  const toggleGlass = (): void => setGlass((g) => !g)
+  const toggleGlass = (): void => { if (GLASS_EXPERIMENT_ENABLED) setGlass((g) => !g) }
 
   return (
     <ThemeContext.Provider value={{ theme, colors, toggle, glass, toggleGlass, glassOpacity, setGlassOpacity }}>
