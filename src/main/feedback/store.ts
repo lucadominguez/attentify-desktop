@@ -206,6 +206,149 @@ export function countFeedback(sinceMs: number): { agree: number; disagree: numbe
   return out
 }
 
+// ── Learned adjustments (scoped correction memory) ──────────────────────────────
+
+export interface AdjustmentRow {
+  id: string
+  ts: number
+  scope: 'route' | 'domain_goal' | 'domain' | 'global'
+  scope_key: string
+  target_value?: string
+  goal_id?: string
+  kind: 'suppress' | 'downweight'
+  weight_delta?: number
+  reason?: string
+  source?: string
+  error_prob?: number
+  support: number
+  active: number
+  updated_at?: number
+  expires_at?: number
+}
+
+// Insert, or reinforce an existing adjustment for the same scope_key+kind (bumping its
+// support and recency). Reinforcement is what later licenses widening the scope.
+export function upsertAdjustment(a: Omit<AdjustmentRow, 'id' | 'ts' | 'support' | 'active'> & { id?: string; ts?: number }): { id: string; support: number } {
+  try {
+    const existing = getDb().exec(
+      "SELECT id, support FROM learned_adjustments WHERE scope_key=? AND kind=? AND active=1 LIMIT 1",
+      [a.scope_key, a.kind]
+    )
+    const row = existing[0]?.values?.[0]
+    if (row) {
+      const id = row[0] as string
+      const support = (row[1] as number) + 1
+      getDb().run('UPDATE learned_adjustments SET support=?, updated_at=?, error_prob=?, reason=? WHERE id=?',
+        [support, Date.now(), a.error_prob ?? null, a.reason ?? null, id])
+      markDirty()
+      return { id, support }
+    }
+    const id = a.id ?? randomUUID()
+    getDb().run(
+      `INSERT INTO learned_adjustments (id,ts,scope,scope_key,target_value,goal_id,kind,weight_delta,reason,source,error_prob,support,active,updated_at,expires_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,1,1,?,?)`,
+      [id, a.ts ?? Date.now(), a.scope, a.scope_key, a.target_value ?? null, a.goal_id ?? null,
+       a.kind, a.weight_delta ?? null, a.reason ?? null, a.source ?? null, a.error_prob ?? null,
+       Date.now(), a.expires_at ?? null]
+    )
+    markDirty()
+    return { id, support: 1 }
+  } catch { return { id: a.id ?? 'err', support: 0 } }
+}
+
+// Every active adjustment that could apply to a target: matched by domain, or by the
+// route/domain_goal scope_key the caller passes. Widest matching set; the caller reduces.
+export function findAdjustments(targetValue: string, scopeKeys: string[]): AdjustmentRow[] {
+  try {
+    const keys = [...new Set([targetValue, ...scopeKeys])].filter(Boolean)
+    if (keys.length === 0) return []
+    const ph = keys.map(() => '?').join(',')
+    const rows = getDb().exec(
+      `SELECT * FROM learned_adjustments WHERE active=1 AND (target_value=? OR scope_key IN (${ph})) AND (expires_at IS NULL OR expires_at > ?)`,
+      [targetValue, ...keys, Date.now()]
+    )
+    if (!rows[0]) return []
+    return rows[0].values.map((r: unknown[]) => mapAdjustment(rows[0].columns, r))
+  } catch { return [] }
+}
+
+export function listAdjustments(limit = 100): AdjustmentRow[] {
+  try {
+    const rows = getDb().exec('SELECT * FROM learned_adjustments WHERE active=1 ORDER BY updated_at DESC, ts DESC LIMIT ?', [limit])
+    if (!rows[0]) return []
+    return rows[0].values.map((r: unknown[]) => mapAdjustment(rows[0].columns, r))
+  } catch { return [] }
+}
+
+function mapAdjustment(cols: string[], r: unknown[]): AdjustmentRow {
+  const o: Record<string, unknown> = {}
+  cols.forEach((c, i) => { o[c] = r[i] })
+  return {
+    id: o.id as string, ts: o.ts as number, scope: o.scope as AdjustmentRow['scope'],
+    scope_key: o.scope_key as string, target_value: (o.target_value as string) ?? undefined,
+    goal_id: (o.goal_id as string) ?? undefined, kind: o.kind as AdjustmentRow['kind'],
+    weight_delta: (o.weight_delta as number) ?? undefined, reason: (o.reason as string) ?? undefined,
+    source: (o.source as string) ?? undefined, error_prob: (o.error_prob as number) ?? undefined,
+    support: o.support as number, active: o.active as number,
+    updated_at: (o.updated_at as number) ?? undefined, expires_at: (o.expires_at as number) ?? undefined,
+  }
+}
+
+// Recent disagreement signals for one fingerprint — the raw evidence the hypothesis engine
+// weights. Includes the signal type and whether goals differed across occurrences (which
+// governs how wide a correction may generalize).
+export function feedbackForFingerprint(fingerprint: string, withinMs = 30 * 24 * 3600_000): FeedbackRow[] {
+  try {
+    const rows = getDb().exec(
+      "SELECT id,ts,decision_id,target_type,target_value,fingerprint,signal,user_decision,goal_id,latency_ms,note FROM classification_feedback WHERE fingerprint=? AND ts > ? ORDER BY ts DESC LIMIT 50",
+      [fingerprint, Date.now() - withinMs]
+    )
+    if (!rows[0]) return []
+    return rows[0].values.map((r: unknown[]) => ({
+      id: r[0] as string, ts: r[1] as number, decision_id: (r[2] as string) ?? undefined,
+      target_type: (r[3] as string) ?? undefined, target_value: (r[4] as string) ?? undefined,
+      fingerprint: (r[5] as string) ?? undefined, signal: r[6] as string,
+      user_decision: r[7] as FeedbackRow['user_decision'], goal_id: (r[8] as string) ?? undefined,
+      latency_ms: (r[9] as number) ?? undefined, note: (r[10] as string) ?? undefined,
+    }))
+  } catch { return [] }
+}
+
+// ── Error hypotheses (engineering diagnosis) ────────────────────────────────────
+
+export interface HypothesisRow {
+  id: string
+  ts: number
+  decision_id?: string
+  component?: string
+  target_value?: string
+  fingerprint?: string
+  error_prob: number
+  failure_stage?: string
+  failure_mode?: string
+  severity?: string
+  evidence?: unknown
+  status?: string
+  recovered?: number
+}
+
+export function insertHypothesis(h: Omit<HypothesisRow, 'id' | 'ts'> & { id?: string; ts?: number }): string {
+  const id = h.id ?? randomUUID()
+  try {
+    getDb().run(
+      `INSERT INTO error_hypotheses (id,ts,decision_id,component,target_value,fingerprint,error_prob,failure_stage,failure_mode,severity,evidence,status,recovered)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, h.ts ?? Date.now(), h.decision_id ?? null, h.component ?? null, h.target_value ?? null,
+       h.fingerprint ?? null, h.error_prob, h.failure_stage ?? null, h.failure_mode ?? null,
+       h.severity ?? null, h.evidence != null ? JSON.stringify(h.evidence) : null,
+       h.status ?? 'suspected', h.recovered ? 1 : 0]
+    )
+    getDb().run('DELETE FROM error_hypotheses WHERE id NOT IN (SELECT id FROM error_hypotheses ORDER BY ts DESC LIMIT 2000)')
+    markDirty()
+  } catch { /* best-effort */ }
+  return id
+}
+
 function safeParse(s: string): Record<string, unknown> | undefined {
   try { return JSON.parse(s) } catch { return undefined }
 }

@@ -514,3 +514,23 @@ export interface CalibrationReport {
   worstCategory?: CategoryCalibration
   generatedAt: number
 }
+
+// A learned correction the classifier consults before deciding: a context the user
+// repeatedly reversed, at the narrowest scope the evidence supports.
+export interface LearnedAdjustment {
+  id: string
+  ts: number
+  scope: 'route' | 'domain_goal' | 'domain' | 'global'
+  scope_key: string
+  target_value?: string
+  goal_id?: string
+  kind: 'suppress' | 'downweight'
+  weight_delta?: number
+  reason?: string
+  source?: string
+  error_prob?: number
+  support: number
+  active: number
+  updated_at?: number
+  expires_at?: number
+}

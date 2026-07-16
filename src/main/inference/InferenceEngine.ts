@@ -8,7 +8,7 @@ import { getStore, patchStore } from '../store'
 import { canUseAi, recordUsage } from '../billing'
 import { resolveModel } from '../agent/modelRouter'
 import { debugLog } from '../debug/logger'
-import { recordDecision } from '../feedback/FeedbackService'
+import { recordDecision, getApplicableAdjustment } from '../feedback/FeedbackService'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { ActivitySession } from '../../shared/types'
 
@@ -768,12 +768,37 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     meta: { reasoning: string; source: string; title?: string; goalId?: string; category?: string; policyWeight?: number; url?: string }
   ): void {
     const evidence = { source: meta.source, title: meta.title }
+
+    // Consult LEARNED CORRECTIONS before deciding. A context the user has repeatedly
+    // reversed is suppressed (never auto-blocked here again) or downweighted, at whatever
+    // scope was learned. This is what turns their past rejections from inert rows into
+    // behaviour — the classifier stops repeating a mistake it was told about.
+    const originalConfidence = confidence
+    const adj = getApplicableAdjustment(value, meta.url, meta.goalId)
+    if (adj.downweight) confidence = Math.max(0, confidence - adj.downweight)
+    if (adj.suppress) confidence = Math.min(confidence, CONFIDENCE_SUGGEST - 0.01) // demote below suggest → skip
+    const wasAdjusted = confidence !== originalConfidence
+
     const pct = Math.round(confidence * 100)
     const action = confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto' ? 'auto_block'
       : confidence >= CONFIDENCE_AUTO_BLOCK ? 'suggest(ask-mode)'
       : confidence >= CONFIDENCE_SUGGEST ? 'suggest'
       : 'skip'
-    debugLog('inference:candidate', { type, value, confidence: pct, source: meta.source, action, reasoning: meta.reasoning?.slice(0, 80) })
+    debugLog('inference:candidate', { type, value, confidence: pct, source: meta.source, action, adjusted: wasAdjusted, reasoning: meta.reasoning?.slice(0, 80) })
+
+    // A learned correction demoted this below the suggest bar: record the suppression for
+    // the audit trail (so "the correction is working" is visible) and stop. Nothing is
+    // shown to the user, which is the whole point of the correction.
+    if (wasAdjusted && action === 'skip') {
+      recordDecision({
+        targetType: type, targetValue: value, action: 'skip', confidence,
+        policyWeight: meta.policyWeight, category: meta.category, source: meta.source,
+        reasoning: `suppressed by learned correction: ${adj.reason ?? 'user previously reversed this'}`,
+        goalId: meta.goalId, url: meta.url,
+        features: { suppressed: true, originalConfidence, adjustmentReason: adj.reason },
+      })
+      return
+    }
 
     // Dedup: skip if a non-rejected inference already exists for this value.
     // Covers 'pending', 'auto_applied', AND 'confirmed' so a previously-confirmed
@@ -802,6 +827,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
       goalId: meta.goalId ?? goals[0]?.id,
       goalText,
       url: meta.url,
+      features: wasAdjusted ? { originalConfidence, downweight: adj.downweight } : undefined,
     })
 
     if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto') {

@@ -211,6 +211,8 @@ const api = {
   // and an on-demand review pass over unreviewed disagreements.
   getClassifierCalibration: (windowDays?: number): Promise<import('../shared/types').CalibrationReport> =>
     ipcRenderer.invoke('mistake:calibration', windowDays),
+  getLearnedAdjustments: (limit?: number): Promise<import('../shared/types').LearnedAdjustment[]> =>
+    ipcRenderer.invoke('mistake:adjustments', limit),
   reviewClassifierMistakes: (): Promise<{ reviewed: number; mistakes: number }> =>
     ipcRenderer.invoke('mistake:review-now'),
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Shield, Zap, Bell, Key, CheckCircle, Sparkles, Sun, Moon, TrendingUp, ChevronRight, RotateCcw, History, AlertTriangle, RefreshCw, Cpu, XCircle } from 'lucide-react'
 import { useTheme } from '../context/ThemeContext'
+import SelfEvaluationPanel from '../components/SelfEvaluationPanel'
 import type { AppStore, UsageState, CloudState, ViewName, ChangeEntry, UpdateStatus, CompatReport, CompatStatus } from '@shared/types'
 
 const api = (window as unknown as { electronAPI: Window['electronAPI'] }).electronAPI
@@ -255,6 +256,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: store.settings.shareDiagnostics === false ? 2 : 22 }} />
             </button>
           </div>
+          {/* Classifier self-evaluation: calibration, learned corrections, caught mistakes. */}
+          <SelfEvaluationPanel />
           {/* Updates */}
           <div className="flex items-center justify-between p-4 rounded-lg mt-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="pr-3">

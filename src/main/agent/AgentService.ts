@@ -328,27 +328,36 @@ export class AgentService {
     this.lastFrictionCheck = now
     if (!canUseAi()) return
     try {
-      const sys = `You review ONE exchange between a user and a focus assistant and detect PRODUCT FRICTION, a sign the app fell short of what the user expected. Categories:
-- missed-nuance: misread what the user meant.
-- detection-gap: failed to auto-detect/notice something the user expected it to.
-- wrong-action: did the wrong thing.
-- needs-clarification: had to ask because it couldn't infer.
-- other-friction: any other UX/logic shortfall.
-Reply with ONLY compact JSON, no prose: {"friction":<true|false>,"category":"<category or none>","note":"<=18 words on what fell short"}
-Only report REAL friction (a correction, frustration, or a clear gap). Ordinary helpful back-and-forth is NOT friction.`
-      const input = `User: ${userText.slice(0, 700)}\nAssistant: ${assistantText.slice(0, 700)}`
-      const raw = await this.complete(sys, input, 120)
+      // Decision-centric, not complaint-centric. The critical job is to tell a real
+      // correction apart from ordinary refinement or a changed mind — misclassifying those
+      // as errors is how a system starts falsely apologizing and corrupts its own training
+      // data. Only the correction/failure classes are logged as errors.
+      const sys = `You judge whether the LATEST user message is EVIDENCE that the assistant's previous decision, interpretation, or action was wrong or incomplete. Classify the message as exactly one change_type:
+- new_request: a fresh, unrelated ask. NOT an error.
+- refinement: a small tweak to a result that was fine ("make it a bit larger"). NOT an error.
+- preference_change: they changed their mind; the earlier choice was reasonable at the time ("actually, do X instead"). NOT an error.
+- implicit_correction: no complaint words, but they reverse a result or re-state a constraint the assistant violated. IS an error.
+- explicit_correction: they directly say it was wrong / misunderstood / not what they asked. IS an error.
+- execution_failure: the assistant claimed something happened that did not. IS an error.
+Also identify failure_stage (context_capture | intent_inference | classification | reasoning | policy | action_execution | response_generation | unknown) and failure_mode (misinterpretation | ignored_constraint | missing_context | wrong_action | failed_execution | unnecessary_clarification | other).
+Reply with ONLY compact JSON: {"change_type":"...","error":<bool>,"failure_stage":"...","failure_mode":"...","corrected_fact":"<=18 words or empty","confidence":0.0-1.0}`
+      const input = `Assistant (previous): ${assistantText.slice(0, 700)}\nUser (latest): ${userText.slice(0, 700)}`
+      const raw = await this.complete(sys, input, 140)
       const m = raw.match(/\{[\s\S]*\}/)
       if (!m) return
-      const p = JSON.parse(m[0]) as { friction?: boolean; category?: string; note?: string }
-      if (p && p.friction) {
+      const p = JSON.parse(m[0]) as { change_type?: string; error?: boolean; failure_stage?: string; failure_mode?: string; corrected_fact?: string; confidence?: number }
+      const isError = p?.error === true && ['implicit_correction', 'explicit_correction', 'execution_failure'].includes(String(p.change_type))
+      if (isError) {
         reportIssue({
           kind: 'ai_friction',
-          severity: 'low',
-          category: String(p.category || 'other-friction').slice(0, 40),
-          title: 'AI friction detected in chat',
-          description: String(p.note || '').slice(0, 300),
-          context: { excerpt: input, conversationId },
+          severity: p.change_type === 'execution_failure' ? 'medium' : 'low',
+          category: String(p.failure_mode || p.change_type || 'other').slice(0, 40),
+          title: `Chat ${String(p.change_type).replace('_', ' ')}: ${p.failure_stage ?? 'unknown'} stage`,
+          description: [
+            p.corrected_fact ? `Corrected: ${p.corrected_fact}.` : '',
+            `stage=${p.failure_stage ?? 'unknown'} mode=${p.failure_mode ?? 'other'} conf=${p.confidence ?? '?'}`,
+          ].filter(Boolean).join(' ').slice(0, 300),
+          context: { excerpt: input, conversationId, classification: p },
         })
       }
     } catch { /* best-effort */ }

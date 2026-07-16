@@ -296,6 +296,53 @@ CREATE INDEX IF NOT EXISTS idx_cfb_ts       ON classification_feedback(ts);
 CREATE INDEX IF NOT EXISTS idx_cfb_decision ON classification_feedback(decision_id);
 CREATE INDEX IF NOT EXISTS idx_cfb_reviewed ON classification_feedback(reviewed);
 `,
+  '006_corrections.sql': `
+-- Scoped correction memory. A rejection must not terminate as an inert 'rejected' row: it
+-- becomes a learned exception the classifier consults BEFORE deciding, at the narrowest
+-- scope the evidence supports (a youtube tutorial being fine for a coding goal must not
+-- teach "all youtube is fine"). Scope widens only when repeated corrections agree.
+CREATE TABLE IF NOT EXISTS learned_adjustments (
+  id            TEXT PRIMARY KEY,
+  ts            INTEGER NOT NULL,
+  scope         TEXT NOT NULL,        -- route | domain_goal | domain | global
+  scope_key     TEXT NOT NULL,        -- fingerprint | domain|goal | domain
+  target_value  TEXT,                 -- domain/app, for fast lookup
+  goal_id       TEXT,
+  kind          TEXT NOT NULL,        -- suppress | downweight
+  weight_delta  REAL,                 -- for downweight
+  reason        TEXT,
+  source        TEXT,                 -- behavioural | mistake_review
+  error_prob    REAL,
+  support       INTEGER NOT NULL DEFAULT 1,   -- corrections backing this
+  active        INTEGER NOT NULL DEFAULT 1,
+  updated_at    INTEGER,
+  expires_at    INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_ladj_target   ON learned_adjustments(target_value);
+CREATE INDEX IF NOT EXISTS idx_ladj_scopekey ON learned_adjustments(scope_key);
+CREATE INDEX IF NOT EXISTS idx_ladj_active   ON learned_adjustments(active);
+
+-- The engineering diagnosis of a detected error: structured, aggregatable, versioned —
+-- separate from the one-line user-facing message. failureStage answers "where", failureMode
+-- answers "how", and errorProbability is the aggregated evidence, not one signal.
+CREATE TABLE IF NOT EXISTS error_hypotheses (
+  id             TEXT PRIMARY KEY,
+  ts             INTEGER NOT NULL,
+  decision_id    TEXT,
+  component      TEXT,                -- distraction_classifier | chat | ...
+  target_value   TEXT,
+  fingerprint    TEXT,
+  error_prob     REAL NOT NULL,
+  failure_stage  TEXT,
+  failure_mode   TEXT,
+  severity       TEXT,
+  evidence       TEXT,                -- JSON: [{type,strength,ts}]
+  status         TEXT NOT NULL DEFAULT 'suspected',  -- suspected | confirmed | dismissed | corrected
+  recovered      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_ehyp_ts     ON error_hypotheses(ts);
+CREATE INDEX IF NOT EXISTS idx_ehyp_status ON error_hypotheses(status);
+`,
 }
 
 function runMigrations(db: Database): void {

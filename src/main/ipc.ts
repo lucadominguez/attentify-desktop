@@ -28,7 +28,8 @@ import { debugLog } from './debug/logger'
 import { notificationQueue } from './overlay/NotificationQueue'
 import { ContentRuleEngine } from './blocking/ContentRuleEngine'
 import { recordCloudEvent, startCloudSync, stopCloudSync } from './cloudSync'
-import { recordFeedback, computeCalibration } from './feedback/FeedbackService'
+import { recordFeedback, computeCalibration, setRecoveryHook } from './feedback/FeedbackService'
+import { listAdjustments } from './feedback/store'
 import { mistakeReviewer } from './feedback/MistakeReviewer'
 import { randomUUID } from 'crypto'
 import {
@@ -231,7 +232,7 @@ const OPEN_CHANNELS = new Set<string>([
   'goals:get', 'inferences:get', 'issue:list', 'preferences:get', 'safety:changelog',
   'cards:items',
   'safety:status', 'startup:list', 'timesheet:get', 'update:check', 'update:status',
-  'usage:get', 'daemon:startup-status', 'mistake:calibration',
+  'usage:get', 'daemon:startup-status', 'mistake:calibration', 'mistake:adjustments',
   // chrome / environment
   'app:version', 'daemon:platform', 'shell:open-external',
   // Settings incl. the theme + diagnostics toggles: appearance is part of "looking".
@@ -382,6 +383,22 @@ export function initIpc(): void {
   monitor.getUrlGuard().init(effectiveKey)
   inferenceEngine.init(effectiveKey)
   mistakeReviewer.init(effectiveKey)
+
+  // Automatic recovery: when the feedback loop concludes an auto-block was a false positive,
+  // it calls this to lift the block. Guarded so it only ever reverses the app's OWN blocks
+  // (reason starts 'auto') and never a user-added one or a Deep-Focus-locked domain.
+  setRecoveryHook((domain: string): boolean => {
+    const s = getStore()
+    const entry = s.blocklist.domains.find((d) => d.domain === domain)
+    if (!entry || typeof entry.reason !== 'string' || !entry.reason.startsWith('auto')) return false
+    const deep = s.sessions.find((x) => x.active && x.mode === 'deep')
+    if (deep && engine?.isDeepDomain(domain)) return false
+    engine?.removeDomain(domain)
+    patchStore({ blocklist: { ...s.blocklist, domains: s.blocklist.domains.filter((d) => d.domain !== domain) } })
+    debugLog('feedback:recovered', { domain, was: entry.reason })
+    sendMain('inference:recovered', { domain })
+    return true
+  })
 
   // Push live free-usage updates to the renderer so the meter/paywall stay current.
   setUsageChangeCallback((usage) => sendMain('usage:changed', usage))
@@ -1391,6 +1408,7 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
   // Read the calibration report (pure aggregation, no AI), and trigger an on-demand
   // review of unreviewed disagreements (AI, best-effort).
   ipcMain.handle('mistake:calibration', (_e, windowDays?: number) => computeCalibration(windowDays ?? 30))
+  ipcMain.handle('mistake:adjustments', (_e, limit?: number) => listAdjustments(limit ?? 100))
   ipcMain.handle('mistake:review-now', async () => {
     try { return await mistakeReviewer.review() } catch { return { reviewed: 0, mistakes: 0 } }
   })
