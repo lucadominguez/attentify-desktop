@@ -343,6 +343,13 @@ CREATE TABLE IF NOT EXISTS error_hypotheses (
 CREATE INDEX IF NOT EXISTS idx_ehyp_ts     ON error_hypotheses(ts);
 CREATE INDEX IF NOT EXISTS idx_ehyp_status ON error_hypotheses(status);
 `,
+  '007_decision_component.sql': `
+-- Broaden the ledger beyond the distraction classifier: agent check-ins, notifications and
+-- other consequential AI actions log here too, tagged by component. Existing rows default
+-- to the classifier, which is what they all were.
+ALTER TABLE classification_decisions ADD COLUMN component TEXT NOT NULL DEFAULT 'distraction_classifier';
+CREATE INDEX IF NOT EXISTS idx_cdec_component ON classification_decisions(component);
+`,
 }
 
 function runMigrations(db: Database): void {

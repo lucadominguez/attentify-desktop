@@ -5,14 +5,20 @@ import { reportIssue } from '../diagnostics/report'
 import { debugLog } from '../debug/logger'
 import {
   getUnreviewedDisagreements, markFeedbackReviewed, countFeedback,
-  type FeedbackWithDecision,
+  confirmedHypothesisExists, getUnreactedDecisions, markDecisionAudited, insertHypothesis,
+  type FeedbackWithDecision, type DecisionRow,
 } from './store'
-import { computeCalibration } from './FeedbackService'
+import { computeCalibration, refreshLearnedWeights } from './FeedbackService'
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api'
 const REVIEW_INTERVAL_MS = 12 * 60 * 1000     // sweep for new disagreements every 12 min
 const CALIBRATION_INTERVAL_MS = 6 * 60 * 60 * 1000  // recompute calibration ~4x/day
 const MIN_CLUSTER_TO_REVIEW = 1               // even a single strong disagreement is worth a look
+const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000   // don't re-file an issue already handled today
+// Shadow audit: sample decisions the user never reacted to, so SILENT errors (never
+// complained about) still get caught. Conservative rate — this spends tokens on the quiet.
+const AUDIT_SAMPLE = 6                          // decisions audited per pass
+const AUDIT_MIN_AGE_MS = 45 * 60 * 1000         // give the user 45 min to react before auditing
 
 // Audits the classifier's OWN decisions using the user's reactions as ground truth. The
 // friction detector in AgentService only fires when the user complains in chat; this closes
@@ -72,7 +78,6 @@ export class MistakeReviewer {
     let reviewedIds: string[] = []
     try {
       const rows = getUnreviewedDisagreements(40)
-      if (rows.length === 0) return { reviewed: 0, mistakes: 0 }
 
       // Cluster by fingerprint (falling back to target): repeated disagreement on the same
       // context is one mistake to fix, not N, and the repeat count is itself evidence.
@@ -90,10 +95,23 @@ export class MistakeReviewer {
         // Mark the whole cluster reviewed regardless of verdict, so we don't re-spend on it.
         reviewedIds = reviewedIds.concat(group.map((g) => g.id))
         if (verdict?.mistake) {
+          // Dedupe: if the deterministic loop already confirmed and corrected this context,
+          // the user-facing issue is already covered — don't file a second one. Still count
+          // it, and enrich the record, but no duplicate entry in "recently caught".
+          const fp = group[0]!.fingerprint
+          if (fp && confirmedHypothesisExists(fp, DEDUP_WINDOW_MS)) {
+            debugLog('mistake:dedup-skip', { fingerprint: fp, category: verdict.category })
+            continue
+          }
           mistakes++
           this.fileMistake(group, verdict)
         }
       }
+
+      // Shadow audit for SILENT errors: decisions the user never reacted to. Runs on the
+      // same pass so it shares the AI-budget gate. This is the only path that can catch a
+      // wrong call the user simply never noticed.
+      mistakes += await this.auditSilent()
     } catch (e) {
       debugLog('mistake:review-error', { error: String(e) })
     } finally {
@@ -174,12 +192,72 @@ Reply with ONLY compact JSON, no prose: {"mistake":<true|false>,"category":"<one
     debugLog('mistake:filed', { target: head.target_value, category: v.category, cluster: group.length })
   }
 
+  // ── Shadow audit of silent errors ────────────────────────────────────────────
+
+  // Sample decisions the user never reacted to and ask a model, given richer context than
+  // the classifier had, whether the call was actually supported. A flagged one becomes a
+  // suspected error hypothesis (NOT a correction — the user never confirmed it, so it must
+  // not auto-suppress; it is evidence for a human/aggregate, per the spec's caveat).
+  private async auditSilent(): Promise<number> {
+    if (!this.client) return 0
+    const candidates = getUnreactedDecisions(AUDIT_MIN_AGE_MS, 60).slice(0, AUDIT_SAMPLE)
+    if (candidates.length === 0) return 0
+    let flagged = 0
+    for (const d of candidates) {
+      const verdict = await this.auditOne(d)
+      if (verdict == null) continue          // parse/transport failure: leave unaudited, try later
+      markDecisionAudited(d.id, verdict.silent_error === true)
+      if (verdict.silent_error) {
+        flagged++
+        insertHypothesis({
+          decision_id: d.id, component: 'distraction_classifier', target_value: d.target_value,
+          fingerprint: d.fingerprint, error_prob: Math.min(0.75, verdict.confidence ?? 0.6),
+          failure_stage: 'classification', failure_mode: String(verdict.failure_mode || 'other'),
+          severity: 'low', evidence: [{ type: 'shadow_audit', strength: verdict.confidence ?? 0.6, ts: Date.now() }],
+          status: 'suspected',
+        })
+        reportIssue({
+          kind: 'classifier_mistake', severity: 'low', category: `silent:${verdict.failure_mode ?? 'other'}`.slice(0, 40),
+          title: `Possible silent error on ${d.target_value ?? 'a site'}`,
+          description: `Shadow audit flagged an un-reacted ${d.action} of ${d.target_value} (${d.category ?? '?'}, ${Math.round((d.confidence ?? 0) * 100)}%). ${verdict.why ?? ''}`.slice(0, 300),
+          context: { audit: verdict, decision: { action: d.action, category: d.category, confidence: d.confidence, reasoning: d.reasoning, goal: d.goal_text, features: d.features } },
+        })
+      }
+    }
+    debugLog('mistake:audit-done', { audited: candidates.length, flagged })
+    return flagged
+  }
+
+  private async auditOne(d: DecisionRow): Promise<AuditVerdict | null> {
+    if (!this.client) return null
+    const sys = `You independently audit ONE automatic decision made by an attention-guarding app. The user did NOT react to it, so there is no complaint — judge purely on whether the decision was SUPPORTED by its evidence. Be conservative: only flag a clear mistake, since silence usually means the decision was fine.
+Reply ONLY compact JSON: {"silent_error":<bool>,"failure_mode":"false_positive|wrong_category|over_aggressive|other","why":"<=16 words","confidence":0.0-1.0}`
+    const input = [
+      `Decision: ${d.action} "${d.target_value}"${d.category ? ` (labeled ${d.category})` : ''} at confidence ${(d.confidence ?? 0).toFixed(2)}.`,
+      d.reasoning ? `Reason given: ${d.reasoning}` : '',
+      d.goal_text ? `User's active goal: "${d.goal_text}"` : 'No active goal.',
+      d.features ? `Page context: ${JSON.stringify(d.features).slice(0, 200)}` : '',
+    ].filter(Boolean).join('\n')
+    try {
+      const resp = await this.client.messages.create({ model: this.model, max_tokens: 90, messages: [{ role: 'user', content: `${sys}\n\n${input}` }] })
+      recordUsage(this.model, resp.usage?.input_tokens ?? 0, resp.usage?.output_tokens ?? 0)
+      const text = resp.content.find((b) => b.type === 'text')?.text ?? ''
+      const m = text.match(/\{[\s\S]*\}/)
+      if (!m) return null
+      const parsed = JSON.parse(m[0]) as AuditVerdict
+      return typeof parsed.silent_error === 'boolean' ? parsed : null
+    } catch { return null }
+  }
+
   // ── Calibration ──────────────────────────────────────────────────────────────
 
   // No AI needed — pure aggregation. If a category is both frequent and frequently
   // disagreed with, that is a systematic classifier fault, so file it as one issue.
   runCalibration(): void {
     try {
+      // Refresh the data-learned signal weights first, so the hypothesis engine calibrates
+      // itself off accumulated outcomes instead of the hand-set priors forever.
+      refreshLearnedWeights(30)
       const report = computeCalibration(30)
       if (report.totalResolved < 10) return   // not enough to conclude anything
       const fb = countFeedback(Date.now() - 30 * 24 * 3600_000)
@@ -208,6 +286,13 @@ interface JudgeVerdict {
   mistake: boolean
   category?: string
   fix?: string
+  confidence?: number
+}
+
+interface AuditVerdict {
+  silent_error: boolean
+  failure_mode?: string
+  why?: string
   confidence?: number
 }
 

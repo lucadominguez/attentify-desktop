@@ -28,7 +28,7 @@ import { debugLog } from './debug/logger'
 import { notificationQueue } from './overlay/NotificationQueue'
 import { ContentRuleEngine } from './blocking/ContentRuleEngine'
 import { recordCloudEvent, startCloudSync, stopCloudSync } from './cloudSync'
-import { recordFeedback, computeCalibration, setRecoveryHook } from './feedback/FeedbackService'
+import { recordFeedback, recordDecision, computeCalibration, setRecoveryHook } from './feedback/FeedbackService'
 import { listAdjustments } from './feedback/store'
 import { mistakeReviewer } from './feedback/MistakeReviewer'
 import { randomUUID } from 'crypto'
@@ -52,6 +52,8 @@ let mainWin: BrowserWindow | null = null
 // The domain the interstitial is currently showing, so a "proceed anyway" can be attributed
 // to the decision that blocked it (the interstitial itself only knows it should hide).
 let lastInterstitialDomain: string | null = null
+// The app the most recent agent check-in was about, so a dismissal can be attributed to it.
+let lastProactiveTarget: string | null = null
 
 // Break mode — suppresses interstitials and new auto-blocks for a timed window
 let breakEndAt: number | null = null
@@ -449,6 +451,15 @@ export function initIpc(): void {
   monitor.on('distraction', (session: ActivitySession) => {
     if (session.duration >= 90000) {
       agentService?.notifyDistraction(session)
+      // Log the check-in as an agent_action decision so the ledger (and error detection)
+      // spans more than the classifier. Its target is the app it is about; a dismissal
+      // becomes feedback against it.
+      lastProactiveTarget = session.app
+      recordDecision({
+        component: 'agent_action', targetType: 'app', targetValue: session.app,
+        action: 'suggest', confidence: 0.7, category: session.category,
+        source: 'proactive_checkin', reasoning: `proactive check-in after ${Math.round(session.duration / 60000)}min on ${session.app}`,
+      })
     }
     // Feed the cloud dashboard for substantial distraction reads (≥30s).
     if (session.duration >= 30000) {
@@ -1026,6 +1037,12 @@ export function initIpc(): void {
 
   ipcMain.handle('agent:dismiss-proactive', () => {
     agentService?.onInterventionDismissed()
+    // Dismissing a check-in is (weak) evidence it was not wanted — feedback on the last
+    // agent_action decision.
+    if (lastProactiveTarget) {
+      recordFeedback({ targetType: 'app', targetValue: lastProactiveTarget, signal: 'proactive_dismissed' })
+      lastProactiveTarget = null
+    }
     return { ok: true }
   })
 

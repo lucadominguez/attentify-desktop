@@ -12,6 +12,7 @@ import { getDb, markDirty } from '../data/db'
 export interface DecisionRow {
   id: string
   ts: number
+  component?: string
   target_type: 'domain' | 'app'
   target_value: string
   category?: string
@@ -51,12 +52,12 @@ export function insertDecision(d: Omit<DecisionRow, 'id' | 'ts'> & { id?: string
   try {
     getDb().run(
       `INSERT INTO classification_decisions
-       (id,ts,target_type,target_value,category,action,confidence,policy_weight,source,reasoning,goal_id,goal_text,fingerprint,features,classifier_version)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       (id,ts,component,target_type,target_value,category,action,confidence,policy_weight,source,reasoning,goal_id,goal_text,fingerprint,features,classifier_version)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
-        id, d.ts ?? Date.now(), d.target_type, d.target_value, d.category ?? null, d.action,
-        d.confidence, d.policy_weight ?? null, d.source ?? null, d.reasoning ?? null,
-        d.goal_id ?? null, d.goal_text ?? null, d.fingerprint ?? null,
+        id, d.ts ?? Date.now(), d.component ?? 'distraction_classifier', d.target_type, d.target_value,
+        d.category ?? null, d.action, d.confidence, d.policy_weight ?? null, d.source ?? null,
+        d.reasoning ?? null, d.goal_id ?? null, d.goal_text ?? null, d.fingerprint ?? null,
         d.features != null ? JSON.stringify(d.features) : null, d.classifier_version ?? null,
       ]
     )
@@ -91,8 +92,10 @@ export function attachOutcome(decisionId: string, outcome: DecisionRow['outcome'
 // tell us whether the score meant anything.
 export function getResolvedDecisions(sinceMs: number, limit = 2000): DecisionRow[] {
   try {
+    // Only REAL user reactions calibrate the score. Shadow-audit outcomes (audit_ok /
+    // audit_error) live in the same column but must never count as user agreement.
     const rows = getDb().exec(
-      'SELECT * FROM classification_decisions WHERE outcome IS NOT NULL AND ts > ? ORDER BY ts DESC LIMIT ?',
+      "SELECT * FROM classification_decisions WHERE outcome IN ('agree','disagree','override') AND ts > ? ORDER BY ts DESC LIMIT ?",
       [sinceMs, limit]
     )
     if (!rows[0]) return []
@@ -104,7 +107,7 @@ function mapDecision(cols: string[], r: unknown[]): DecisionRow {
   const o: Record<string, unknown> = {}
   cols.forEach((c, i) => { o[c] = r[i] })
   return {
-    id: o.id as string, ts: o.ts as number,
+    id: o.id as string, ts: o.ts as number, component: (o.component as string) ?? undefined,
     target_type: o.target_type as DecisionRow['target_type'], target_value: o.target_value as string,
     category: (o.category as string) ?? undefined, action: o.action as DecisionRow['action'],
     confidence: o.confidence as number, policy_weight: (o.policy_weight as number) ?? undefined,
@@ -256,16 +259,18 @@ export function upsertAdjustment(a: Omit<AdjustmentRow, 'id' | 'ts' | 'support' 
   } catch { return { id: a.id ?? 'err', support: 0 } }
 }
 
-// Every active adjustment that could apply to a target: matched by domain, or by the
-// route/domain_goal scope_key the caller passes. Widest matching set; the caller reduces.
-export function findAdjustments(targetValue: string, scopeKeys: string[]): AdjustmentRow[] {
+// Adjustments that apply to a context, matched ONLY by the exact scope keys the caller
+// supplies (route fingerprint, domain|goal, and domain). Matching on the bare target_value
+// would leak a narrowly-scoped correction — "youtube is fine for THIS goal" — onto every
+// goal, since a domain-scoped row's key already IS the domain and is passed explicitly.
+export function findAdjustments(_targetValue: string, scopeKeys: string[]): AdjustmentRow[] {
   try {
-    const keys = [...new Set([targetValue, ...scopeKeys])].filter(Boolean)
+    const keys = [...new Set(scopeKeys)].filter(Boolean)
     if (keys.length === 0) return []
     const ph = keys.map(() => '?').join(',')
     const rows = getDb().exec(
-      `SELECT * FROM learned_adjustments WHERE active=1 AND (target_value=? OR scope_key IN (${ph})) AND (expires_at IS NULL OR expires_at > ?)`,
-      [targetValue, ...keys, Date.now()]
+      `SELECT * FROM learned_adjustments WHERE active=1 AND scope_key IN (${ph}) AND (expires_at IS NULL OR expires_at > ?)`,
+      [...keys, Date.now()]
     )
     if (!rows[0]) return []
     return rows[0].values.map((r: unknown[]) => mapAdjustment(rows[0].columns, r))
@@ -347,6 +352,66 @@ export function insertHypothesis(h: Omit<HypothesisRow, 'id' | 'ts'> & { id?: st
     markDirty()
   } catch { /* best-effort */ }
   return id
+}
+
+// Per-signal reliability, learned from history: of the decisions a given feedback signal
+// was attached to, how often did their outcome end up a disagreement? This is what turns
+// the hand-set signal weights into data-calibrated ones once there is volume.
+export function signalOutcomeStats(sinceMs: number): Record<string, { total: number; disagree: number }> {
+  const out: Record<string, { total: number; disagree: number }> = {}
+  try {
+    const rows = getDb().exec(
+      `SELECT signal,
+              COUNT(*) AS n,
+              SUM(CASE WHEN user_decision IN ('disagree','override') THEN 1 ELSE 0 END) AS dis
+       FROM classification_feedback WHERE ts > ? GROUP BY signal`,
+      [sinceMs]
+    )
+    for (const r of rows[0]?.values ?? []) {
+      out[r[0] as string] = { total: r[1] as number, disagree: r[2] as number }
+    }
+  } catch { /* best-effort */ }
+  return out
+}
+
+// Has the deterministic loop already confirmed an error for this context? Used to keep the
+// LLM reviewer from filing a second, duplicate issue for something already handled.
+export function confirmedHypothesisExists(fingerprint: string, sinceMs: number): boolean {
+  try {
+    const rows = getDb().exec(
+      "SELECT 1 FROM error_hypotheses WHERE fingerprint=? AND status IN ('confirmed','corrected') AND ts > ? LIMIT 1",
+      [fingerprint, sinceMs]
+    )
+    return !!rows[0]?.values?.length
+  } catch { return false }
+}
+
+// Decisions the user never reacted to, old enough that they had the chance — the candidates
+// for shadow auditing of SILENT errors. Oversamples the risky kinds (auto-blocks and
+// low-confidence calls) by ordering them first.
+export function getUnreactedDecisions(olderThanMs: number, limit = 40): DecisionRow[] {
+  try {
+    const cutoff = Date.now() - olderThanMs
+    const rows = getDb().exec(
+      `SELECT * FROM classification_decisions
+       WHERE outcome IS NULL AND action IN ('auto_block','suggest') AND ts < ?
+       ORDER BY (CASE WHEN action='auto_block' THEN 0 ELSE 1 END), ABS(confidence-0.7) ASC, ts DESC
+       LIMIT ?`,
+      [cutoff, limit]
+    )
+    if (!rows[0]) return []
+    return rows[0].values.map((r: unknown[]) => mapDecision(rows[0].columns, r))
+  } catch { return [] }
+}
+
+// Mark a decision audited (reuse the outcome column with a distinct value so it is not
+// re-audited, without pretending the user reacted).
+export function markDecisionAudited(id: string, silentError: boolean): void {
+  try {
+    getDb().run('UPDATE classification_decisions SET outcome=?, outcome_at=? WHERE id=?',
+      [silentError ? 'audit_error' : 'audit_ok', Date.now(), id])
+    markDirty()
+  } catch { /* best-effort */ }
 }
 
 function safeParse(s: string): Record<string, unknown> | undefined {

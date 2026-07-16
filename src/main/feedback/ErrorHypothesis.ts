@@ -10,16 +10,50 @@ import type { FeedbackRow } from './store'
 // Prior: absent any evidence, a logged decision is probably NOT an error. -2.2 log-odds ≈ 0.10.
 const PRIOR_LOG_ODDS = -2.2
 
-// Per-signal strength. Pushing past a block or explicitly rejecting is near-conclusive;
-// dismissing a soft nudge barely moves the needle (people dismiss things they agree with).
+// Per-signal strength, as HAND-SET PRIORS. Pushing past a block or explicitly rejecting is
+// near-conclusive; dismissing a soft nudge barely moves the needle. These are starting
+// values, deliberately, and are blended toward data-learned weights as evidence accrues
+// (see setLearnedWeights) — the spec's "must eventually be learned and calibrated".
 const SIGNAL_WEIGHT: Record<string, number> = {
   interstitial_proceed: 2.4,   // walked through a wall — the strongest wordless "you're wrong"
   quick_unblock: 2.2,          // removed an auto-block the app just added
   inference_rejected: 2.0,     // explicit "no, don't block this"
   bypass: 1.4,                 // tried to get around an element block
   nudge_dismissed: 0.5,        // weak: dismissal is not disagreement
+  proactive_dismissed: 0.6,    // dismissed an agent check-in
   inference_confirmed: -2.5,   // explicit agreement pulls the other way
   nudge_acted: -1.5,
+}
+
+// Data-learned weights, blended over the hand-set priors. Refreshed periodically from the
+// observed disagreement rate per signal. Empty until there is enough history.
+let learnedWeight: Record<string, number> = {}
+
+function logit(p: number): number {
+  const c = Math.max(0.02, Math.min(0.98, p))
+  return Math.log(c / (1 - c))
+}
+
+// Recompute the effective weight for each signal from how often decisions it was attached
+// to actually turned out to be errors. Blend toward the data as its volume grows, so a
+// signal seen twice barely moves off its prior and a signal seen 200 times is essentially
+// data-driven. BASE_RATE is the prior probability any decision is an error (matches PRIOR).
+export function setLearnedWeights(stats: Record<string, { total: number; disagree: number }>): void {
+  const BASE_RATE = 0.10
+  const K = 25 // half-trust point: at n=25 samples the learned weight gets ~50% of the blend
+  const next: Record<string, number> = {}
+  for (const [signal, { total, disagree }] of Object.entries(stats)) {
+    if (total < 3) continue
+    const prior = SIGNAL_WEIGHT[signal] ?? 0.3
+    const dataWeight = logit(disagree / total) - logit(BASE_RATE)   // log-odds shift this signal implies
+    const alpha = total / (total + K)
+    next[signal] = prior * (1 - alpha) + dataWeight * alpha
+  }
+  learnedWeight = next
+}
+
+export function effectiveWeight(signal: string): number {
+  return learnedWeight[signal] ?? SIGNAL_WEIGHT[signal] ?? 0.3
 }
 
 // Repeated occurrences of the same signal accumulate with geometric decay: the 2nd counts
@@ -61,7 +95,7 @@ export function estimateError(feedback: FeedbackRow[], decision?: { category?: s
     if (f.goal_id) goals.add(f.goal_id)
   }
   for (const [signal, count] of bySignal) {
-    const w = SIGNAL_WEIGHT[signal] ?? 0.3
+    const w = effectiveWeight(signal)
     logOdds += w * occurrenceFactor(count)
     evidence.push({ type: signal, strength: round(sigmoid(w) * 2 - 1), ts: Date.now() })
   }

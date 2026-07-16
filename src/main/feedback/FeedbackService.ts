@@ -2,9 +2,9 @@ import { contextFingerprint, contextTokens, CLASSIFIER_VERSION } from './fingerp
 import {
   insertDecision, findRecentDecision, attachOutcome, insertFeedback,
   getResolvedDecisions, feedbackForFingerprint, upsertAdjustment, findAdjustments,
-  insertHypothesis, type DecisionRow, type AdjustmentRow,
+  insertHypothesis, signalOutcomeStats, type DecisionRow, type AdjustmentRow,
 } from './store'
-import { estimateError, type ErrorHypothesis } from './ErrorHypothesis'
+import { estimateError, setLearnedWeights, type ErrorHypothesis } from './ErrorHypothesis'
 import { debugLog } from '../debug/logger'
 import type { CalibrationBucket, CategoryCalibration, CalibrationReport } from '../../shared/types'
 
@@ -34,6 +34,9 @@ export interface RecordDecisionInput {
   goalText?: string
   url?: string                // to derive path-aware fingerprint identity
   features?: Record<string, unknown>
+  // Which AI subsystem made this call. Defaults to the distraction classifier; the ledger
+  // spans agent check-ins and notifications too, so error detection is not classifier-only.
+  component?: string
 }
 
 // Log a classification decision. Returns the decision id so a caller can link an
@@ -46,6 +49,7 @@ export function recordDecision(input: RecordDecisionInput): string {
     goalId: input.goalId,
   })
   return insertDecision({
+    component: input.component,
     target_type: input.targetType,
     target_value: input.targetValue,
     category: input.category,
@@ -72,8 +76,10 @@ const SIGNAL_DECISION: Record<string, 'agree' | 'disagree' | 'override'> = {
   inference_rejected: 'disagree',
   inference_confirmed: 'agree',
   interstitial_proceed: 'override',
-  nudge_dismissed: 'disagree',      // dismissing a flag/nudge is weak disagreement
+  nudge_dismissed: 'disagree',        // dismissing a flag/nudge is weak disagreement
   nudge_acted: 'agree',
+  proactive_dismissed: 'disagree',    // dismissed an agent check-in
+  proactive_acted: 'agree',
 }
 
 export interface RecordFeedbackInput {
@@ -218,6 +224,13 @@ export function evaluateAndCorrect(
 // disagreed with ~20% of the time. Also broken out per category to surface ones that fail
 // systematically. This needs volume to mean anything; with little data it just reports the
 // counts honestly rather than pretending to a calibration curve.
+
+// Recompute the data-learned signal weights from the last 30 days and push them into the
+// hypothesis engine. Cheap; called on the calibration timer. With no history it is a no-op
+// and the hand-set priors stand.
+export function refreshLearnedWeights(windowDays = 30): void {
+  try { setLearnedWeights(signalOutcomeStats(Date.now() - windowDays * 24 * 3600_000)) } catch { /* keep priors */ }
+}
 
 export function computeCalibration(windowDays = 30): CalibrationReport {
   const since = Date.now() - windowDays * 24 * 3600_000
