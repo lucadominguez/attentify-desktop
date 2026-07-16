@@ -5,9 +5,15 @@ import { useTheme } from '../context/ThemeContext'
 // The neural field. An experiment, behind the Settings toggle: opt-in, off by default.
 //
 // A faint web of interconnected wires with electrical charges travelling along them,
-// slowly. The charges are the signal: they run a wire, arrive at a node, and hop to
-// another wire leaving that node, so what you see is activity propagating through a
-// network rather than a decoration looping.
+// slowly. The charges are the signal: they run a wire, and when they ARRIVE at a node
+// the node FIRES — a brief flash and an expanding ring, like a synapse — before the
+// charge hops onto another wire leaving it. Occasionally an arrival BRANCHES, spawning a
+// second charge down a different wire: a thought splitting. What you see is activity
+// propagating and forking through a network, not a decoration looping.
+//
+// The firing is the whole reason it reads as "thinking" rather than "moving". Without it
+// you have dots on tracks; with it you see arrivals, and arrivals are what a nervous
+// system looks like from the outside.
 //
 // This is a canvas, not CSS. The first attempt was a CSS dot grid, and a grid is the one
 // thing a neural web must not look like: the whole read comes from irregular spacing and
@@ -111,6 +117,12 @@ export default function PulseField(): React.ReactElement | null {
     let stopped = false
     let web: ReturnType<typeof buildWeb> | null = null
     let charges: Charge[] = []
+    // A synaptic fire: a node lit briefly because a charge just reached it. This is the
+    // difference between "dots moving on lines" and "a network thinking" — you see the
+    // arrival, not just the travel. Kept as a flat list drained by age each frame.
+    let fires: { node: number; at: number }[] = []
+    let baseCount = 8            // the resting number of charges; branching floats above it
+    let maxCharges = 16         // hard cap so a branching cascade can never run away
     let webLayer: HTMLCanvasElement | null = null
     let dpr = 1, w = 0, h = 0
 
@@ -153,17 +165,22 @@ export default function PulseField(): React.ReactElement | null {
       canvas.height = Math.floor(h * dpr)
       web = buildWeb(w, h)
       renderWebLayer()
-      // A charge per ~14 edges, so density scales with the window instead of a big
-      // monitor looking emptier than a small one.
-      const count = Math.max(4, Math.min(14, Math.round(web.edges.length / 14)))
+      // Density scales with the window so a big monitor is not emptier than a small one.
+      baseCount = Math.max(5, Math.min(12, Math.round(web.edges.length / 16)))
+      maxCharges = baseCount * 2
+      fires = []
       const rnd = mulberry32(99)
-      charges = Array.from({ length: count }, () => ({
+      charges = Array.from({ length: baseCount }, () => ({
         edge: Math.floor(rnd() * web!.edges.length),
         t: rnd(),
         dir: rnd() > 0.5 ? 1 : -1,
         speed: 26 + rnd() * 26,   // px/sec. Slow: this is a signal, not a loading bar.
       }))
     }
+
+    // How long a fired node stays lit. Long enough to notice the arrival, short enough
+    // that the field is never a wall of glowing nodes.
+    const FIRE_MS = 900
 
     const draw = (now: number, dt: number): void => {
       if (!web || !webLayer) return
@@ -181,21 +198,61 @@ export default function PulseField(): React.ReactElement | null {
       ctx.globalAlpha = 1
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-      if (reduced) return   // A still web. No travelling charges.
+      if (reduced) return   // A still web. No travelling charges, no fires.
 
-      for (const c of charges) {
+      // ── Node fires: the arrivals. Drawn UNDER the charges so a charge sits on top of
+      //    the node it just lit. Drained by age; FIRE_MS old ones drop off.
+      fires = fires.filter((f) => now - f.at < FIRE_MS)
+      for (const f of fires) {
+        const n = web.nodes[f.node]
+        const p = (now - f.at) / FIRE_MS          // 0 → 1 over the life of the fire
+        const ease = 1 - p
+        // An expanding ring (the signal spreading from the synapse) plus a bright core
+        // that fades. Both scale with gain so the whole field still breathes together.
+        const ring = 3 + p * 13
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${(0.28 * ease * ease * gain).toFixed(3)})`
+        ctx.lineWidth = 1.2
+        ctx.beginPath(); ctx.arc(n.x, n.y, ring, 0, Math.PI * 2); ctx.stroke()
+        const core = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 6)
+        core.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.9 * ease * gain).toFixed(3)})`)
+        core.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`)
+        ctx.fillStyle = core
+        ctx.beginPath(); ctx.arc(n.x, n.y, 6, 0, Math.PI * 2); ctx.fill()
+      }
+
+      for (let ci = 0; ci < charges.length; ci++) {
+        const c = charges[ci]
         const e = web.edges[c.edge]
         const A = web.nodes[e.a], B = web.nodes[e.b]
         c.t += (c.speed * dt) / 1000 / e.len * c.dir
-        // Arrived at a node: hop onto another wire leaving it. This is what makes it read
-        // as propagation through a network rather than dots looping on fixed tracks.
+        // Arrived at a node: fire it, then hop onto a wire leaving it. The fire is what
+        // makes it read as propagation through a network rather than dots on tracks; the
+        // occasional branch is a thought splitting.
         if (c.t > 1 || c.t < 0) {
           const atNode = c.t > 1 ? e.b : e.a
+          fires.push({ node: atNode, at: now })
           const options = web.adj[atNode].filter((i) => i !== c.edge)
-          const next = options.length ? options[Math.floor(Math.random() * options.length)] : c.edge
+          if (!options.length) {
+            // Dead end: turn around rather than freeze.
+            c.dir = (c.dir * -1) as 1 | -1
+            c.t = Math.max(0, Math.min(1, c.t))
+            continue
+          }
+          // Branch: with some probability, and only under the cap, spawn a second charge
+          // down a DIFFERENT wire. Extra charges above the resting count are the ones
+          // allowed to die out at dead ends, so the population drifts back to baseCount.
+          if (options.length > 1 && charges.length < maxCharges && Math.random() < 0.14) {
+            const bi = options[Math.floor(Math.random() * options.length)]
+            const be = web.edges[bi]
+            charges.push({ edge: bi, t: be.a === atNode ? 0 : 1, dir: be.a === atNode ? 1 : -1, speed: c.speed })
+          } else if (charges.length > baseCount && Math.random() < 0.10) {
+            // Prune a surplus charge occasionally so branches do not accumulate forever.
+            charges.splice(ci, 1); ci--
+            continue
+          }
+          const next = options[Math.floor(Math.random() * options.length)]
           const ne = web.edges[next]
           c.edge = next
-          // Enter the new wire from whichever end we are standing on.
           c.dir = ne.a === atNode ? 1 : -1
           c.t = ne.a === atNode ? 0 : 1
           continue
