@@ -66,7 +66,9 @@ function mulberry32(seed: number): () => number {
 // neuron web actually has.
 function buildWeb(w: number, h: number): { nodes: Node[]; edges: Edge[]; adj: number[][] } {
   const rnd = mulberry32(1337)
-  const cell = 108
+  // Smaller cells = more neurons. Dropped from 108 to 72 to make the web read as dense
+  // grey matter rather than a sparse constellation.
+  const cell = 72
   const cols = Math.max(2, Math.ceil(w / cell) + 1)
   const rows = Math.max(2, Math.ceil(h / cell) + 1)
   const nodes: Node[] = []
@@ -77,7 +79,7 @@ function buildWeb(w: number, h: number): { nodes: Node[]; edges: Edge[]; adj: nu
   }
   // Connect near neighbours only. A distance cap is what keeps it a web instead of a
   // cat's cradle: long edges crossing everything destroy the sense of local structure.
-  const maxLen = cell * 1.55
+  const maxLen = cell * 1.6
   const edges: Edge[] = []
   const adj: number[][] = nodes.map(() => [])
   for (let i = 0; i < nodes.length; i++) {
@@ -85,8 +87,9 @@ function buildWeb(w: number, h: number): { nodes: Node[]; edges: Edge[]; adj: nu
       const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y
       const len = Math.hypot(dx, dy)
       if (len > maxLen) continue
-      // Thin the graph: every candidate edge would make a dense quilt.
-      if (rnd() > 0.62) continue
+      // Thin the graph, but less than before: keep ~72% of candidates so the mesh is
+      // denser and more interconnected without becoming a solid quilt.
+      if (rnd() > 0.72) continue
       const idx = edges.length
       edges.push({ a: i, b: j, len })
       adj[i].push(idx); adj[j].push(idx)
@@ -144,13 +147,13 @@ export default function PulseField(): React.ReactElement | null {
         const A = web.nodes[e.a], B = web.nodes[e.b]
         // Longer wires fade: it reads as depth, and it stops the far connections from
         // being as loud as the tight local clusters.
-        const a = 0.16 * (1 - (e.len / (108 * 1.55)) * 0.55)
+        const a = 0.19 * (1 - (e.len / (72 * 1.6)) * 0.55)
         lc.strokeStyle = `rgba(${r}, ${g}, ${b}, ${a.toFixed(3)})`
         lc.lineWidth = 1
         lc.beginPath(); lc.moveTo(A.x, A.y); lc.lineTo(B.x, B.y); lc.stroke()
       }
       for (const n of web.nodes) {
-        lc.fillStyle = `rgba(${r}, ${g}, ${b}, 0.30)`
+        lc.fillStyle = `rgba(${r}, ${g}, ${b}, 0.38)`
         lc.beginPath(); lc.arc(n.x, n.y, 1.5, 0, Math.PI * 2); lc.fill()
       }
       webLayer = layer
@@ -165,9 +168,12 @@ export default function PulseField(): React.ReactElement | null {
       canvas.height = Math.floor(h * dpr)
       web = buildWeb(w, h)
       renderWebLayer()
-      // Density scales with the window so a big monitor is not emptier than a small one.
-      baseCount = Math.max(5, Math.min(12, Math.round(web.edges.length / 16)))
-      maxCharges = baseCount * 2
+      // More charges = more arrivals = more nodes firing, which is what "livelier" means
+      // here. Density scales with the window, but capped hard in absolute terms: the
+      // denser web has many more edges, and charges are the one thing drawn live every
+      // frame, so this cap is what protects a 24/7 app from a big monitor.
+      baseCount = Math.max(9, Math.min(22, Math.round(web.edges.length / 24)))
+      maxCharges = Math.min(40, baseCount * 2)
       fires = []
       const rnd = mulberry32(99)
       charges = Array.from({ length: baseCount }, () => ({
@@ -200,6 +206,13 @@ export default function PulseField(): React.ReactElement | null {
 
       if (reduced) return   // A still web. No travelling charges, no fires.
 
+      // Spontaneous idle firing: a resting brain is never fully quiet. A few times a
+      // second a random node flickers on its own, so regions with no charge passing
+      // through still show life. Rate is per-second, made frame-rate independent via dt.
+      if (Math.random() < 1.8 * (dt / 1000)) {
+        fires.push({ node: Math.floor(Math.random() * web.nodes.length), at: now })
+      }
+
       // ── Node fires: the arrivals. Drawn UNDER the charges so a charge sits on top of
       //    the node it just lit. Drained by age; FIRE_MS old ones drop off.
       fires = fires.filter((f) => now - f.at < FIRE_MS)
@@ -209,15 +222,15 @@ export default function PulseField(): React.ReactElement | null {
         const ease = 1 - p
         // An expanding ring (the signal spreading from the synapse) plus a bright core
         // that fades. Both scale with gain so the whole field still breathes together.
-        const ring = 3 + p * 13
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${(0.28 * ease * ease * gain).toFixed(3)})`
-        ctx.lineWidth = 1.2
+        const ring = 3 + p * 15
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${(0.36 * ease * ease * gain).toFixed(3)})`
+        ctx.lineWidth = 1.3
         ctx.beginPath(); ctx.arc(n.x, n.y, ring, 0, Math.PI * 2); ctx.stroke()
-        const core = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 6)
-        core.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.9 * ease * gain).toFixed(3)})`)
+        const core = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 7)
+        core.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(1.0 * ease * gain).toFixed(3)})`)
         core.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`)
         ctx.fillStyle = core
-        ctx.beginPath(); ctx.arc(n.x, n.y, 6, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(n.x, n.y, 7, 0, Math.PI * 2); ctx.fill()
       }
 
       for (let ci = 0; ci < charges.length; ci++) {
@@ -265,17 +278,17 @@ export default function PulseField(): React.ReactElement | null {
         const ty = A.y + (B.y - A.y) * Math.max(0, Math.min(1, c.t - tail * c.dir))
         const grad = ctx.createLinearGradient(tx, ty, x, y)
         grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`)
-        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${(0.5 * gain).toFixed(3)})`)
+        grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, ${(0.66 * gain).toFixed(3)})`)
         ctx.strokeStyle = grad
-        ctx.lineWidth = 1.4
+        ctx.lineWidth = 1.5
         ctx.lineCap = 'round'
         ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(x, y); ctx.stroke()
         // The charge head, with a soft halo.
-        const halo = ctx.createRadialGradient(x, y, 0, x, y, 5)
-        halo.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.75 * gain).toFixed(3)})`)
+        const halo = ctx.createRadialGradient(x, y, 0, x, y, 5.5)
+        halo.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${(0.95 * gain).toFixed(3)})`)
         halo.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`)
         ctx.fillStyle = halo
-        ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(x, y, 5.5, 0, Math.PI * 2); ctx.fill()
       }
     }
 
