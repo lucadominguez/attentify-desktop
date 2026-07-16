@@ -28,6 +28,8 @@ import { debugLog } from './debug/logger'
 import { notificationQueue } from './overlay/NotificationQueue'
 import { ContentRuleEngine } from './blocking/ContentRuleEngine'
 import { recordCloudEvent, startCloudSync, stopCloudSync } from './cloudSync'
+import { recordFeedback, computeCalibration } from './feedback/FeedbackService'
+import { mistakeReviewer } from './feedback/MistakeReviewer'
 import { randomUUID } from 'crypto'
 import {
   getActiveGoals, insertGoal, clearGoal,
@@ -46,6 +48,9 @@ let inferenceEngine: InferenceEngine | null = null
 let contentRuleEngine: ContentRuleEngine | null = null
 let interstitialWin: BrowserWindow | null = null
 let mainWin: BrowserWindow | null = null
+// The domain the interstitial is currently showing, so a "proceed anyway" can be attributed
+// to the decision that blocked it (the interstitial itself only knows it should hide).
+let lastInterstitialDomain: string | null = null
 
 // Break mode — suppresses interstitials and new auto-blocks for a timed window
 let breakEndAt: number | null = null
@@ -88,6 +93,7 @@ export function getContentRuleEngine(): ContentRuleEngine | null {
 export function stopTracking(): void {
   monitor?.stop()
   inferenceEngine?.stop()
+  mistakeReviewer.stop()
   stopCloudSync()
 }
 
@@ -225,7 +231,7 @@ const OPEN_CHANNELS = new Set<string>([
   'goals:get', 'inferences:get', 'issue:list', 'preferences:get', 'safety:changelog',
   'cards:items',
   'safety:status', 'startup:list', 'timesheet:get', 'update:check', 'update:status',
-  'usage:get', 'daemon:startup-status',
+  'usage:get', 'daemon:startup-status', 'mistake:calibration',
   // chrome / environment
   'app:version', 'daemon:platform', 'shell:open-external',
   // Settings incl. the theme + diagnostics toggles: appearance is part of "looking".
@@ -375,6 +381,7 @@ export function initIpc(): void {
   agentService.init(effectiveKey)
   monitor.getUrlGuard().init(effectiveKey)
   inferenceEngine.init(effectiveKey)
+  mistakeReviewer.init(effectiveKey)
 
   // Push live free-usage updates to the renderer so the meter/paywall stay current.
   setUsageChangeCallback((usage) => sendMain('usage:changed', usage))
@@ -387,6 +394,7 @@ export function initIpc(): void {
   engine.on('blocked', (event: { type: string; item: string }) => {
     if (!isBreakActive() && interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
       const session = getStore().sessions.find((s) => s.active)
+      lastInterstitialDomain = event.type === 'domain' ? event.item : null
       interstitialWin.webContents.send('interstitial:data', {
         blocked: event.item,
         type: event.type,
@@ -402,6 +410,7 @@ export function initIpc(): void {
     debugLog('monitor:url-blocked', { domain: data.domain, url: data.url })
     if (!isBreakActive() && interstitialWin && !interstitialWin.isDestroyed() && !interstitialWin.isVisible()) {
       const session = getStore().sessions.find((s) => s.active)
+      lastInterstitialDomain = data.domain
       interstitialWin.webContents.send('interstitial:data', {
         blocked: data.domain,
         type: 'domain',
@@ -543,6 +552,12 @@ export function initIpc(): void {
     if (deep && engine?.isDeepDomain(domain)) {
       return { ok: false, locked: true, error: 'Locked by Deep Focus until the session ends.' }
     }
+    // If the app auto-added this domain recently, removing it is the user overturning that
+    // decision. A domain the user themselves added carries no such signal.
+    const entry = getStore().blocklist.domains.find((d) => d.domain === domain)
+    if (entry && typeof entry.reason === 'string' && entry.reason.startsWith('auto')) {
+      recordFeedback({ targetType: 'domain', targetValue: domain, signal: 'quick_unblock', note: `removed auto-block (${entry.reason})` })
+    }
     engine?.removeDomain(domain)
     const s = getStore()
     patchStore({ blocklist: { ...s.blocklist, domains: s.blocklist.domains.filter((d) => d.domain !== domain) } })
@@ -647,6 +662,13 @@ export function initIpc(): void {
 
   ipcMain.on('overlay:action', (_e, id: string, action: { type: string; domain?: string; durationMs?: number; chatMsg?: string }) => {
     notificationQueue.onDismiss(id)
+    // The user's response to a nudge is feedback on the flag behind it. Accepting the block
+    // agrees; dismissing it is weak disagreement. Only a domain-scoped nudge carries a
+    // target we can attribute.
+    if (action.domain) {
+      if (action.type === 'block') recordFeedback({ targetType: 'domain', targetValue: action.domain, signal: 'nudge_acted' })
+      else if (action.type === 'dismiss') recordFeedback({ targetType: 'domain', targetValue: action.domain, signal: 'nudge_dismissed' })
+    }
     // Route actions that need main-process involvement
     if (action.type === 'chat' && action.chatMsg) {
       mainWin?.show()
@@ -755,6 +777,7 @@ export function initIpc(): void {
     agentService?.init(key)
     monitor?.getUrlGuard().init(key)
     inferenceEngine?.init(key)
+    mistakeReviewer.init(key)
     notificationQueue.refreshClient()
     sendMain('usage:changed', getUsageState())  // own key → no longer metered
     return { ok: true }
@@ -767,6 +790,7 @@ export function initIpc(): void {
     agentService?.init(k)
     monitor?.getUrlGuard().init(k)
     inferenceEngine?.init(k)
+    mistakeReviewer.init(k)
     notificationQueue.refreshClient()
     sendMain('usage:changed', getUsageState())
     return { ok: true }
@@ -831,6 +855,16 @@ export function initIpc(): void {
     const all = getInferences()
     const inf = all.find((i) => i.id === id)
     resolveInference(id, status)
+
+    // Confirm/reject of a suggestion is a labeled verdict on that decision.
+    if (inf) {
+      recordFeedback({
+        targetType: inf.type,
+        targetValue: inf.value,
+        signal: status === 'confirmed' ? 'inference_confirmed' : 'inference_rejected',
+        goalId: inf.goal_id,
+      })
+    }
 
     // When user confirms a domain suggestion, actually add it to the blocklist
     if (status === 'confirmed' && inf && inf.type === 'domain') {
@@ -1280,12 +1314,26 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
   // ── Interstitial ──────────────────────────────────────────────────────────
 
   ipcMain.handle('interstitial:hide', () => interstitialWin?.hide())
-  ipcMain.handle('interstitial:proceed', () => interstitialWin?.hide())
+  ipcMain.handle('interstitial:proceed', () => {
+    // Pushing past a block is the strongest "you were wrong" the user can give without
+    // words. Attribute it to the decision that blocked this domain.
+    if (lastInterstitialDomain) {
+      recordFeedback({ targetType: 'domain', targetValue: lastInterstitialDomain, signal: 'interstitial_proceed', note: 'proceeded past interstitial' })
+      lastInterstitialDomain = null
+    }
+    interstitialWin?.hide()
+  })
 
   // ── Content Rule Engine (browser extension element blocking) ─────────────
 
   // Wire up bypass escalation → agent check-in + overlay notification
   contentRuleEngine.on('bypass', (attempt: import('../../shared/types').BypassAttempt, score: number, escalation: string) => {
+    // Every bypass attempt is the user disagreeing with an element block. Attribute it to
+    // the rule's domain so the reviewer can judge whether that block is misfiring.
+    {
+      const rule = contentRuleEngine!.getRules().find((r) => r.id === attempt.ruleId)
+      if (rule?.domain) recordFeedback({ targetType: 'domain', targetValue: rule.domain, signal: 'bypass', note: `${score}x on ${rule.displayName ?? attempt.ruleId}` })
+    }
     if (escalation === 'warn') {
       const rule = contentRuleEngine!.getRules().find((r) => r.id === attempt.ruleId)
       agentService?.notifyDistraction({
@@ -1339,6 +1387,14 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
     return { ok }
   })
 
+  // ── Classifier self-evaluation (mistake detection) ───────────────────────────
+  // Read the calibration report (pure aggregation, no AI), and trigger an on-demand
+  // review of unreviewed disagreements (AI, best-effort).
+  ipcMain.handle('mistake:calibration', (_e, windowDays?: number) => computeCalibration(windowDays ?? 30))
+  ipcMain.handle('mistake:review-now', async () => {
+    try { return await mistakeReviewer.review() } catch { return { reviewed: 0, mistakes: 0 } }
+  })
+
   ipcMain.handle('content-rules:install-predefined', () => {
     const rules = contentRuleEngine?.installPredefined() ?? []
     return { ok: true, count: rules.length, rules }
@@ -1361,6 +1417,9 @@ export function startTracking(): void {
   if (store.settings?.trackingEnabled !== false) {
     monitor?.start()
     inferenceEngine?.start()
+    // Audits its own decisions against the user's reactions. Cheap when idle (a timer that
+    // finds no unreviewed disagreements does nothing), so it runs whenever tracking does.
+    mistakeReviewer.start()
     // Sync focus events to the cloud for Cloud-tier users (powers the web dashboard).
     // The module itself no-ops for free users, so it's always safe to start.
     startCloudSync()

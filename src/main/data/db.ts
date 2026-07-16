@@ -248,6 +248,54 @@ CREATE TABLE IF NOT EXISTS usage_stats (
   PRIMARY KEY (day, model)
 );
 `,
+  '005_feedback.sql': `
+-- Decision log: every automatic distraction decision plus the features that drove it, so
+-- feedback can be attached to it and the classifier calibrated against real outcomes. The
+-- hand-set policy weight is stored SEPARATELY from the confidence, because they are
+-- different quantities that were previously conflated in one field.
+CREATE TABLE IF NOT EXISTS classification_decisions (
+  id                 TEXT PRIMARY KEY,
+  ts                 INTEGER NOT NULL,
+  target_type        TEXT NOT NULL,        -- domain | app
+  target_value       TEXT NOT NULL,
+  category           TEXT,
+  action             TEXT NOT NULL,        -- auto_block | suggest | skip
+  confidence         REAL NOT NULL,        -- score used for the decision
+  policy_weight      REAL,                 -- hand-set category base score (NOT model confidence)
+  source             TEXT,                 -- url_visit | search_prediction | ai_url | session | sweep | title_match | escalation
+  reasoning          TEXT,
+  goal_id            TEXT,
+  goal_text          TEXT,
+  fingerprint        TEXT,                 -- hash(registeredDomain, pathClass, goalId, classifierVersion)
+  features           TEXT,                 -- JSON: the raw feature bag
+  classifier_version TEXT,
+  outcome            TEXT,                 -- agree | disagree | override | ignored | null (filled by feedback)
+  outcome_at         INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_cdec_ts    ON classification_decisions(ts);
+CREATE INDEX IF NOT EXISTS idx_cdec_value ON classification_decisions(target_value);
+CREATE INDEX IF NOT EXISTS idx_cdec_fp    ON classification_decisions(fingerprint);
+
+-- Feedback: the user's reaction, read from real behaviour, linked to the decision that
+-- caused it. This is the labeled-disagreement stream the mistake reviewer consumes.
+CREATE TABLE IF NOT EXISTS classification_feedback (
+  id            TEXT PRIMARY KEY,
+  ts            INTEGER NOT NULL,
+  decision_id   TEXT,                 -- FK -> classification_decisions.id (null if unmatched)
+  target_type   TEXT,
+  target_value  TEXT,
+  fingerprint   TEXT,
+  signal        TEXT NOT NULL,        -- bypass | quick_unblock | inference_rejected | inference_confirmed | interstitial_proceed | nudge_dismissed | nudge_acted
+  user_decision TEXT NOT NULL,        -- agree | disagree | override
+  goal_id       TEXT,
+  latency_ms    INTEGER,              -- decision -> reaction, when known
+  note          TEXT,
+  reviewed      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_cfb_ts       ON classification_feedback(ts);
+CREATE INDEX IF NOT EXISTS idx_cfb_decision ON classification_feedback(decision_id);
+CREATE INDEX IF NOT EXISTS idx_cfb_reviewed ON classification_feedback(reviewed);
+`,
 }
 
 function runMigrations(db: Database): void {

@@ -432,7 +432,7 @@ export function clearAgentMessages(conversationId?: string): void {
 export interface DbIssue {
   id: string
   ts: number
-  kind: 'bug_manual' | 'crash' | 'freeze' | 'ai_friction'
+  kind: 'bug_manual' | 'crash' | 'freeze' | 'ai_friction' | 'classifier_mistake'
   category?: string
   severity?: string
   title?: string

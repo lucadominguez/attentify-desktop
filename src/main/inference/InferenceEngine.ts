@@ -8,6 +8,7 @@ import { getStore, patchStore } from '../store'
 import { canUseAi, recordUsage } from '../billing'
 import { resolveModel } from '../agent/modelRouter'
 import { debugLog } from '../debug/logger'
+import { recordDecision } from '../feedback/FeedbackService'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { ActivitySession } from '../../shared/types'
 
@@ -365,7 +366,7 @@ export class InferenceEngine {
       const reasoning = goals.length > 0
         ? `visited ${domain} (${category}) while goal "${goals[0]!.text}" is active`
         : `${domain} is a known ${category} site`
-      this.handleCandidate('domain', domain, confidence, { reasoning, source: 'url_visit', title })
+      this.handleCandidate('domain', domain, confidence, { reasoning, source: 'url_visit', title, category, policyWeight: baseScore, url })
       return
     }
 
@@ -377,7 +378,7 @@ export class InferenceEngine {
         const category = DOMAIN_TO_CATEGORY.get(known) ?? 'distraction'
         this.handleCandidate('domain', domain, 0.72, {
           reasoning: `subdomain/variant of known distraction ${known} (${category})`,
-          source: 'url_visit', title,
+          source: 'url_visit', title, category, policyWeight: CATEGORY_AUTO_BLOCK_SCORE[category], url,
         })
         return
       }
@@ -423,7 +424,7 @@ export class InferenceEngine {
               : Math.max(0.55, pred.confidence - 0.15)
             this.handleCandidate('domain', domain, confidence, {
               reasoning: `search query "${query}" predicts navigation to ${pred.category} site`,
-              source: 'search_prediction',
+              source: 'search_prediction', category: pred.category, policyWeight: pred.confidence,
             })
           }
         }
@@ -467,7 +468,7 @@ export class InferenceEngine {
         if (confidence >= CONFIDENCE_SUGGEST) {
           this.handleCandidate('domain', domain, confidence, {
             reasoning: this.buildSessionReasoning(domain, confidence, session),
-            source: 'session',
+            source: 'session', category: DOMAIN_TO_CATEGORY.get(domain) ?? session.category, url: session.url,
           })
         }
       } catch { /* ignore */ }
@@ -498,7 +499,7 @@ export class InferenceEngine {
         if (confidence >= CONFIDENCE_SUGGEST) {
           this.handleCandidate('domain', dom, confidence, {
             reasoning: `window title matched ${cat} site (${dom})`,
-            source: 'title_match',
+            source: 'title_match', category: cat, policyWeight: baseScore,
           })
         }
         return // one match per session is enough
@@ -515,7 +516,7 @@ export class InferenceEngine {
     if (confidence >= CONFIDENCE_SUGGEST) {
       this.handleCandidate('app', app, confidence, {
         reasoning: this.buildSessionReasoning(app, confidence, session),
-        source: 'session',
+        source: 'session', category: session.category,
       })
     }
   }
@@ -550,7 +551,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"category":"<3 word
         if (result.distraction && result.confidence >= CONFIDENCE_SUGGEST) {
           this.handleCandidate('domain', domain, result.confidence, {
             reasoning: `AI: ${result.reasoning} (${result.category})`,
-            source: 'ai_url',
+            source: 'ai_url', category: result.category,
           })
         }
       },
@@ -764,7 +765,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     type: DbInference['type'],
     value: string,
     confidence: number,
-    meta: { reasoning: string; source: string; title?: string; goalId?: string }
+    meta: { reasoning: string; source: string; title?: string; goalId?: string; category?: string; policyWeight?: number; url?: string }
   ): void {
     const evidence = { source: meta.source, title: meta.title }
     const pct = Math.round(confidence * 100)
@@ -781,6 +782,27 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
       (i) => i.value === value && i.status !== 'rejected'
     )
     if (anyExisting) return
+
+    // Log the decision — AFTER the dedup guard, so only decisions that actually produce a
+    // block or a surfaced suggestion are recorded. A phantom row for a domain the user
+    // never saw could never be reacted to, and would poison calibration. This is the
+    // substrate the mistake-detection loop reads from; it must never affect the decision,
+    // so recordDecision is fire-and-forget and swallows its own errors.
+    const goals = getActiveGoals()
+    const goalText = meta.goalId ? goals.find((g) => g.id === meta.goalId)?.text : goals[0]?.text
+    recordDecision({
+      targetType: type,
+      targetValue: value,
+      action: action.startsWith('auto') ? 'auto_block' : 'suggest',
+      confidence,
+      policyWeight: meta.policyWeight,
+      category: meta.category,
+      source: meta.source,
+      reasoning: meta.reasoning,
+      goalId: meta.goalId ?? goals[0]?.id,
+      goalText,
+      url: meta.url,
+    })
 
     if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto') {
       insertInference({ type, value, goal_id: meta.goalId, confidence, reasoning: meta.reasoning, evidence, status: 'auto_applied', action: 'auto_block', created_at: Date.now() })

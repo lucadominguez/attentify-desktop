@@ -487,3 +487,30 @@ export interface InferenceSuggestion {
 export interface ApiKeyStatus {
   hasKey: boolean
 }
+
+// ── Classifier self-evaluation (mistake detection / calibration) ────────────────
+// Produced by the feedback subsystem: for the automatic distraction decisions the user
+// actually reacted to, does a given confidence band behave like its number claims?
+export interface CalibrationBucket {
+  band: string                 // e.g. "0.80-0.90"
+  lo: number
+  n: number
+  disagreementRate: number
+  expectedDisagreement: number // 1 - band midpoint
+  gap: number                  // observed - expected; > 0 means over-confident
+}
+
+export interface CategoryCalibration {
+  category: string
+  n: number
+  disagreementRate: number
+}
+
+export interface CalibrationReport {
+  windowDays: number
+  totalResolved: number
+  buckets: CalibrationBucket[]
+  categories: CategoryCalibration[]
+  worstCategory?: CategoryCalibration
+  generatedAt: number
+}

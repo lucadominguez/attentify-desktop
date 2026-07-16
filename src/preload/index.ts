@@ -207,6 +207,13 @@ const api = {
 
   dismissHeuristicAlert: (id: string): Promise<void> => ipcRenderer.invoke('heuristics:dismiss', id),
 
+  // Classifier self-evaluation: calibration report (predicted vs. observed disagreement)
+  // and an on-demand review pass over unreviewed disagreements.
+  getClassifierCalibration: (windowDays?: number): Promise<import('../shared/types').CalibrationReport> =>
+    ipcRenderer.invoke('mistake:calibration', windowDays),
+  reviewClassifierMistakes: (): Promise<{ reviewed: number; mistakes: number }> =>
+    ipcRenderer.invoke('mistake:review-now'),
+
   exportPdf: (): Promise<{ ok: boolean; canceled?: boolean; filePath?: string; error?: string }> =>
     ipcRenderer.invoke('analytics:export-pdf'),
 
