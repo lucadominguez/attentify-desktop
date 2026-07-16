@@ -37,7 +37,7 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
 }
 
 export default function SettingsView({ store, onRefresh, onNavigate }: SettingsProps): React.ReactElement {
-  const { colors, theme, toggle } = useTheme()
+  const { colors, theme, toggle, pulse, togglePulse } = useTheme()
   const currentMode = store.settings.blockingMode ?? 'auto'
   const [apiInput, setApiInput] = useState('')
   const [apiSaved, setApiSaved] = useState(false)
@@ -194,6 +194,47 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               ThemeContext, so restoring it is flipping that flag and putting these two
               controls back. A toggle that cannot do anything is worse than no toggle,
               so it does not stay on screen while shelved. */}
+
+          {/* Pulse field. An experiment, so it is off by default and says so plainly. */}
+          <div
+            className="flex items-center justify-between p-4 rounded-lg mt-2"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}
+          >
+            <div className="pr-3">
+              <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+                Breathing background
+                <span
+                  className="ml-2 text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded"
+                  style={{ background: colors.accentBg, color: colors.accent }}
+                >
+                  Experiment
+                </span>
+              </p>
+              <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+                A slow pulse around the edges of the app, so it feels present rather than idle.
+                Stays out of the centre and stops entirely if your system asks for reduced motion.
+              </p>
+            </div>
+            <button
+              onClick={togglePulse}
+              role="switch"
+              aria-checked={pulse}
+              className="relative flex-shrink-0 rounded-full transition-colors"
+              style={{
+                width: 38, height: 21,
+                background: pulse ? colors.accent : 'rgba(255,255,255,0.10)',
+                border: `1px solid ${pulse ? colors.accent : colors.border}`,
+              }}
+            >
+              <span
+                className="absolute rounded-full transition-transform"
+                style={{
+                  width: 15, height: 15, top: 2, left: 2, background: '#fff',
+                  transform: pulse ? 'translateX(17px)' : 'none',
+                }}
+              />
+            </button>
+          </div>
 
           {/* Diagnostics sharing */}
           <div className="flex items-center justify-between p-4 rounded-lg mt-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>

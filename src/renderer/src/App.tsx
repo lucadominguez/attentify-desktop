@@ -17,6 +17,7 @@ import Logic from './views/Logic'
 import Activity from './views/Activity'
 import ChatPanel from './chat/ChatPanel'
 import AmbientWash from './components/AmbientWash'
+import PulseField from './components/PulseField'
 import { PresenceProvider } from './context/PresenceContext'
 import AuthPanel from './components/AuthPanel'
 import type { ViewName, AppStore, ScanResult, HeuristicAlert } from '@shared/types'
@@ -212,6 +213,7 @@ export default function App(): React.ReactElement {
     <div className="flex flex-col h-screen w-full overflow-hidden relative" style={{ background: colors.rootBg, transition: 'background 0.2s ease' }}>
       {/* The app's ambient response to your state. Behind everything, pointer-events:none. */}
       <AmbientWash />
+      <PulseField />
       {/* Custom title bar */}
       <div
         className="titlebar-drag flex items-center justify-between px-4 flex-shrink-0"

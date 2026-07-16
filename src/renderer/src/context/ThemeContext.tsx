@@ -220,6 +220,9 @@ interface ThemeCtx {
   /** 0.15 - 0.9. How solid the glass is; 0.5 is the tuned default. */
   glassOpacity: number
   setGlassOpacity: (v: number) => void
+  /** The pulse experiment: a slow breathing field behind the app. See PulseField.tsx. */
+  pulse: boolean
+  togglePulse: () => void
 }
 
 const ThemeContext = createContext<ThemeCtx>({
@@ -229,6 +232,8 @@ const ThemeContext = createContext<ThemeCtx>({
   glass: false,
   toggleGlass: () => {},
   glassOpacity: 0.5,
+  pulse: false,
+  togglePulse: () => {},
   setGlassOpacity: () => {},
 })
 
@@ -314,6 +319,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
   // localStorage, not the store: a look is a per-window view preference, and routing it
   // through IPC would put it behind the sign-in gate.
   const [glass, setGlass] = useState<boolean>(() => GLASS_EXPERIMENT_ENABLED && localStorage.getItem('pd-glass') === '1')
+  const [pulse, setPulse] = useState<boolean>(() => localStorage.getItem('pd-pulse') === '1')
   const [glassOpacity, setGlassOpacity] = useState<number>(() => {
     const v = Number(localStorage.getItem('pd-glass-opacity'))
     return Number.isFinite(v) && v >= 0.25 && v <= 0.9 ? v : 0.6
@@ -349,19 +355,21 @@ export function ThemeProvider({ children }: { children: React.ReactNode }): Reac
     localStorage.setItem('pd-theme', theme)
     localStorage.setItem('pd-glass', glass ? '1' : '0')
     localStorage.setItem('pd-glass-opacity', String(glassOpacity))
+    localStorage.setItem('pd-pulse', pulse ? '1' : '0')
     const api = (window as unknown as { electronAPI?: { getStore?: () => Promise<Record<string, unknown>>; setStore?: (p: Record<string, unknown>) => Promise<unknown> } }).electronAPI
     api?.getStore?.().then((st) => {
       const cur = (st.settings ?? {}) as Record<string, unknown>
       if (cur.fullGlass === glass && cur.glassOpacity === glassOpacity) return
       return api.setStore?.({ settings: { ...cur, fullGlass: glass, glassOpacity } })
     }).catch(() => { /* view pref; localStorage already has it */ })
-  }, [theme, glass, glassOpacity, colors])
+  }, [theme, glass, glassOpacity, pulse, colors])
 
   const toggle = (): void => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
   const toggleGlass = (): void => { if (GLASS_EXPERIMENT_ENABLED) setGlass((g) => !g) }
+  const togglePulse = (): void => setPulse((p) => !p)
 
   return (
-    <ThemeContext.Provider value={{ theme, colors, toggle, glass, toggleGlass, glassOpacity, setGlassOpacity }}>
+    <ThemeContext.Provider value={{ theme, colors, toggle, glass, toggleGlass, glassOpacity, setGlassOpacity, pulse, togglePulse }}>
       {children}
     </ThemeContext.Provider>
   )

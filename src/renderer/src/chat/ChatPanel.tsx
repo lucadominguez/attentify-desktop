@@ -60,6 +60,46 @@ function cleanForDisplay(text: string): string {
   return t.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trimEnd()
 }
 
+// The accent arrives as a hex or an rgb()/rgba(); the focus ring needs it at low alpha.
+function tint(color: string, a: number): string {
+  const hex = color.match(/^#([0-9a-f]{6})$/i)
+  if (hex) {
+    const n = parseInt(hex[1], 16)
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+  }
+  const rgb = color.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i)
+  if (rgb) return `rgba(${rgb[1]}, ${rgb[2]}, ${rgb[3]}, ${a})`
+  return color
+}
+
+// What the assistant is doing, said in the user's words. The raw tool name is our
+// vocabulary; anything not listed falls back to a humanised form of the identifier so a
+// tool added later degrades to "Creating report card" rather than to nothing.
+const TOOL_LABELS: Record<string, string> = {
+  block_domain: 'Adding a block', unblock_domain: 'Removing a block',
+  block_process: 'Blocking an app', unblock_process: 'Unblocking an app',
+  block_category: 'Blocking a category', get_active_blocks: 'Checking your blocks',
+  start_focus_session: 'Starting your session', stop_focus_session: 'Ending your session',
+  get_analytics: 'Reading your activity', get_recent_events: 'Reading recent activity',
+  get_patterns: 'Looking for patterns', query_activity_data: 'Querying your activity',
+  get_goals: 'Checking your goals', add_goal: 'Saving a goal', clear_goal: 'Clearing a goal',
+  get_preferences: 'Checking your preferences', set_preference: 'Saving a preference',
+  get_inferences: 'Reviewing what it inferred', resolve_inference: 'Updating an inference',
+  create_content_rule: 'Writing a content rule', list_content_rules: 'Checking content rules',
+  toggle_content_rule: 'Updating a content rule',
+  create_analytics_card: 'Building a card', create_action_card: 'Building a card',
+  list_analytics_cards: 'Checking your cards', delete_analytics_card: 'Removing a card',
+  create_schedule: 'Adding a schedule', list_schedules: 'Checking your schedule',
+  remove_schedule: 'Removing a schedule', get_bypass_attempts: 'Reviewing bypass attempts',
+}
+
+function toolLabel(name: string): string {
+  const known = TOOL_LABELS[name]
+  if (known) return `${known}…`
+  const words = name.replace(/_/g, ' ').trim()
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}…`
+}
+
 const QUICK_COMMANDS = [
   "I'm writing until 5pm, keep me off social",
   'Hide YouTube Shorts but keep my subscriptions',
@@ -238,6 +278,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
   const [confirmClear, setConfirmClear] = useState(false)
   const [paywalled, setPaywalled] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  const [composerFocused, setComposerFocused] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -646,13 +687,25 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
       )}
 
       {/* Messages */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-        {messages.map((msg) => (
-          <div key={msg.id} className="flex flex-col group">
+      {/* Bottom-anchored. A short conversation pinned to the top of a tall pane with a
+          void underneath is the clearest tell of a chat that was not finished: real ones
+          grow up from the composer. justify-end does that without measuring anything. */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col justify-end">
+        {messages.map((msg, msgIdx) => {
+        // Group runs from the same speaker: the avatar and the timestamp belong to the
+        // group, not to every line, or a three-part answer looks like three answers.
+        const prev = messages[msgIdx - 1]
+        const next = messages[msgIdx + 1]
+        const startsGroup = !prev || prev.role !== msg.role
+        const endsGroup = !next || next.role !== msg.role
+        return (
+          <div key={msg.id} className={`flex flex-col group ${startsGroup ? 'mt-3' : 'mt-0.5'}`}>
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {msg.role === 'assistant' && (
-              <div className="mr-2 mt-0.5 flex-shrink-0">
-                <BrandMark size={24} />
+              // The gutter is always reserved so grouped lines stay aligned with the
+              // first; only the first of a run actually shows the mark.
+              <div className="mr-2 mt-0.5 flex-shrink-0" style={{ width: 24 }}>
+                {startsGroup && <BrandMark size={24} />}
               </div>
             )}
             <div
@@ -661,7 +714,10 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
                 background: msg.role === 'user' ? colors.userBubbleBg : colors.aiBubbleBg,
                 border: `1px solid ${msg.role === 'user' ? colors.userBubbleBorder : colors.aiBubbleBorder}`,
                 color: msg.role === 'user' ? colors.userBubbleText : colors.aiBubbleText,
-                borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '4px 12px 12px 12px',
+                // Square off the inner corners of a run so a group reads as one block.
+                borderRadius: msg.role === 'user'
+                  ? `12px ${startsGroup ? '12px' : '4px'} ${endsGroup ? '4px' : '4px'} 12px`
+                  : `${startsGroup ? '4px' : '4px'} 12px 12px ${endsGroup ? '12px' : '4px'}`,
               }}
             >
               {msg.images && msg.images.length > 0 && (
@@ -730,21 +786,28 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
                 </button>
               </div>
             )}
+            {/* One timestamp per group, on hover. A time on every line is clutter; no
+                time at all is the thing you miss the moment you scroll back. */}
+            {endsGroup && !msg.streaming && msg.id !== 'welcome' && (
+              <div className={`flex ${msg.role === 'user' ? 'justify-end pr-1' : 'justify-start pl-8'}`}>
+                <span className="text-[9px] opacity-0 group-hover:opacity-100 transition-opacity data-value" style={{ color: colors.textDim }}>
+                  {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
           </div>
-        ))}
+        )})}
 
-        {/* Tool use indicator */}
+        {/* Tool use indicator. It used to print the raw tool name ("Using tool:
+            create_card"), which is our internal vocabulary, not the user's. */}
         {activeToolName && (
-          <div className="flex justify-start">
-            <div className="w-6 h-6 rounded-full bg-accent-blue/20 flex items-center justify-center mr-2 mt-0.5 flex-shrink-0">
-              <Zap size={12} className="text-accent-blue" />
+          <div className="flex justify-start mt-2 items-center">
+            <div className="mr-2 flex-shrink-0" style={{ width: 24 }}>
+              <Zap size={12} style={{ color: colors.accent }} />
             </div>
-            <div
-              className="px-3 py-2 text-[10px] italic flex items-center gap-1.5"
-              style={{ color: colors.textMuted }}
-            >
-              <div className="w-1 h-1 rounded-full bg-accent-blue animate-pulse" />
-              Using tool: {activeToolName}
+            <div className="px-3 py-2 text-[10px] flex items-center gap-1.5" style={{ color: colors.textMuted }}>
+              <div className="w-1 h-1 rounded-full animate-pulse" style={{ background: colors.accent }} />
+              {toolLabel(activeToolName)}
             </div>
           </div>
         )}
@@ -752,19 +815,24 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
         <div ref={bottomRef} />
       </div>
 
-      {/* Quick commands */}
+      {/* Openers. Full-width rows rather than a wrapped pill strip: these are sentences,
+          and pills chopped them mid-thought at every panel width. Each one is a real
+          message, so the first thing you see is the shape of what you can say. */}
       {showQuickCommands && (
-        <div className="px-4 pb-2 flex-shrink-0">
-          <p className="text-[10px] mb-2" style={{ color: colors.textMuted }}>Quick commands:</p>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="px-4 pb-3 flex-shrink-0">
+          <p className="text-[9px] uppercase tracking-widest mb-1.5" style={{ color: colors.textDim }}>
+            Try asking
+          </p>
+          <div className="flex flex-col gap-1">
             {QUICK_COMMANDS.map((cmd) => (
               <button
                 key={cmd}
                 onClick={() => sendMessage(cmd)}
-                className="px-2.5 py-1.5 rounded-full text-[10px] transition-colors"
-                style={{ background: colors.cardBg, border: `1px solid ${colors.border}`, color: colors.textSecondary }}
+                className="group/sug flex items-center justify-between gap-2 text-left px-2.5 py-2 rounded-xl text-[11px] transition-colors hover:bg-white/5"
+                style={{ border: `1px solid ${colors.border}`, color: colors.textSecondary }}
               >
-                {cmd}
+                <span className="truncate">{cmd}</span>
+                <Send size={10} className="flex-shrink-0 opacity-0 group-hover/sug:opacity-60 transition-opacity" />
               </button>
             ))}
           </div>
@@ -805,7 +873,17 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
             ))}
           </div>
         )}
-        <div className="flex items-center gap-2">
+        {/* One field, not three boxes in a row. The attach and send controls live inside
+            the same bordered surface as the text, so the composer reads as a single place
+            to write rather than a toolbar that happens to sit next to an input. */}
+        <div
+          className="flex items-end gap-1.5 px-1.5 py-1.5 rounded-2xl transition-colors"
+          style={{
+            background: colors.inputBg,
+            border: `1px solid ${composerFocused ? colors.accent : colors.border}`,
+            boxShadow: composerFocused ? `0 0 0 3px ${tint(colors.accent, 0.12)}` : 'none',
+          }}
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -817,9 +895,9 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={sending || attachments.length >= 4}
-            title="Attach image"
-            className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors flex-shrink-0 disabled:opacity-40"
-            style={{ background: colors.inputBg, border: `1px solid ${colors.border}`, color: colors.textMuted }}
+            title={attachments.length >= 4 ? 'Four images is the limit' : 'Attach an image'}
+            className="w-8 h-8 flex items-center justify-center rounded-xl transition-colors flex-shrink-0 disabled:opacity-30 hover:bg-white/5"
+            style={{ color: colors.textMuted }}
           >
             <Paperclip size={14} />
           </button>
@@ -830,7 +908,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
           <textarea
             ref={inputRef}
             rows={1}
-            placeholder="Block Twitter for 2 hours…    (Shift+Enter for a new line)"
+            placeholder="Block Twitter for 2 hours…"
             value={input}
             onChange={(e) => {
               setInput(e.target.value)
@@ -848,20 +926,31 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
               const imgs = Array.from(e.clipboardData.files).filter((f) => f.type.startsWith('image/'))
               if (imgs.length) { e.preventDefault(); addFiles(imgs) }
             }}
-            className="flex-1 text-xs px-3 py-2.5 rounded-xl outline-none transition-colors resize-none"
-            style={{
-              background: colors.inputBg, border: `1px solid ${colors.border}`,
-              color: colors.textPrimary, maxHeight: 160, lineHeight: 1.5,
-            }}
+            onFocus={() => setComposerFocused(true)}
+            onBlur={() => setComposerFocused(false)}
+            className="flex-1 text-xs px-1.5 py-2 outline-none resize-none bg-transparent border-0"
+            style={{ color: colors.textPrimary, maxHeight: 160, lineHeight: 1.5 }}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={(!input.trim() && attachments.length === 0) || sending}
-            className="w-9 h-9 flex items-center justify-center disabled:opacity-40 rounded-xl transition-all hover:brightness-110 flex-shrink-0"
+            title="Send"
+            className="w-8 h-8 flex items-center justify-center disabled:opacity-30 rounded-xl transition-all hover:brightness-110 flex-shrink-0"
             style={{ background: colors.accent }}
           >
-            <Send size={14} className="text-white" />
+            <Send size={13} className="text-white" />
           </button>
+        </div>
+        {/* The hint lives under the field, where it stays readable while you type. It was
+            inside the placeholder, which put it in the one spot it disappears from the
+            moment it becomes relevant. */}
+        <div className="flex items-center justify-between mt-1.5 px-1 h-3">
+          <span className="text-[9px]" style={{ color: colors.textDim }}>
+            {sending ? 'Thinking…' : composerFocused || input ? <><kbd className="data-value">Enter</kbd> to send · <kbd className="data-value">Shift+Enter</kbd> for a new line</> : ''}
+          </span>
+          {input.length > 400 && (
+            <span className="text-[9px] data-value" style={{ color: colors.textDim }}>{input.length}</span>
+          )}
         </div>
       </div>
     </div>
