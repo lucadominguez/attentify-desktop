@@ -687,10 +687,14 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
       )}
 
       {/* Messages */}
-      {/* Bottom-anchored. A short conversation pinned to the top of a tall pane with a
-          void underneath is the clearest tell of a chat that was not finished: real ones
-          grow up from the composer. justify-end does that without measuring anything. */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col justify-end">
+      {/* Bottom-anchored, but scrollable. `justify-end` on the scroll container itself is
+          the trap: once the conversation is taller than the pane, flexbox pushes the
+          overflow off the TOP and it can never be scrolled back to. The fix is an inner
+          wrapper with `mt-auto` — it sinks a short conversation to the bottom, and the
+          moment content exceeds the height the auto margin collapses to 0 and normal
+          top-to-bottom scrolling returns. */}
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col">
+        <div className="mt-auto">
         {messages.map((msg, msgIdx) => {
         // Group runs from the same speaker: the avatar and the timestamp belong to the
         // group, not to every line, or a three-part answer looks like three answers.
@@ -813,6 +817,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
         )}
 
         <div ref={bottomRef} />
+        </div>
       </div>
 
       {/* Openers. Full-width rows rather than a wrapped pill strip: these are sentences,
