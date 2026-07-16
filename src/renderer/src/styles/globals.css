@@ -369,23 +369,6 @@ html.light .bg-grid {
 }
 .presence-breathe { animation: presenceBreathe 5s ease-in-out infinite; }
 
-/* ── Pulse field experiment ──────────────────────────────────────────────────
-   Opt-in via Settings. See components/PulseField.tsx for the reasoning; these are
-   just the two motions. Both are opacity/transform only, so they stay on the
-   compositor and never trigger paint on an app that runs all day. */
-@keyframes pulse-breathe {
-  0%, 100% { opacity: var(--pulse-lo, 0.55); transform: scale(1); }
-  50%      { opacity: var(--pulse-hi, 1);    transform: scale(1.035); }
-}
-/* The band crosses, then the field rests. The rest is the point: a pulse with no gap
-   is a loading shimmer. It is only visible for the first ~30% of the cycle. */
-@keyframes pulse-travel {
-  0%        { transform: translate3d(-60%, 0, 0); opacity: 0; }
-  6%        { opacity: 1; }
-  26%       { opacity: 1; }
-  32%, 100% { transform: translate3d(60%, 0, 0); opacity: 0; }
-}
-
 /* ── Reduced motion ──────────────────────────────────────────────────────────
    Respect the OS setting. Nothing here is load-bearing: the presence still reads
    through colour and the ambient wash still shifts, they just stop moving. */

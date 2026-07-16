@@ -202,7 +202,7 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
           >
             <div className="pr-3">
               <p className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
-                Breathing background
+                Neural background
                 <span
                   className="ml-2 text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded"
                   style={{ background: colors.accentBg, color: colors.accent }}
@@ -211,8 +211,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
                 </span>
               </p>
               <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
-                A slow pulse around the edges of the app, so it feels present rather than idle.
-                Stays out of the centre and stops entirely if your system asks for reduced motion.
+                A faint web behind the app with slow electrical charges running through it, so it
+                feels present rather than idle. Sits behind every panel, and holds still if your
+                system asks for reduced motion.
               </p>
             </div>
             <button
