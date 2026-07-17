@@ -382,6 +382,24 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       return json(res, { ok: true })
     }
 
+    // The extension as the AUTHORITATIVE browser sensor. When installed it reports real
+    // navigation events (with the actual URL + title + light page metadata) here, which is
+    // far more reliable than scraping the address bar via PowerShell. The monitor prefers
+    // this and backs the PowerShell poller off to a fallback while the extension is live.
+    if (path === '/extension/activity') {
+      const url = body.url as string
+      const title = (body.title as string) ?? ''
+      if (typeof url === 'string' && /^https?:\/\//.test(url)) {
+        deps.contentRules?.()?.heartbeat()
+        deps.monitor()?.ingestExtensionActivity(url, title, {
+          description: body.description as string | undefined,
+          mediaPlaying: body.mediaPlaying as boolean | undefined,
+          headings: Array.isArray(body.headings) ? (body.headings as unknown[]).slice(0, 6).map(String) : undefined,
+        })
+      }
+      return json(res, { ok: true })
+    }
+
     if (path === '/extension/escalate') {
       const domain = body.domain as string
       const action = body.action as string

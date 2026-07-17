@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
   Brain, ChevronDown, ChevronRight, Target, Lightbulb, Sparkles,
-  Check, X, Trash2, User, ArrowDown, Zap, RefreshCw,
+  Check, X, Trash2, User, ArrowDown, Zap, RefreshCw, Pencil,
 } from 'lucide-react'
 import type { HeuristicAlert, UserContextNote } from '@shared/types'
 import { MetricDrill, TableQuery, AskAIProvider, useAskAI, type DrillSpec } from '../components/MetricDrill'
@@ -181,6 +181,9 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
   const [selectedGoals, setSelectedGoals] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [loading, setLoading] = useState(true)
+  // Inline editing of a learned preference (edit its value, or delete it) — parity with goals.
+  const [editingPref, setEditingPref] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState('')
 
   const selectedGoalTexts = useCallback(
     () => goals.filter((g) => selectedGoals.has(g.id)).map((g) => g.text),
@@ -244,6 +247,26 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
   const delContext = async (id: string): Promise<void> => {
     await api.deleteUserContext(id).catch(() => {})
     setContext((prev) => prev.filter((c) => c.id !== id))
+  }
+
+  // Delete a learned preference outright (it was wrong, or no longer true).
+  const delPref = async (key: string): Promise<void> => {
+    setPrefs((prev) => prev.filter((p) => p.key !== key))   // optimistic
+    await api.deletePreference?.(key).catch(() => {})
+    load()
+  }
+
+  // Correct a learned preference's value. Saving marks it source:'user' so the app treats
+  // the corrected value as authoritative over what it had inferred.
+  const startEditPref = (key: string, value: string): void => { setEditingPref(key); setEditValue(value) }
+  const saveEditPref = async (): Promise<void> => {
+    const key = editingPref
+    const val = editValue.trim()
+    if (!key || !val) { setEditingPref(null); return }
+    setPrefs((prev) => prev.map((p) => (p.key === key ? { ...p, value: val, source: 'user' } : p)))
+    setEditingPref(null)
+    await api.setPreference?.(key, val).catch(() => {})
+    load()
   }
 
   const pending = inferences.filter((i) => i.status === 'pending')
@@ -422,9 +445,33 @@ export default function Logic({ onChatWith }: { onChatWith?: (msg: string) => vo
                         <p className="hud-label mb-1.5" style={{ color: colors.textMuted }}>Learned about you</p>
                         <div className="space-y-1">
                           {prefs.slice(0, 12).map((p, i) => (
-                            <div key={i} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: colors.inputBg, border: `1px solid ${colors.border}` }}>
-                              <span className="text-[11px] flex-1" style={{ color: colors.textSecondary }}><b style={{ color: colors.textPrimary }}>{p.key}</b>: {p.value}</span>
-                              <span className="text-[8.5px] px-1.5 py-0.5 rounded" style={{ background: colors.accentBg, color: colors.textMuted }}>{p.source === 'user' ? 'you told me' : 'inferred'} · {p.scope}</span>
+                            <div key={i} className="group flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: colors.inputBg, border: `1px solid ${colors.border}` }}>
+                              {editingPref === p.key ? (
+                                <>
+                                  <b className="text-[11px] flex-shrink-0" style={{ color: colors.textPrimary }}>{p.key}:</b>
+                                  <input
+                                    autoFocus
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') void saveEditPref(); if (e.key === 'Escape') setEditingPref(null) }}
+                                    className="flex-1 bg-transparent text-[11px] outline-none"
+                                    style={{ color: colors.textSecondary, borderBottom: `1px solid ${colors.accent}`, caretColor: colors.accent }}
+                                  />
+                                  <button onClick={() => void saveEditPref()} className="text-[10px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: colors.accentBg, color: colors.accent }}>Save</button>
+                                  <button onClick={() => setEditingPref(null)} className="text-[10px] flex-shrink-0" style={{ color: colors.textMuted }} title="Cancel">Cancel</button>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-[11px] flex-1" style={{ color: colors.textSecondary }}><b style={{ color: colors.textPrimary }}>{p.key}</b>: {p.value}</span>
+                                  <span className="text-[8.5px] px-1.5 py-0.5 rounded flex-shrink-0" style={{ background: colors.accentBg, color: colors.textMuted }}>{p.source === 'user' ? 'you told me' : 'inferred'} · {p.scope}</span>
+                                  <button onClick={() => startEditPref(p.key, p.value)} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" style={{ color: colors.textMuted }} title="Correct this">
+                                    <Pencil size={11} />
+                                  </button>
+                                  <button onClick={() => void delPref(p.key)} className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" style={{ color: colors.textMuted }} title="This is wrong, remove it">
+                                    <Trash2 size={11} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           ))}
                         </div>

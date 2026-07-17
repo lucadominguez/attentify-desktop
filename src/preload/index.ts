@@ -207,6 +207,12 @@ const api = {
 
   dismissHeuristicAlert: (id: string): Promise<void> => ipcRenderer.invoke('heuristics:dismiss', id),
 
+  // Browser extension: connection + which sensor is active, and a best-effort installer.
+  getExtensionStatus: (): Promise<{ connected: boolean; activeSensor: 'extension' | 'fallback'; rules: number; enabledRules: number }> =>
+    ipcRenderer.invoke('extension:status'),
+  installExtension: (): Promise<{ ok: boolean; method: string; url: string; steps?: string[] }> =>
+    ipcRenderer.invoke('extension:install'),
+
   // Classifier self-evaluation: calibration report (predicted vs. observed disagreement)
   // and an on-demand review pass over unreviewed disagreements.
   getClassifierCalibration: (windowDays?: number): Promise<import('../shared/types').CalibrationReport> =>

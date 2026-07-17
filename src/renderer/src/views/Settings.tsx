@@ -37,6 +37,52 @@ function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }
   )
 }
 
+// Browser-extension status + install recommendation. Installing it moves the app off the
+// PowerShell address-bar fallback onto the accurate extension sensor.
+function ExtensionPanel({ colors }: { colors: ReturnType<typeof useTheme>['colors'] }): React.ReactElement {
+  const [status, setStatus] = useState<{ connected: boolean; activeSensor: string } | null>(null)
+  const [steps, setSteps] = useState<string[] | null>(null)
+  const load = React.useCallback(() => { api.getExtensionStatus?.().then((s) => setStatus(s as { connected: boolean; activeSensor: string })).catch(() => {}) }, [])
+  useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t) }, [load])
+
+  const connected = status?.connected === true
+  const install = async (): Promise<void> => {
+    const r = await api.installExtension?.().catch(() => null)
+    if (r?.steps) setSteps(r.steps)
+  }
+
+  return (
+    <div className="rounded-lg mt-2 p-4" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="flex items-center justify-between">
+        <div className="pr-3">
+          <p className="text-[12px] font-medium flex items-center gap-2" style={{ color: colors.textPrimary }}>
+            Browser extension
+            <span className="text-[9px] uppercase tracking-widest px-1.5 py-0.5 rounded"
+              style={{ background: connected ? 'rgba(52,211,153,0.12)' : 'rgba(251,191,36,0.12)', color: connected ? colors.positive : colors.warning }}>
+              {connected ? 'connected' : 'not installed'}
+            </span>
+          </p>
+          <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
+            {connected
+              ? 'Attentify is using the extension as its browser sensor — accurate URLs and page context.'
+              : 'Attentify is on the fallback sensor (it reads the address bar, which is less reliable). Install the extension for accurate detection across browsers and single-page apps.'}
+          </p>
+        </div>
+        {!connected && (
+          <button onClick={() => void install()} className="flex-shrink-0 px-3 py-2 rounded-lg text-[11px] font-medium" style={{ background: colors.accent, color: '#fff' }}>
+            Install extension
+          </button>
+        )}
+      </div>
+      {steps && !connected && (
+        <ol className="mt-3 space-y-1 list-decimal list-inside">
+          {steps.map((s, i) => <li key={i} className="text-[10px]" style={{ color: colors.textSecondary }}>{s}</li>)}
+        </ol>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsView({ store, onRefresh, onNavigate }: SettingsProps): React.ReactElement {
   const { colors, theme, toggle, pulse, togglePulse } = useTheme()
   const currentMode = store.settings.blockingMode ?? 'auto'
@@ -256,6 +302,8 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: store.settings.shareDiagnostics === false ? 2 : 22 }} />
             </button>
           </div>
+          {/* Browser extension: detection + recommend install + active sensor. */}
+          <ExtensionPanel colors={colors} />
           {/* Classifier self-evaluation: calibration, learned corrections, caught mistakes. */}
           <SelfEvaluationPanel />
           {/* Updates */}

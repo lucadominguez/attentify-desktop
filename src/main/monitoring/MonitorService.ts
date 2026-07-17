@@ -188,38 +188,10 @@ while ($true) {
         const trimmed = line.trim()
         if (trimmed.startsWith('URL:')) {
           const url = trimmed.slice(4).trim()
-          if (url !== this.currentUrl) {
-            this.currentUrl = url
-            const title = this.currentTitle ?? ''
-            this.emit('url', url)
-
-            // Check if this URL's domain is in the blocklist → trigger interstitial
-            try {
-              const domain = new URL(url.startsWith('http') ? url : `https://${url}`)
-                .hostname.replace(/^www\./, '').toLowerCase()
-              const store = getStore()
-              if (store.blocklist.domains.some((d) => domain === d.domain || domain.endsWith('.' + d.domain))) {
-                this.emit('url:blocked', { domain, url })
-              }
-            } catch { /* ignore invalid URLs */ }
-
-            // Write URL visit event
-            bufferEvent({ ts: Date.now(), type: 'url_visit', url, title })
-
-            // Hot path: immediate inference engine URL check (no debounce)
-            this.inference?.analyzeUrl(url, title)
-
-            // Extract and immediately analyze search queries
-            const query = extractSearchQuery(url)
-            if (query) {
-              bufferEvent({ ts: Date.now(), type: 'search_query', url, title: query })
-              this.inference?.analyzeSearchQuery(query)
-              this.emit('search', query)
-            }
-
-            // AI-based guard (debounced, runs 6s after navigation settles)
-            this.urlGuard.onUrlChange(url, title)
-          }
+          // While the extension is the live sensor, ignore the PowerShell reading — the
+          // extension's URL is authoritative and the poller is only a fallback.
+          if (this.extensionSensing()) continue
+          if (url !== this.currentUrl) this.processUrl(url, this.currentTitle ?? '', 'powershell')
         }
       }
     })
@@ -232,5 +204,59 @@ while ($true) {
         }, 10000)
       }
     })
+  }
+
+  // ── Sensor selection ─────────────────────────────────────────────────────────
+
+  private lastExtensionActivityTs = 0
+
+  // The extension counts as the live sensor if it pushed activity recently. When true, the
+  // PowerShell address-bar poller stands down (its reads are dropped) so the two never fight.
+  extensionSensing(): boolean {
+    return Date.now() - this.lastExtensionActivityTs < 60_000
+  }
+
+  // Which sensor is currently authoritative — surfaced to the UI so it can tell the user
+  // whether they are on the accurate (extension) path or the fallback.
+  activeSensor(): 'extension' | 'fallback' {
+    return this.extensionSensing() ? 'extension' : 'fallback'
+  }
+
+  // Authoritative navigation event from the browser extension. Same processing as the
+  // PowerShell path, but with a real URL + title (and room for page metadata), so it is
+  // both more reliable and richer.
+  ingestExtensionActivity(url: string, title: string, _meta?: { description?: string; mediaPlaying?: boolean; headings?: string[] }): void {
+    this.lastExtensionActivityTs = Date.now()
+    if (!this.active) return
+    if (title) this.currentTitle = title
+    if (url !== this.currentUrl) this.processUrl(url, title || this.currentTitle || '', 'extension')
+  }
+
+  // Shared URL handling for BOTH sensors: blocklist → interstitial, event log, the
+  // inference hot path, search extraction, and the debounced AI guard.
+  private processUrl(url: string, title: string, _source: 'powershell' | 'extension'): void {
+    this.currentUrl = url
+    this.emit('url', url)
+
+    try {
+      const domain = new URL(url.startsWith('http') ? url : `https://${url}`)
+        .hostname.replace(/^www\./, '').toLowerCase()
+      const store = getStore()
+      if (store.blocklist.domains.some((d) => domain === d.domain || domain.endsWith('.' + d.domain))) {
+        this.emit('url:blocked', { domain, url })
+      }
+    } catch { /* ignore invalid URLs */ }
+
+    bufferEvent({ ts: Date.now(), type: 'url_visit', url, title })
+    this.inference?.analyzeUrl(url, title)
+
+    const query = extractSearchQuery(url)
+    if (query) {
+      bufferEvent({ ts: Date.now(), type: 'search_query', url, title: query })
+      this.inference?.analyzeSearchQuery(query)
+      this.emit('search', query)
+    }
+
+    this.urlGuard.onUrlChange(url, title)
   }
 }

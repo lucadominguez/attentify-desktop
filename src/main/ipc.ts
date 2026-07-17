@@ -28,6 +28,7 @@ import { debugLog } from './debug/logger'
 import { notificationQueue } from './overlay/NotificationQueue'
 import { ContentRuleEngine } from './blocking/ContentRuleEngine'
 import { recordCloudEvent, startCloudSync, stopCloudSync } from './cloudSync'
+import { EXTENSION_WEBSTORE_URL, EXTENSION_DOWNLOAD_URL } from './config'
 import { recordFeedback, recordDecision, computeCalibration, setRecoveryHook } from './feedback/FeedbackService'
 import { listAdjustments } from './feedback/store'
 import { mistakeReviewer } from './feedback/MistakeReviewer'
@@ -231,6 +232,7 @@ const OPEN_CHANNELS = new Set<string>([
   'store:get', 'activity:get', 'agent:get-history', 'alwayson:get', 'analytics:get',
   'analytics:get-cards', 'apikey:get-status', 'blocking:elevation-status', 'break:status',
   'checkpoints:list', 'cloud:get', 'compat:check', 'content-rules:get', 'context:list',
+  'extension:install',
   'conversations:list', 'conversations:messages', 'elevation:status', 'extension:status',
   'goals:get', 'inferences:get', 'issue:list', 'preferences:get', 'safety:changelog',
   'cards:items',
@@ -1441,10 +1443,33 @@ ${weeklyAppRows ? `<h2>Top Apps This Week</h2><table><thead><tr><th>Application<
 
   ipcMain.handle('extension:status', () => ({
     connected: contentRuleEngine?.isExtensionConnected() ?? false,
+    // Which sensor the app is actually using right now: the accurate extension feed, or the
+    // PowerShell fallback. Lets the UI tell the user they are on the degraded path.
+    activeSensor: monitor?.activeSensor() ?? 'fallback',
     rules: contentRuleEngine?.getRules().length ?? 0,
     enabledRules: contentRuleEngine?.getRules().filter((r) => r.enabled).length ?? 0,
     bypassScores: contentRuleEngine?.getAllBypassScores() ?? {},
   }))
+
+  // Install the extension — the closest thing to automatic available at each stage. Once
+  // EXTENSION_STORE_ID is set (after publishing), this is a one-click Web Store add;
+  // until then it opens the sideloadable download and returns guided steps.
+  ipcMain.handle('extension:install', async () => {
+    if (EXTENSION_WEBSTORE_URL) {
+      await shell.openExternal(EXTENSION_WEBSTORE_URL).catch(() => {})
+      return { ok: true, method: 'webstore', url: EXTENSION_WEBSTORE_URL }
+    }
+    await shell.openExternal(EXTENSION_DOWNLOAD_URL).catch(() => {})
+    return {
+      ok: true, method: 'sideload', url: EXTENSION_DOWNLOAD_URL,
+      steps: [
+        'Download and unzip the Attentify extension.',
+        'Open chrome://extensions in your browser.',
+        'Turn on Developer mode (top-right).',
+        'Click "Load unpacked" and select the unzipped folder.',
+      ],
+    }
+  })
 
   // Registration is done — stop intercepting so nothing registered elsewhere (or later)
   // is silently wrapped by this gate.
