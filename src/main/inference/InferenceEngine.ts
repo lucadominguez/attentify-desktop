@@ -1,14 +1,14 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { getDb } from '../data/db'
 import {
   insertInference, getInferences, getActiveGoals,
   type DbInference,
 } from '../data/repository'
 import { getStore, patchStore } from '../store'
-import { canUseAi, recordUsage } from '../billing'
-import { resolveModel } from '../agent/modelRouter'
 import { debugLog } from '../debug/logger'
 import { recordDecision, getApplicableAdjustment } from '../feedback/FeedbackService'
+import { registeredDomain } from '../feedback/fingerprint'
+import { classifyUrl } from './siteRules'
+import { contextAssessment, ContextAssessmentService, type AiAssessment } from './ContextAssessmentService'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
 import type { ActivitySession } from '../../shared/types'
 
@@ -20,10 +20,6 @@ const BACKGROUND_SWEEP_MS   = 5 * 60 * 1000
 const MIN_TIME_MS           = 3 * 60 * 1000
 const MIN_VISITS            = 2
 const DEDUP_TTL             = 5 * 60 * 1000
-const AI_CACHE_TTL          = 20 * 60 * 1000
-const AI_RATE_LIMIT_MS      = 4000  // min ms between AI calls
-
-const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
 const SAFE_CATEGORIES = new Set(['development', 'productivity', 'system'])
 // These categories always use their full base confidence — never discounted for "no active goals".
@@ -31,6 +27,10 @@ const SAFE_CATEGORIES = new Set(['development', 'productivity', 'system'])
 // Without this, e.g. instagram (base 0.88) drops to max(0.55, 0.78) = 0.78 with no goals —
 // below the 0.85 auto-block threshold, and stays pending instead of auto-blocking.
 const HARDBLOCK_CATEGORIES = new Set(['adult', 'gambling', 'dating', 'social_media', 'video_streaming'])
+// Categories unambiguous enough that a SINGLE evidence source may auto-block. Everything
+// else (video_streaming, social_media, news, shopping…) needs corroboration — two
+// independent signals — before an automatic block, so one noisy read can't wrongly block.
+const AUTOBLOCK_SINGLE_CATEGORIES = new Set(['adult', 'gambling', 'dating', 'short_form_video'])
 const BROWSER_PROCESSES_SET = new Set(['chrome', 'firefox', 'msedge', 'brave', 'vivaldi', 'opera', 'arc', 'thorium', 'librewolf', 'waterfox', 'floorp'])
 
 // ── Comprehensive distraction domain taxonomy ─────────────────────────────────
@@ -276,8 +276,9 @@ const RECREATIONAL_SIGNALS = [
 
 export class InferenceEngine {
   private blockingEngine: BlockingEngine
-  private client: Anthropic | null = null
-  private model = resolveModel('cheap', false)
+  // AI availability is now owned by the shared ContextAssessmentService; this flag just
+  // mirrors whether a key has been provided so the hot paths can cheaply skip the AI branch.
+  private aiReady = false
   private sweepTimer: ReturnType<typeof setInterval> | null = null
   private active = false
 
@@ -288,28 +289,21 @@ export class InferenceEngine {
 
   // Dedup: recently processed keys
   private recentlyProcessed = new Map<string, number>()
-  // AI result cache: domain/query → { result, cachedAt }
-  private aiCache = new Map<string, { distraction: boolean; category: string; confidence: number; reasoning: string; cachedAt: number }>()
-  // Rate limiting for AI calls
-  private lastAiCallTs = 0
-  // Queue of pending AI evaluations
-  private aiQueue: Array<{ key: string; prompt: string; onResult: (r: AiEval) => void }> = []
-  private aiProcessing = false
+  // Corroboration: distinct evidence sources seen for a value within a window. Auto-block on
+  // an ambiguous category requires ≥2. Separately, domains a recent search predicted are
+  // "sensitized" so a later visit counts the search as a second source.
+  private evidenceSources = new Map<string, { sources: Set<string>; ts: number }>()
+  private sensitized = new Map<string, number>()
+  private static readonly EVIDENCE_TTL = 15 * 60 * 1000
 
   constructor(engine: BlockingEngine) {
     this.blockingEngine = engine
   }
 
   init(apiKey: string): void {
-    const isOpenRouter = apiKey.startsWith('sk-or-')
-    this.model = resolveModel('cheap', isOpenRouter)
-    this.client = new Anthropic({
-      apiKey,
-      ...(isOpenRouter ? {
-        baseURL: OPENROUTER_BASE,
-        defaultHeaders: { 'HTTP-Referer': 'https://attentify.ai', 'X-Title': 'Attentify' },
-      } : {}),
-    })
+    // The actual model client lives in ContextAssessmentService (inited alongside this in
+    // ipc.ts). We only note that AI is configured.
+    this.aiReady = !!apiKey
   }
 
   setCallbacks(opts: {
@@ -342,53 +336,62 @@ export class InferenceEngine {
 
   analyzeUrl(url: string, title: string): void {
     if (!this.active) return
-    let domain: string
+    // Match on the REGISTERED domain (eTLD+1), not the raw hostname, and never on a bare
+    // substring. The old `domain.includes(known.split('.')[0])` matched "reddit" inside
+    // any hostname — e.g. reddit.com.evil.example — which is both wrong and a spoofing risk.
+    let host: string, regDomain: string
     try {
-      domain = new URL(url.startsWith('http') ? url : `https://${url}`)
-        .hostname.replace(/^www\./, '').toLowerCase()
+      host = new URL(url.startsWith('http') ? url : `https://${url}`).hostname.replace(/^www\./, '').toLowerCase()
+      regDomain = registeredDomain(host)
     } catch { return }
 
     const store = getStore()
-    if (store.blocklist.domains.some((d) => domain === d.domain || domain.endsWith('.' + d.domain))) return
-    if (this.wasRecentlyProcessed(`url:${domain}`)) return
+    if (store.blocklist.domains.some((d) => regDomain === d.domain || host === d.domain || host.endsWith('.' + d.domain))) return
+    if (this.wasRecentlyProcessed(`url:${host}`)) return
 
-    // Exact match in taxonomy
-    if (ALL_DISTRACTION_DOMAINS.has(domain)) {
-      this.markProcessed(`url:${domain}`)
-      const category = DOMAIN_TO_CATEGORY.get(domain) ?? 'distraction'
+    // ── Path-aware rules FIRST: the route can flip the meaning (youtube /shorts vs /watch,
+    //    reddit /r/programming vs the feed). These win over the domain-level taxonomy.
+    const rule = classifyUrl(url)
+    if (rule) {
+      this.markProcessed(`url:${host}`)
+      // A rule can also say a route is fine (dev sites, a tutorial page) — below the suggest
+      // bar it is simply allowed, and logging a skip would be noise.
+      if (rule.risk < CONFIDENCE_SUGGEST) return
+      const goals = getActiveGoals()
+      const confidence = goals.length > 0 ? Math.min(0.99, rule.risk + 0.05) : Math.max(0.5, rule.risk - 0.08)
+      this.handleCandidate('domain', regDomain, confidence, {
+        reasoning: `${rule.ruleId}: ${rule.category} route on ${regDomain}${goals.length ? ` while goal "${goals[0]!.text}" is active` : ''}`,
+        source: 'url_visit', title, category: rule.category, policyWeight: rule.risk, url,
+        singleSourceOk: rule.unambiguous,
+      })
+      return
+    }
+
+    // ── Exact registered-domain match in the taxonomy ──
+    if (ALL_DISTRACTION_DOMAINS.has(regDomain)) {
+      this.markProcessed(`url:${host}`)
+      const category = DOMAIN_TO_CATEGORY.get(regDomain) ?? 'distraction'
       const baseScore = CATEGORY_AUTO_BLOCK_SCORE[category] ?? 0.75
       const goals = getActiveGoals()
-      // Hard-block categories (adult/gambling/dating) always auto-block — don't reduce for no goals
       const hardBlock = HARDBLOCK_CATEGORIES.has(category)
       const confidence = hardBlock
         ? Math.min(0.99, baseScore + 0.05)
         : goals.length > 0 ? Math.min(0.99, baseScore + 0.05) : Math.max(0.55, baseScore - 0.1)
       const reasoning = goals.length > 0
-        ? `visited ${domain} (${category}) while goal "${goals[0]!.text}" is active`
-        : `${domain} is a known ${category} site`
-      this.handleCandidate('domain', domain, confidence, { reasoning, source: 'url_visit', title, category, policyWeight: baseScore, url })
+        ? `visited ${regDomain} (${category}) while goal "${goals[0]!.text}" is active`
+        : `${regDomain} is a known ${category} site`
+      this.handleCandidate('domain', regDomain, confidence, {
+        reasoning, source: 'url_visit', title, category, policyWeight: baseScore, url,
+        singleSourceOk: AUTOBLOCK_SINGLE_CATEGORIES.has(category),
+      })
       return
     }
 
-    // Subdomain / partial match
-    for (const known of ALL_DISTRACTION_DOMAINS) {
-      if (domain.endsWith('.' + known) || domain.includes(known.split('.')[0]!)) {
-        if (this.wasRecentlyProcessed(`url:${domain}`)) return
-        this.markProcessed(`url:${domain}`)
-        const category = DOMAIN_TO_CATEGORY.get(known) ?? 'distraction'
-        this.handleCandidate('domain', domain, 0.72, {
-          reasoning: `subdomain/variant of known distraction ${known} (${category})`,
-          source: 'url_visit', title, category, policyWeight: CATEGORY_AUTO_BLOCK_SCORE[category], url,
-        })
-        return
-      }
-    }
-
-    // Unknown domain — queue for AI reasoning
-    if (this.client) {
+    // Unknown domain — one unified AI assessment (see ContextAssessmentService).
+    if (this.aiReady && contextAssessment.ready()) {
       const goals = getActiveGoals()
-      if (goals.length > 0 || this.shouldAiCheckUnknown(domain)) {
-        this.queueAiUrlCheck(domain, title, goals.map((g) => g.text))
+      if (goals.length > 0 || this.shouldAiCheckUnknown(regDomain)) {
+        this.queueAiUrlCheck(regDomain, title, goals.map((g) => g.text), url)
       }
     }
   }
@@ -413,21 +416,11 @@ export class InferenceEngine {
 
         this.onSearchAlert?.(query, domain, pred.category)
         console.log(`[InferenceEngine] search "${query}" → predicted ${domain} (${pred.category})`)
-
-        if (goals.length > 0) {
-          const existing = getInferences().find(
-            (i) => i.value === domain && ['pending', 'auto_applied'].includes(i.status)
-          )
-          if (!existing) {
-            const confidence = goals.length > 0
-              ? Math.min(0.99, pred.confidence)
-              : Math.max(0.55, pred.confidence - 0.15)
-            this.handleCandidate('domain', domain, confidence, {
-              reasoning: `search query "${query}" predicts navigation to ${pred.category} site`,
-              source: 'search_prediction', category: pred.category, policyWeight: pred.confidence,
-            })
-          }
-        }
+        // A search NEVER blocks on its own — it is intent, not a visit ("Reddit OAuth
+        // callback issue" is not recreation). Instead it raises sensitivity: if the user
+        // then actually navigates to the predicted site, the search counts as a second
+        // corroborating source toward an auto-block, but by itself it does nothing.
+        if (goals.length > 0) this.markSensitive(domain, pred.category)
         return
       }
     }
@@ -440,7 +433,7 @@ export class InferenceEngine {
     }
 
     // AI reasoning for ambiguous search queries (when goals are active)
-    if (this.client && goals.length > 0 && !this.wasRecentlyProcessed(`aisearch:${lower.slice(0, 40)}`)) {
+    if (this.aiReady && contextAssessment.ready() && goals.length > 0 && !this.wasRecentlyProcessed(`aisearch:${lower.slice(0, 40)}`)) {
       this.markProcessed(`aisearch:${lower.slice(0, 40)}`)
       this.queueAiSearchCheck(query, goals.map((g) => g.text))
     }
@@ -523,107 +516,32 @@ export class InferenceEngine {
 
   // ── AI evaluation queue ───────────────────────────────────────────────────
 
-  private queueAiUrlCheck(domain: string, title: string, goals: string[]): void {
-    const cacheKey = `url:${domain}:${goals.join('|').slice(0, 60)}`
-    const cached = this.aiCache.get(cacheKey)
-    if (cached && Date.now() - cached.cachedAt < AI_CACHE_TTL) {
-      if (cached.distraction) {
-        this.handleCandidate('domain', domain, cached.confidence, {
-          reasoning: cached.reasoning,
-          source: 'ai_url',
+  // Both AI paths now delegate to the ONE ContextAssessmentService (shared prompt, schema,
+  // cache, rate-limit, confidence scale). This class keeps only the policy: how an
+  // assessment maps onto a blocking decision.
+  private queueAiUrlCheck(domain: string, title: string, goals: string[], url?: string): void {
+    let path: string | undefined
+    try { if (url) path = new URL(url.startsWith('http') ? url : `https://${url}`).pathname } catch { /* ignore */ }
+    void contextAssessment.assess({ kind: 'url', domain, path, title, goals, goalId: getActiveGoals()[0]?.id })
+      .then((a: AiAssessment | null) => {
+        if (!a || !ContextAssessmentService.isDistraction(a)) return
+        const confidence = ContextAssessmentService.toConfidence(a)
+        if (confidence < CONFIDENCE_SUGGEST) return
+        this.handleCandidate('domain', domain, confidence, {
+          reasoning: `AI: ${a.evidence[0] ?? a.recommendedAction} (${a.contentCategory}, align ${a.goalAlignment.toFixed(2)})`,
+          source: 'ai_url', category: a.contentCategory, url,
         })
-      }
-      return
-    }
-
-    const goalText = goals.length > 0 ? `User goals: ${goals.join('; ')}` : 'User has no stated goals.'
-    const prompt = `A user's computer just navigated to "${domain}" (page title: "${title.slice(0, 80)}").
-${goalText}
-
-Is this a distraction or recreational site that conflicts with their goals?
-Reply with JSON only, no markdown: {"distraction":true/false,"category":"<3 words>","confidence":0.0-1.0,"reasoning":"<10 words max>"}`
-
-    this.aiQueue.push({
-      key: cacheKey,
-      prompt,
-      onResult: (result) => {
-        this.aiCache.set(cacheKey, { ...result, cachedAt: Date.now() })
-        if (result.distraction && result.confidence >= CONFIDENCE_SUGGEST) {
-          this.handleCandidate('domain', domain, result.confidence, {
-            reasoning: `AI: ${result.reasoning} (${result.category})`,
-            source: 'ai_url', category: result.category,
-          })
-        }
-      },
-    })
-    void this.drainAiQueue()
+      })
   }
 
+  // A search is intent, not a visit: it may raise an alert, but it NEVER auto-blocks. The
+  // service is told this and will not recommend "block"; here we only surface the alert.
   private queueAiSearchCheck(query: string, goals: string[]): void {
-    const cacheKey = `search:${query.slice(0, 40)}:${goals.join('|').slice(0, 40)}`
-    const cached = this.aiCache.get(cacheKey)
-    if (cached && Date.now() - cached.cachedAt < AI_CACHE_TTL) {
-      if (cached.distraction) {
-        this.onSearchAlert?.(query, '', cached.category)
-      }
-      return
-    }
-
-    const goalText = goals.join('; ')
-    const prompt = `A user searched for: "${query}"
-Their goals: ${goalText}
-
-Does this search suggest they're about to visit a distraction or off-task site?
-Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":"domain.com or empty","category":"<3 words>","confidence":0.0-1.0,"reasoning":"<10 words max>"}`
-
-    this.aiQueue.push({
-      key: cacheKey,
-      prompt,
-      onResult: (result) => {
-        this.aiCache.set(cacheKey, { ...result, cachedAt: Date.now() })
-        if (result.distraction && result.confidence >= 0.65) {
-          this.onSearchAlert?.(query, (result as AiSearchEval).predicted_domain ?? '', result.category)
-        }
-      },
-    })
-    void this.drainAiQueue()
-  }
-
-  private async drainAiQueue(): Promise<void> {
-    if (this.aiProcessing || this.aiQueue.length === 0 || !this.client) return
-    // Free AI allowance exhausted — drop queued reasoning. Exact domain/keyword
-    // matching (handleCandidate) still works without AI, so blocking continues.
-    if (!canUseAi()) { this.aiQueue.length = 0; return }
-    this.aiProcessing = true
-
-    while (this.aiQueue.length > 0) {
-      const item = this.aiQueue.shift()!
-      // Rate limit
-      const since = Date.now() - this.lastAiCallTs
-      if (since < AI_RATE_LIMIT_MS) {
-        await sleep(AI_RATE_LIMIT_MS - since)
-      }
-
-      try {
-        this.lastAiCallTs = Date.now()
-        const response = await this.client.messages.create({
-          model: this.model,
-          max_tokens: 80,
-          messages: [{ role: 'user', content: item.prompt }],
-        })
-        recordUsage(this.model, response.usage?.input_tokens ?? 0, response.usage?.output_tokens ?? 0)
-        const text = response.content.find((b) => b.type === 'text')?.text ?? ''
-        const jsonMatch = text.match(/\{[\s\S]*?\}/)
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]) as AiEval
-          item.onResult(parsed)
-        }
-      } catch (e) {
-        console.error('[InferenceEngine] AI eval failed:', e)
-      }
-    }
-
-    this.aiProcessing = false
+    void contextAssessment.assess({ kind: 'search', searchQuery: query, goals, goalId: getActiveGoals()[0]?.id })
+      .then((a: AiAssessment | null) => {
+        if (!a || !ContextAssessmentService.isDistraction(a)) return
+        this.onSearchAlert?.(query, '', a.contentCategory)
+      })
   }
 
   // ── Background sweep ──────────────────────────────────────────────────────
@@ -765,7 +683,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     type: DbInference['type'],
     value: string,
     confidence: number,
-    meta: { reasoning: string; source: string; title?: string; goalId?: string; category?: string; policyWeight?: number; url?: string }
+    meta: { reasoning: string; source: string; title?: string; goalId?: string; category?: string; policyWeight?: number; url?: string; singleSourceOk?: boolean }
   ): void {
     const evidence = { source: meta.source, title: meta.title }
 
@@ -779,12 +697,23 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     if (adj.suppress) confidence = Math.min(confidence, CONFIDENCE_SUGGEST - 0.01) // demote below suggest → skip
     const wasAdjusted = confidence !== originalConfidence
 
+    // ── Corroboration gate (abstention). An automatic block needs MORE than a single high
+    //    score unless the category is unambiguous (adult/gambling/short-form). For anything
+    //    debatable, require two independent evidence sources — a URL visit plus a search
+    //    prediction, a session plus a sweep — before blocking automatically; a lone signal
+    //    is downgraded to a suggestion the user confirms. This is the single biggest lever
+    //    against false auto-blocks on ambiguous sites.
+    const sourceCount = this.addEvidenceSource(value, meta.source)
+    const corroborated = sourceCount >= 2
+    const mayAutoBlock = meta.singleSourceOk === true || corroborated
+
     const pct = Math.round(confidence * 100)
-    const action = confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto' ? 'auto_block'
+    let action = confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto' && mayAutoBlock ? 'auto_block'
+      : confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto' ? 'abstain(confirm)'
       : confidence >= CONFIDENCE_AUTO_BLOCK ? 'suggest(ask-mode)'
       : confidence >= CONFIDENCE_SUGGEST ? 'suggest'
       : 'skip'
-    debugLog('inference:candidate', { type, value, confidence: pct, source: meta.source, action, adjusted: wasAdjusted, reasoning: meta.reasoning?.slice(0, 80) })
+    debugLog('inference:candidate', { type, value, confidence: pct, source: meta.source, sources: sourceCount, action, adjusted: wasAdjusted, reasoning: meta.reasoning?.slice(0, 80) })
 
     // A learned correction demoted this below the suggest bar: record the suppression for
     // the audit trail (so "the correction is working" is visible) and stop. Nothing is
@@ -818,19 +747,22 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     recordDecision({
       targetType: type,
       targetValue: value,
-      action: action.startsWith('auto') ? 'auto_block' : 'suggest',
+      action: action === 'auto_block' ? 'auto_block' : 'suggest',
       confidence,
       policyWeight: meta.policyWeight,
       category: meta.category,
       source: meta.source,
-      reasoning: meta.reasoning,
+      reasoning: action === 'abstain(confirm)' ? `${meta.reasoning} [abstained from auto-block: only ${sourceCount} evidence source]` : meta.reasoning,
       goalId: meta.goalId ?? goals[0]?.id,
       goalText,
       url: meta.url,
-      features: wasAdjusted ? { originalConfidence, downweight: adj.downweight } : undefined,
+      features: {
+        ...(wasAdjusted ? { originalConfidence, downweight: adj.downweight } : {}),
+        evidenceSources: sourceCount, corroborated, singleSourceOk: meta.singleSourceOk === true,
+      },
     })
 
-    if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto') {
+    if (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'auto' && mayAutoBlock) {
       insertInference({ type, value, goal_id: meta.goalId, confidence, reasoning: meta.reasoning, evidence, status: 'auto_applied', action: 'auto_block', created_at: Date.now() })
 
       if (type === 'domain') {
@@ -849,7 +781,7 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
           console.log(`[InferenceEngine] AUTO-BLOCKED ${value} via ${meta.source} (${Math.round(confidence * 100)}%)`)
         }
       }
-    } else if (confidence >= CONFIDENCE_SUGGEST || (confidence >= CONFIDENCE_AUTO_BLOCK && this.blockingMode === 'ask')) {
+    } else if (confidence >= CONFIDENCE_SUGGEST || (confidence >= CONFIDENCE_AUTO_BLOCK && (this.blockingMode === 'ask' || !mayAutoBlock))) {
       const inf = insertInference({ type, value, goal_id: meta.goalId, confidence, reasoning: meta.reasoning, evidence, status: 'pending', action: 'suggest', created_at: Date.now() })
       this.onSuggest?.(inf)
       console.log(`[InferenceEngine] suggest ${value} via ${meta.source} (${Math.round(confidence * 100)}%)`)
@@ -880,6 +812,28 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     }
   }
 
+  // A search predicted this domain: remember it briefly so an actual visit is corroborated.
+  private markSensitive(domain: string, _category: string): void {
+    this.sensitized.set(domain, Date.now())
+  }
+
+  // Record a distinct evidence source for a value and return the current count. A recent
+  // search prediction for the same domain is folded in as its own source, so "searched for
+  // it, then went there" reaches the two-source bar without either signal blocking alone.
+  private addEvidenceSource(value: string, source: string): number {
+    const now = Date.now()
+    let e = this.evidenceSources.get(value)
+    if (!e || now - e.ts > InferenceEngine.EVIDENCE_TTL) { e = { sources: new Set(), ts: now }; this.evidenceSources.set(value, e) }
+    e.sources.add(source)
+    e.ts = now
+    const sensedAt = this.sensitized.get(value)
+    if (sensedAt && now - sensedAt < InferenceEngine.EVIDENCE_TTL) e.sources.add('search_prediction')
+    if (this.evidenceSources.size > 300) {
+      for (const [k, v] of this.evidenceSources) if (now - v.ts > InferenceEngine.EVIDENCE_TTL) this.evidenceSources.delete(k)
+    }
+    return e.sources.size
+  }
+
   private buildSessionReasoning(value: string, confidence: number, session: ActivitySession): string {
     const parts: string[] = []
     if (ALL_DISTRACTION_DOMAINS.has(value)) {
@@ -891,21 +845,4 @@ Reply with JSON only, no markdown: {"distraction":true/false,"predicted_domain":
     parts.push(`${Math.round(confidence * 100)}% confidence`)
     return parts.join(', ')
   }
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface AiEval {
-  distraction: boolean
-  category: string
-  confidence: number
-  reasoning: string
-}
-
-interface AiSearchEval extends AiEval {
-  predicted_domain?: string
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
 }

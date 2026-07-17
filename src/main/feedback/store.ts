@@ -241,7 +241,9 @@ export function upsertAdjustment(a: Omit<AdjustmentRow, 'id' | 'ts' | 'support' 
     if (row) {
       const id = row[0] as string
       const support = (row[1] as number) + 1
-      getDb().run('UPDATE learned_adjustments SET support=?, updated_at=?, error_prob=?, reason=? WHERE id=?',
+      // A reinforced correction becomes PERMANENT: clear any cooldown expiry. One reversal
+      // is a 24h cooldown; a second reversal on the same context makes it stick for good.
+      getDb().run('UPDATE learned_adjustments SET support=?, updated_at=?, error_prob=?, reason=?, expires_at=NULL WHERE id=?',
         [support, Date.now(), a.error_prob ?? null, a.reason ?? null, id])
       markDirty()
       return { id, support }

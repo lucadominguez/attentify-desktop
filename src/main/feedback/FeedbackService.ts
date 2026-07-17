@@ -190,7 +190,16 @@ export function evaluateAndCorrect(
     status: hyp.errorProbability >= CORRECTION_THRESHOLD ? 'confirmed' : 'suspected',
   })
 
-  if (hyp.errorProbability < CORRECTION_THRESHOLD) return { hypothesis: hyp, corrected: false, recovered: false }
+  // A single EXPLICIT reversal (unblocking an auto-block, rejecting a suggestion, walking
+  // past an interstitial) is a strong "no" on its own. It may not cross the permanent-
+  // correction threshold yet, but it must at least stop the app from re-blocking the same
+  // thing minutes later — the exact "I unblock it and it comes right back" bug. So: below
+  // threshold but with an explicit reversal → a TEMPORARY suppression (a cooldown) that
+  // expires; at or above threshold → a PERMANENT one. Repeated reversals escalate.
+  const EXPLICIT = new Set(['quick_unblock', 'inference_rejected', 'interstitial_proceed'])
+  const hasExplicit = feedback.some((f) => EXPLICIT.has(f.signal))
+  const permanent = hyp.errorProbability >= CORRECTION_THRESHOLD
+  if (!permanent && !hasExplicit) return { hypothesis: hyp, corrected: false, recovered: false }
 
   // Scope selection. Disagreement that spans several goals is about the SITE, not one task,
   // so it generalizes to the domain. A single-goal correction stays route/goal-scoped so a
@@ -200,12 +209,17 @@ export function evaluateAndCorrect(
   const wideEnough = hyp.distinctGoals >= 2
   const scope: AdjustmentRow['scope'] = wideEnough ? 'domain' : (goalId ? 'domain_goal' : 'route')
   const scopeKey = scope === 'domain' ? keys.domain : scope === 'domain_goal' ? keys.domainGoal : keys.route
+  const COOLDOWN_MS = 24 * 60 * 60 * 1000
 
   const res = upsertAdjustment({
     scope, scope_key: scopeKey, target_value: targetValue, goal_id: goalId,
     kind: 'suppress',
-    reason: `${hyp.failureMode} (${hyp.failureStage}); user reversed ${feedback.length}x so far, p(err)=${hyp.errorProbability}`,
+    reason: permanent
+      ? `${hyp.failureMode} (${hyp.failureStage}); user reversed ${feedback.length}x, p(err)=${hyp.errorProbability}`
+      : `explicit reversal — 24h cooldown so it does not immediately re-block (p(err)=${hyp.errorProbability})`,
     source: 'behavioural', error_prob: hyp.errorProbability,
+    // A reinforced correction (support climbs) becomes permanent; a lone one is a cooldown.
+    expires_at: permanent ? undefined : Date.now() + COOLDOWN_MS,
   })
 
   // Recovery: if this domain is auto-blocked right now, the correct repair is to lift it.
@@ -214,7 +228,7 @@ export function evaluateAndCorrect(
     try { recovered = recoveryHook(targetValue) } catch { recovered = false }
   }
 
-  debugLog('feedback:corrected', { target: targetValue, scope, support: res.support, pErr: hyp.errorProbability, recovered })
+  debugLog('feedback:corrected', { target: targetValue, scope, permanent, support: res.support, pErr: hyp.errorProbability, recovered })
   return { hypothesis: hyp, corrected: true, recovered }
 }
 

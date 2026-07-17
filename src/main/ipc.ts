@@ -31,6 +31,7 @@ import { recordCloudEvent, startCloudSync, stopCloudSync } from './cloudSync'
 import { recordFeedback, recordDecision, computeCalibration, setRecoveryHook } from './feedback/FeedbackService'
 import { listAdjustments } from './feedback/store'
 import { mistakeReviewer } from './feedback/MistakeReviewer'
+import { contextAssessment } from './inference/ContextAssessmentService'
 import { randomUUID } from 'crypto'
 import {
   getActiveGoals, insertGoal, clearGoal,
@@ -385,6 +386,7 @@ export function initIpc(): void {
   monitor.getUrlGuard().init(effectiveKey)
   inferenceEngine.init(effectiveKey)
   mistakeReviewer.init(effectiveKey)
+  contextAssessment.init(effectiveKey)
 
   // Automatic recovery: when the feedback loop concludes an auto-block was a false positive,
   // it calls this to lift the block. Guarded so it only ever reverses the app's OWN blocks
@@ -806,6 +808,7 @@ export function initIpc(): void {
     monitor?.getUrlGuard().init(key)
     inferenceEngine?.init(key)
     mistakeReviewer.init(key)
+    contextAssessment.init(key)
     notificationQueue.refreshClient()
     sendMain('usage:changed', getUsageState())  // own key → no longer metered
     return { ok: true }
@@ -819,6 +822,7 @@ export function initIpc(): void {
     monitor?.getUrlGuard().init(k)
     inferenceEngine?.init(k)
     mistakeReviewer.init(k)
+    contextAssessment.init(k)
     notificationQueue.refreshClient()
     sendMain('usage:changed', getUsageState())
     return { ok: true }
