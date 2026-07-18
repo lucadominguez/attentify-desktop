@@ -563,10 +563,11 @@ declare global {
       }>
       getStartupItems: () => Promise<import('@shared/types').StartupItem[]>
       disableStartupItem: (item: import('@shared/types').StartupItem) => Promise<{ ok: boolean; error?: string; needsAdmin?: boolean }>
-      onChatChunk: (cb: (chunk: string) => void) => (() => void)
-      onChatTool: (cb: (toolName: string) => void) => (() => void)
+      onChatChunk: (cb: (chunk: string, conversationId?: string) => void) => (() => void)
+      onChatTool: (cb: (toolName: string, conversationId?: string) => void) => (() => void)
       onChatDone: (cb: (event: import('@shared/types').AgentDoneEvent) => void) => (() => void)
-      onChatError: (cb: (err: string) => void) => (() => void)
+      onChatError: (cb: (err: string, conversationId?: string) => void) => (() => void)
+      isChatGenerating: (conversationId?: string) => Promise<boolean>
       getAgentHistory: (limit?: number) => Promise<unknown[]>
       clearChatHistory: (conversationId?: string) => Promise<{ ok: boolean }>
       dismissProactive: () => Promise<{ ok: boolean }>

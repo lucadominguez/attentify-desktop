@@ -464,6 +464,10 @@ export interface AgentDoneEvent {
   id: string
   content: string
   timestamp: number
+  // The conversation this reply belongs to, so a chat view that unmounted and
+  // remounted mid-stream can tell whether the completed reply is for the
+  // conversation it's currently showing before reconciling.
+  conversationId?: string
 }
 
 export interface AgentErrorEvent {

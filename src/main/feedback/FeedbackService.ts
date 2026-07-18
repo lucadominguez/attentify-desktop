@@ -80,6 +80,7 @@ const SIGNAL_DECISION: Record<string, 'agree' | 'disagree' | 'override'> = {
   nudge_acted: 'agree',
   proactive_dismissed: 'disagree',    // dismissed an agent check-in
   proactive_acted: 'agree',
+  extension_wrong_hide: 'override',   // browser extension auto-hid an element; user said "not a distraction"
 }
 
 export interface RecordFeedbackInput {

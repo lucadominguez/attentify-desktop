@@ -43,23 +43,27 @@ const api = {
   // ── Streaming chat (new) ─────────────────────────────────────────────────
   chatStart: (text: string, images?: { media_type: string; data: string }[], conversationId?: string): void =>
     ipcRenderer.send('chat:start', text, images, conversationId),
-  onChatChunk: (cb: (chunk: string) => void): (() => void) => {
-    const handler = (_e: unknown, chunk: string): void => cb(chunk)
+  onChatChunk: (cb: (chunk: string, conversationId?: string) => void): (() => void) => {
+    const handler = (_e: unknown, chunk: string, conversationId?: string): void => cb(chunk, conversationId)
     ipcRenderer.on('chat:chunk', handler)
     return () => ipcRenderer.off('chat:chunk', handler)
   },
-  onChatTool: (cb: (toolName: string) => void): (() => void) => {
-    const handler = (_e: unknown, toolName: string): void => cb(toolName)
+  onChatTool: (cb: (toolName: string, conversationId?: string) => void): (() => void) => {
+    const handler = (_e: unknown, toolName: string, conversationId?: string): void => cb(toolName, conversationId)
     ipcRenderer.on('chat:tool', handler)
     return () => ipcRenderer.off('chat:tool', handler)
   },
+  // Is a generation currently in flight for this conversation? Used on remount to
+  // restore the "thinking" state when the chat view was closed mid-response.
+  isChatGenerating: (conversationId?: string): Promise<boolean> =>
+    ipcRenderer.invoke('chat:generating', conversationId),
   onChatDone: (cb: (event: AgentDoneEvent) => void): (() => void) => {
     const handler = (_e: unknown, evt: AgentDoneEvent): void => cb(evt)
     ipcRenderer.on('chat:done', handler)
     return () => ipcRenderer.off('chat:done', handler)
   },
-  onChatError: (cb: (err: string) => void): (() => void) => {
-    const handler = (_e: unknown, err: string): void => cb(err)
+  onChatError: (cb: (err: string, conversationId?: string) => void): (() => void) => {
+    const handler = (_e: unknown, err: string, conversationId?: string): void => cb(err, conversationId)
     ipcRenderer.on('chat:error', handler)
     return () => ipcRenderer.off('chat:error', handler)
   },

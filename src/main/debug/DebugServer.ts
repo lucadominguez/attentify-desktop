@@ -6,6 +6,7 @@ import { getStore, patchStore } from '../store'
 import { getInferences, getRecentEvents, getActiveGoals, getAgentMessages } from '../data/repository'
 import { getRecentLogs, getLogPath, debugLog } from './logger'
 import { runFocusScan } from '../scanner/FocusScan'
+import { recordDecision, recordFeedback } from '../feedback/FeedbackService'
 import type { MonitorService } from '../monitoring/MonitorService'
 import type { InferenceEngine } from '../inference/InferenceEngine'
 import type { BlockingEngine } from '../blocking/BlockingEngine'
@@ -400,6 +401,43 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
       return json(res, { ok: true })
     }
 
+    // The extension's element auto-hide is a separate subsystem from the daemon's URL/domain
+    // classifier, so its mistakes never reached the self-evaluation ledger. When the user hits
+    // "not a distraction?" on an auto-hidden element, mirror it into the ledger as a
+    // decision + disagreement so calibration, the error-hypothesis engine and the mistake
+    // reviewer can all see extension auto-hide errors too. Component-tagged so it's
+    // distinguishable from the daemon classifier's own calls.
+    if (path === '/extension/feedback') {
+      const url = typeof body.url === 'string' ? body.url : ''
+      const domain = (typeof body.domain === 'string' && body.domain) ||
+        (() => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' } })()
+      const verdict = body.verdict as string | undefined
+      if (domain && verdict === 'wrong-hide') {
+        try {
+          const score = Number(body.score)
+          recordDecision({
+            targetType: 'domain',
+            targetValue: domain,
+            action: 'auto_block',
+            confidence: Number.isFinite(score) ? Math.max(0, Math.min(1, score / 100)) : 0.6,
+            category: 'element',
+            source: 'extension_autohide',
+            component: 'extension_autohide',
+            reasoning: typeof body.label === 'string' ? `auto-hid "${body.label}"` : 'auto-hid element',
+            url: url || undefined,
+            features: {
+              label: body.label, selector: body.selector,
+              signals: Array.isArray(body.signals) ? body.signals : undefined,
+              confidence: body.confidence,
+            },
+          })
+          recordFeedback({ targetType: 'domain', targetValue: domain, signal: 'extension_wrong_hide', note: typeof body.label === 'string' ? body.label : undefined })
+          debugLog('extension:wrong-hide', { domain, label: body.label })
+        } catch { /* never break the reporting path */ }
+      }
+      return json(res, { ok: true })
+    }
+
     if (path === '/extension/escalate') {
       const domain = body.domain as string
       const action = body.action as string
@@ -475,6 +513,7 @@ const ROUTES = {
   'POST /content-rules/:id/toggle':   '{ enabled } — enable/disable a rule',
   'POST /extension/bypass':           '{ ruleId, method, url, timestamp? } — record bypass attempt',
   'POST /extension/heartbeat':        'mark extension as connected',
+  'POST /extension/feedback':         '{ verdict:"wrong-hide", domain, url, label, score, signals } — log an auto-hide mistake into the self-eval ledger',
   'POST /extension/escalate':         '{ domain, score, action:"block_5m"|"block_1h" } — escalate block',
   'POST /extension/check-in':         '{ ruleId, domain, score } — trigger agent check-in',
 }

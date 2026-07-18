@@ -238,6 +238,7 @@ const OPEN_CHANNELS = new Set<string>([
   'cards:items',
   'safety:status', 'startup:list', 'timesheet:get', 'update:check', 'update:status',
   'usage:get', 'daemon:startup-status', 'mistake:calibration', 'mistake:adjustments',
+  'chat:generating',
   // chrome / environment
   'app:version', 'daemon:platform', 'shell:open-external',
   // Settings incl. the theme + diagnostics toggles: appearance is part of "looking".
@@ -747,6 +748,14 @@ export function initIpc(): void {
 
   // ── Chat (streaming agent) ────────────────────────────────────────────────
 
+  // Conversations with a generation currently in flight. The chat view can unmount
+  // (tab switch) and remount mid-response; on remount it queries this so it can restore
+  // the "thinking" state (and re-attach) instead of showing an idle composer while the
+  // model is still working.
+  const activeChats = new Set<string>()
+  const chatKey = (conversationId?: string): string => conversationId ?? '__default__'
+  ipcMain.handle('chat:generating', (_e, conversationId?: string) => activeChats.has(chatKey(conversationId)))
+
   ipcMain.on('chat:start', async (event, text: string, images?: { media_type: string; data: string }[], conversationId?: string) => {
     const sender = event.sender
     // Streaming chat registers via ipcMain.on, so the handle-wrapper gate above cannot
@@ -772,22 +781,32 @@ export function initIpc(): void {
       const now = Date.now()
       insertAgentMessage({ role: 'user', content: text, ts: now, session_id: conversationId })
       const saved = insertAgentMessage({ role: 'assistant', content: response.reply, ts: now + 1, session_id: conversationId })
-      sender.send('chat:chunk', response.reply)
-      sender.send('chat:done', { id: saved.id, content: saved.content, timestamp: saved.ts })
+      sender.send('chat:chunk', response.reply, conversationId)
+      sender.send('chat:done', { id: saved.id, content: saved.content, timestamp: saved.ts, conversationId })
       return
     }
 
-    await agentService.chat(text, {
-      onChunk: (chunk) => { if (!sender.isDestroyed()) sender.send('chat:chunk', chunk) },
-      onToolUse: (toolName) => { if (!sender.isDestroyed()) sender.send('chat:tool', toolName) },
-      onDone: (msg) => {
-        if (!sender.isDestroyed()) {
-          sender.send('chat:done', { id: msg.id, content: msg.content, timestamp: msg.ts })
-          sendMain('store:refresh')
-        }
-      },
-      onError: (err) => { if (!sender.isDestroyed()) sender.send('chat:error', err) },
-    }, images)
+    // The conversation is tagged onto every streamed event. The renderer's chat view
+    // can unmount mid-response (switching tabs) and remount; the reply is always
+    // persisted here in main, but tagging lets the remounted view re-attach to a live
+    // stream or reconcile a completed one instead of dropping it.
+    const key = chatKey(conversationId)
+    activeChats.add(key)
+    try {
+      await agentService.chat(text, {
+        onChunk: (chunk) => { if (!sender.isDestroyed()) sender.send('chat:chunk', chunk, conversationId) },
+        onToolUse: (toolName) => { if (!sender.isDestroyed()) sender.send('chat:tool', toolName, conversationId) },
+        onDone: (msg) => {
+          if (!sender.isDestroyed()) {
+            sender.send('chat:done', { id: msg.id, content: msg.content, timestamp: msg.ts, conversationId })
+            sendMain('store:refresh')
+          }
+        },
+        onError: (err) => { if (!sender.isDestroyed()) sender.send('chat:error', err, conversationId) },
+      }, images, conversationId)   // scope the persisted user+assistant rows to this conversation
+    } finally {
+      activeChats.delete(key)   // authoritative end-of-generation, even if the sender went away
+    }
   })
 
   // Legacy handle kept for backwards compat

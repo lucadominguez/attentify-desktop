@@ -341,6 +341,21 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
     } catch { setMessages(welcomeMsg()) }
   }, [])
 
+  // If a generation is still running for this conversation (the view was closed
+  // mid-response and just remounted), restore the "thinking" state: an empty streaming
+  // placeholder so the typing indicator shows, and a streamingId so the next chunk
+  // updates it in place rather than appending a second bubble.
+  const restoreIfGenerating = useCallback(async (convId: string): Promise<void> => {
+    let generating = false
+    try { generating = await api.isChatGenerating(convId) } catch { generating = false }
+    if (!generating || streamingIdRef.current) return
+    const id = crypto.randomUUID()
+    streamingIdRef.current = id
+    setStreamingId(id)
+    setSending(true)
+    setMessages((prev) => [...prev, { id, role: 'assistant', content: '', timestamp: Date.now(), streaming: true }])
+  }, [])
+
   // Bootstrap: load conversation list, open the most recent (or create one).
   useEffect(() => {
     void (async () => {
@@ -352,10 +367,10 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
       setConversations(convs)
       const cur = convs[0]?.id ?? null
       setCurrentConvId(cur)
-      if (cur) void loadConversation(cur)
+      if (cur) { await loadConversation(cur); void restoreIfGenerating(cur) }
       else setMessages(welcomeMsg())
     })()
-  }, [loadConversation])
+  }, [loadConversation, restoreIfGenerating])
 
   const refreshConversations = useCallback(() => {
     api.getConversations().then(setConversations).catch(() => {})
@@ -391,45 +406,69 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
     }
   }, [loadConversation])
 
-  // Register streaming event listeners
+  // Register streaming event listeners. These survive independently of a single send:
+  // the view can unmount mid-response (switching tabs) and remount, so a stream may be
+  // in flight that this instance never started. Main tags every event with its
+  // conversation id and always persists the reply, so we (a) ignore events for other
+  // conversations, (b) adopt a live stream we find already running, and (c) fall back
+  // to reloading from the DB when a reply finalizes that we weren't tracking.
   useEffect(() => {
-    const offChunk = api.onChatChunk((chunk: string) => {
+    const offChunk = api.onChatChunk((chunk: string, conversationId?: string) => {
+      // Belongs to a different conversation than the one on screen — leave it alone.
+      if (conversationId && conversationId !== currentConvIdRef.current) return
       // `chunk` is the FULL sanitized reply-so-far (main scrubs tool-call JSON on every
       // update), so we REPLACE the content rather than append — junk can never persist.
-      setMessages((prev) => {
-        const id = streamingIdRef.current
-        if (!id) return prev
-        return prev.map((m) =>
-          m.id === id ? { ...m, content: chunk } : m
-        )
-      })
+      let id = streamingIdRef.current
+      if (!id) {
+        // We remounted into a stream already running: adopt it so the live text shows
+        // again instead of silently dropping until it finishes.
+        id = crypto.randomUUID()
+        streamingIdRef.current = id
+        setStreamingId(id)
+        setSending(true)
+        setMessages((prev) => [...prev, { id, role: 'assistant', content: chunk, timestamp: Date.now(), streaming: true }])
+        return
+      }
+      setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, content: chunk } : m)))
     })
 
-    const offTool = api.onChatTool((toolName: string) => {
+    const offTool = api.onChatTool((toolName: string, conversationId?: string) => {
+      if (conversationId && conversationId !== currentConvIdRef.current) return
       setActiveToolName(toolName)
       setTimeout(() => setActiveToolName(null), 3000)
     })
 
     const offDone = api.onChatDone((evt) => {
+      // A reply for another conversation finished; it's saved in the DB and will load
+      // when that conversation is opened. Nothing to do here.
+      if (evt.conversationId && evt.conversationId !== currentConvIdRef.current) return
       const sid = streamingIdRef.current
       setSending(false)
       setStreamingId(null)
       streamingIdRef.current = null
       setActiveToolName(null)
-      // Finalize the streaming message with authoritative content from DB
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === sid || m.streaming
-            ? { ...m, id: evt.id, content: evt.content, streaming: false }
-            : m
+      if (sid) {
+        // We were tracking the stream: finalize the placeholder in place.
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === sid || m.streaming
+              ? { ...m, id: evt.id, content: evt.content, streaming: false }
+              : m
+          )
         )
-      )
+      } else {
+        // Not tracking it (we unmounted while it ran and remounted after the last
+        // chunk): the reply is persisted, so reload the conversation from the DB so it
+        // appears rather than being lost from the view.
+        if (currentConvIdRef.current) void loadConversation(currentConvIdRef.current)
+      }
       refreshConversations()
       if (currentConvIdRef.current) void loadCheckpoints(currentConvIdRef.current)
       onRefresh()
     })
 
-    const offError = api.onChatError((err: string) => {
+    const offError = api.onChatError((err: string, conversationId?: string) => {
+      if (conversationId && conversationId !== currentConvIdRef.current) return
       setSending(false)
       setStreamingId(null)
       streamingIdRef.current = null
@@ -460,7 +499,7 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
       offDone()
       offError()
     }
-  }, [onRefresh])
+  }, [onRefresh, loadConversation, refreshConversations])
 
   useEffect(() => {
     const container = scrollContainerRef.current
