@@ -15,7 +15,10 @@ export type Tier = 'micro' | 'cheap' | 'premium'
 const OPENROUTER_MODELS: Record<Tier, string> = {
   micro: 'deepseek/deepseek-v4-pro',      // one-liners: overlay nudges, URL classifier
   cheap: 'deepseek/deepseek-v4-pro',      // default for most chat + tool tasks
-  premium: 'anthropic/claude-sonnet-4.5', // high-ambiguity / vision / deep reasoning
+  // Premium uses DeepSeek's reasoner because the account's OpenRouter keys don't currently
+  // serve Anthropic. To restore Claude here, enable Anthropic on the OpenRouter account and
+  // set this back to 'anthropic/claude-sonnet-4.5'.
+  premium: 'deepseek/deepseek-r1',        // high-ambiguity / deep reasoning
 }
 
 const ANTHROPIC_MODELS: Record<Tier, string> = {
