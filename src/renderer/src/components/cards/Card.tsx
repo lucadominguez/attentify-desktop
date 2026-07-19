@@ -129,7 +129,7 @@ function HeatmapViz({ cells, max, unit }: { cells: { day: number; hour: number; 
               {(byDay[day] ?? []).map((c) => (
                 <div
                   key={c.hour}
-                  title={`${WEEKDAY_SHORT[day]} ${c.hour}:00 — ${fmtValue(c.value, unit)}`}
+                  title={`${WEEKDAY_SHORT[day]} ${c.hour}:00 · ${fmtValue(c.value, unit)}`}
                   style={{
                     flex: 1, height: 10, borderRadius: 2,
                     // Intensity, not hue: the grid should read at a glance without a legend.

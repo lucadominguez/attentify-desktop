@@ -64,7 +64,7 @@ function ExtensionPanel({ colors }: { colors: ReturnType<typeof useTheme>['color
           </p>
           <p className="text-[10px] mt-0.5" style={{ color: colors.textMuted }}>
             {connected
-              ? 'Attentify is using the extension as its browser sensor — accurate URLs and page context.'
+              ? 'Attentify is using the extension as its browser sensor, with accurate URLs and page context.'
               : 'Attentify is on the fallback sensor (it reads the address bar, which is less reliable). Install the extension for accurate detection across browsers and single-page apps.'}
           </p>
         </div>
