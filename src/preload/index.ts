@@ -88,6 +88,8 @@ const api = {
   setCloudLicense: (license: string): Promise<CloudState> => ipcRenderer.invoke('cloud:set-license', license),
   clearCloudLicense: (): Promise<CloudState> => ipcRenderer.invoke('cloud:clear-license'),
   cloudCheckout: (email?: string): Promise<{ url?: string; error?: string }> => ipcRenderer.invoke('cloud:checkout', email),
+  buyCredits: (pack: string): Promise<{ url?: string; error?: string }> => ipcRenderer.invoke('cloud:buy-credits', pack),
+  refreshCloud: (): Promise<UsageState> => ipcRenderer.invoke('cloud:refresh'),
   // Account authentication
   getAuth: (): Promise<import('../shared/types').AuthState> => ipcRenderer.invoke('auth:get'),
   signUp: (email: string, password: string): Promise<import('../shared/types').AuthResult> => ipcRenderer.invoke('auth:signup', { email, password }),

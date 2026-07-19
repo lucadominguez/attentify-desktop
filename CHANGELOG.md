@@ -9,10 +9,23 @@ project uses [semantic versioning](https://semver.org/).
 ### Added
 - **Activity page** — a searchable, filterable, day-grouped feed of your local search
   history, browsing history (URLs), and app-by-app activity. Everything stays on-device.
+- **AI credits and subscription.** Every account starts with free trial credit. Top up
+  any time with a credit pack ($5 / $10 / $20), or subscribe for $9.99/mo to get unlimited
+  AI plus more custom analytics. Your remaining credits show in Settings and in chat.
 
 ### Changed
 - Moved the raw browsing/session data out of Analytics (its old *Websites* and *Log*
   tabs) onto the new Activity page; Analytics now focuses on charts, patterns and cards.
+- **AI now runs through Attentify's secure cloud service.** Signing in gives every account
+  its own metered AI, so no shared key is involved. Bringing your own OpenRouter or
+  Anthropic key still works and is never metered. AI now needs a signed-in account and an
+  internet connection.
+- When your credits run out, AI features and adaptive blocking pause until you top up or
+  subscribe. Your built-in rule packs and any blocks you set by hand keep working.
+
+### Security
+- Removed the bundled provider key from the app entirely. AI is authenticated per account
+  through the cloud service instead, so there is no shared key to leak.
 
 ### Fixed
 - **UI no longer freezes while the AI is thinking.** Streaming updates are coalesced in

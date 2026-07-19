@@ -10,8 +10,9 @@
 // and simply identifies the user. Subscription gating (cloudActive) is unchanged.
 
 import http from 'node:http'
+import os from 'node:os'
 import type { AddressInfo } from 'node:net'
-import { randomBytes } from 'node:crypto'
+import { randomBytes, createHash } from 'node:crypto'
 import { shell } from 'electron'
 import { getStore, patchStore } from './store'
 import { CLOUD_API_BASE } from './config'
@@ -20,7 +21,19 @@ import type { AuthState, AuthResult, AuthProvider } from '../shared/types'
 
 const base = (): string => CLOUD_API_BASE.replace(/\/$/, '')
 
-interface BackendUser { email?: string; tier?: string; status?: string; license_key?: string }
+interface BackendUser { email?: string; tier?: string; status?: string; license_key?: string; subscribed?: boolean; balanceMicros?: number }
+
+// Stable-ish per-device fingerprint (hostname + platform + MAC addresses, hashed). Sent
+// on signup so the backend grants the one-time free trial credit at most once per device,
+// surviving reinstalls — the client-side half of the trial anti-abuse gate.
+function deviceFingerprint(): string {
+  const macs = Object.values(os.networkInterfaces())
+    .flat()
+    .filter((n): n is os.NetworkInterfaceInfo => !!n && !n.internal && !!n.mac && n.mac !== '00:00:00:00:00:00')
+    .map((n) => n.mac)
+  const basis = [os.hostname(), os.platform(), os.arch(), ...new Set(macs)].join('|')
+  return createHash('sha256').update(basis).digest('hex').slice(0, 32)
+}
 
 export function getAuthState(): AuthState {
   const s = getStore()
@@ -35,13 +48,14 @@ export function getAuthState(): AuthState {
 // Persist a freshly authenticated user: session token for identity + license/tier for
 // gating. Called after signup/login and on session restore.
 function applyUser(token: string | null, user: BackendUser): void {
-  const active = user.status === 'active' && user.tier === 'cloud'
+  const active = user.subscribed ?? (user.status === 'active' && user.tier === 'cloud')
   patchStore({
     authToken: token ?? undefined,
     cloudLicense: user.license_key ?? getStore().cloudLicense,
     cloudActive: active,
     cloudTier: user.tier,
     cloudEmail: user.email,
+    ...(typeof user.balanceMicros === 'number' ? { creditMicros: user.balanceMicros } : {}),
   })
 }
 
@@ -49,7 +63,9 @@ async function authRequest(path: string, body: Record<string, unknown>): Promise
   try {
     const res = await fetch(`${base()}${path}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // X-Attentify-Client marks this as the desktop app: the backend uses the device
+      // fingerprint (below) for trial anti-abuse instead of the browser-only Turnstile.
+      headers: { 'Content-Type': 'application/json', 'X-Attentify-Client': 'app' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(12000),
     })
@@ -70,7 +86,7 @@ export async function signup(email: string, password: string): Promise<AuthResul
   const em = (email || '').trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) return { ok: false, error: 'Enter a valid email address.' }
   if ((password || '').length < 8) return { ok: false, error: 'Password must be at least 8 characters.' }
-  return authRequest('/v1/auth/signup', { email: em, password })
+  return authRequest('/v1/auth/signup', { email: em, password, fingerprint: deviceFingerprint() })
 }
 
 export async function login(email: string, password: string): Promise<AuthResult> {

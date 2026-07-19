@@ -5,8 +5,8 @@ import { getStore, patchStore } from './store'
 import { mergeSeeds } from './cards/seeds'
 import { resolveSource } from './cards/sources'
 import {
-  getEffectiveApiKey, getUsageState, getCloudState, setCloudLicense, clearCloudLicense,
-  startCheckout, setUsageChangeCallback,
+  getUsageState, getCloudState, setCloudLicense, clearCloudLicense,
+  startCheckout, buyCredits, setUsageChangeCallback, refreshCloudBalance, canUseAi,
 } from './billing'
 import { getAuthState, signup as authSignup, login as authLogin, logout as authLogout, getAuthProviders as authProviders, oauthLogin as authOauthLogin } from './auth'
 import { checkForUpdates, installUpdate, getUpdateStatus } from './updater'
@@ -381,15 +381,18 @@ export function initIpc(): void {
   const storedMode = (store.settings as AppSettings & { blockingMode?: 'auto' | 'ask' }).blockingMode ?? 'auto'
   inferenceEngine.setBlockingMode(storedMode)
 
-  // Initialize agent + URL guard + inference with the effective key. This is the
-  // user's own key if they pasted one, otherwise the bundled OpenRouter key, so AI
-  // works out of the box. Spend against the bundled key is metered (see billing.ts).
-  const effectiveKey = getEffectiveApiKey()
-  agentService.init(effectiveKey)
-  monitor.getUrlGuard().init(effectiveKey)
-  inferenceEngine.init(effectiveKey)
-  mistakeReviewer.init(effectiveKey)
-  contextAssessment.init(effectiveKey)
+  // (Re)build every AI client from the current auth/key state. buildAiClient() decides
+  // own-key-direct vs metered-proxy vs none; InferenceEngine only tracks whether AI is
+  // usable right now (signed in + has credit / subscription), which gates adaptive blocking.
+  const reinitAiClients = (): void => {
+    agentService?.init()
+    monitor?.getUrlGuard().init()
+    inferenceEngine?.init(canUseAi())
+    mistakeReviewer.init()
+    contextAssessment.init()
+    notificationQueue.refreshClient()
+  }
+  reinitAiClients()
 
   // Automatic recovery: when the feedback loop concludes an auto-block was a false positive,
   // it calls this to lift the block. Guarded so it only ever reverses the app's OWN blocks
@@ -825,26 +828,14 @@ export function initIpc(): void {
 
   ipcMain.handle('apikey:set', (_e, key: string) => {
     saveApiKey(key)
-    agentService?.init(key)
-    monitor?.getUrlGuard().init(key)
-    inferenceEngine?.init(key)
-    mistakeReviewer.init(key)
-    contextAssessment.init(key)
-    notificationQueue.refreshClient()
-    sendMain('usage:changed', getUsageState())  // own key → no longer metered
+    reinitAiClients()                            // own key → direct + unmetered
+    sendMain('usage:changed', getUsageState())
     return { ok: true }
   })
 
   ipcMain.handle('apikey:delete', () => {
     deleteApiKey()
-    // Fall back to the bundled key so AI keeps working (metered again).
-    const k = getEffectiveApiKey()
-    agentService?.init(k)
-    monitor?.getUrlGuard().init(k)
-    inferenceEngine?.init(k)
-    mistakeReviewer.init(k)
-    contextAssessment.init(k)
-    notificationQueue.refreshClient()
+    reinitAiClients()                            // fall back to the metered proxy (if signed in)
     sendMain('usage:changed', getUsageState())
     return { ok: true }
   })
@@ -857,23 +848,48 @@ export function initIpc(): void {
 
   ipcMain.handle('cloud:set-license', async (_e, license: string) => {
     const state = await setCloudLicense(license)
+    reinitAiClients()                            // license token now authenticates the proxy
+    sendMain('usage:changed', getUsageState())
     return state
   })
 
   ipcMain.handle('cloud:clear-license', () => {
     clearCloudLicense()
+    reinitAiClients()
+    sendMain('usage:changed', getUsageState())
     return getCloudState()
   })
 
   ipcMain.handle('cloud:checkout', async (_e, email?: string) => startCheckout(email))
+  ipcMain.handle('cloud:buy-credits', async (_e, pack: string) => buyCredits(pack))
+  ipcMain.handle('cloud:refresh', async () => { await refreshCloudBalance(); return getUsageState() })
 
   // ── Account authentication (email + password against the cloud backend) ──────
+  // On any successful sign-in the account token changes, so rebuild the AI clients and
+  // pull the fresh balance; on sign-out the same rebuild drops the client to null.
+  const afterAuthChange = async (): Promise<void> => {
+    await refreshCloudBalance()
+    reinitAiClients()
+    sendMain('usage:changed', getUsageState())
+  }
   ipcMain.handle('auth:get', () => getAuthState())
-  ipcMain.handle('auth:signup', (_e, input: { email: string; password: string }) => authSignup(input?.email ?? '', input?.password ?? ''))
-  ipcMain.handle('auth:login', (_e, input: { email: string; password: string }) => authLogin(input?.email ?? '', input?.password ?? ''))
-  ipcMain.handle('auth:logout', async () => { await authLogout(); return { ok: true, auth: getAuthState() } })
+  ipcMain.handle('auth:signup', async (_e, input: { email: string; password: string }) => {
+    const r = await authSignup(input?.email ?? '', input?.password ?? '')
+    if (r.ok) await afterAuthChange()
+    return r
+  })
+  ipcMain.handle('auth:login', async (_e, input: { email: string; password: string }) => {
+    const r = await authLogin(input?.email ?? '', input?.password ?? '')
+    if (r.ok) await afterAuthChange()
+    return r
+  })
+  ipcMain.handle('auth:logout', async () => { await authLogout(); await afterAuthChange(); return { ok: true, auth: getAuthState() } })
   ipcMain.handle('auth:providers', () => authProviders())
-  ipcMain.handle('auth:oauth', (_e, provider: AuthProvider) => authOauthLogin(provider))
+  ipcMain.handle('auth:oauth', async (_e, provider: AuthProvider) => {
+    const r = await authOauthLogin(provider)
+    if (r.ok) await afterAuthChange()
+    return r
+  })
 
   // ── Auto-update ─────────────────────────────────────────────────────────────
   ipcMain.handle('update:status', () => getUpdateStatus())

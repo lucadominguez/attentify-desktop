@@ -215,8 +215,10 @@ export interface AppStore {
   blockEventCount: number
   breakMode?: BreakMode
   contentRules?: ContentRule[]
-  // Estimated USD of AI spend against the bundled OpenRouter key (free-tier metering).
+  // Legacy local AI-spend estimate (superseded by the server-metered credit balance).
   aiUsageUsd?: number
+  // Cached AI credit balance in micro-USD (1 credit = $0.001), mirrored from the backend.
+  creditMicros?: number
   // Signed-in account: a 30-day website session token (ses_…) from /v1/auth/*.
   // Establishes identity in-app; the linked license key (cloudLicense) still drives
   // AI/cloud gating so existing billing/sync keep working unchanged.
@@ -355,12 +357,13 @@ export interface FeedBlock {
 }
 
 export interface UsageState {
-  usedUsd: number
-  limitUsd: number
-  remainingUsd: number
-  subscribed: boolean
-  hasOwnKey: boolean
-  exhausted: boolean
+  credits: number          // remaining AI credits (1 credit = $0.001)
+  balanceMicros: number    // balance in micro-USD (source of truth for `credits`)
+  subscribed: boolean      // $9.99/mo plan active
+  hasOwnKey: boolean       // user pasted their own key → unmetered
+  signedIn: boolean
+  outOfCredit: boolean     // signed-in, metered, balance <= 0 → AI + adaptive features pause
+  canUseAi: boolean
 }
 
 export interface CloudState {

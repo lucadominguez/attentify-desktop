@@ -173,6 +173,15 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
     setCheckingOut(false)
   }
 
+  const purchaseCredits = async (pack: string): Promise<void> => {
+    setCheckingOut(true)
+    try {
+      const res = await api.buyCredits(pack)
+      if (res.url) await api.openExternal(res.url)
+    } catch { /* ignore */ }
+    setCheckingOut(false)
+  }
+
   const setMode = async (mode: 'auto' | 'ask'): Promise<void> => {
     await api.setStore({ settings: { ...store.settings, blockingMode: mode } })
     onRefresh()
@@ -503,9 +512,9 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
             {cloud?.active ? (
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[11px] font-bold" style={{ color: '#34d399' }}>Cloud active, unlimited AI</p>
+                  <p className="text-[11px] font-bold" style={{ color: '#34d399' }}>Subscribed, unlimited AI</p>
                   <p className="text-[9px] mt-0.5" style={{ color: colors.textMuted }}>
-                    {cloud.email ? `Subscribed as ${cloud.email}` : 'Subscription active'} · $5/mo
+                    {cloud.email ? `Subscribed as ${cloud.email}` : 'Subscription active'} · $9.99/mo
                   </p>
                 </div>
                 <button
@@ -520,60 +529,44 @@ export default function SettingsView({ store, onRefresh, onNavigate }: SettingsP
               <p className="text-[10px]" style={{ color: colors.textSecondary }}>
                 Using your own API key, usage is billed directly to you and is never metered here.
               </p>
+            ) : !usage?.signedIn ? (
+              <p className="text-[10px]" style={{ color: colors.textSecondary }}>
+                Sign in to start with free AI credit. Your account holds your credits and subscription.
+              </p>
             ) : (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold" style={{ color: colors.textPrimary }}>Free AI credit</span>
-                  <span className="text-[10px] tabular-nums" style={{ color: usage?.exhausted ? '#f87171' : '#34d399' }}>
-                    ${(usage?.usedUsd ?? 0).toFixed(2)} / ${(usage?.limitUsd ?? 1).toFixed(2)} used
+                  <span className="text-[10px] font-semibold" style={{ color: colors.textPrimary }}>AI credits</span>
+                  <span className="text-[13px] font-bold tabular-nums" style={{ color: usage?.outOfCredit ? '#f87171' : '#34d399' }}>
+                    {(usage?.credits ?? 0).toLocaleString()} left
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${Math.min(100, Math.round(((usage?.usedUsd ?? 0) / (usage?.limitUsd || 1)) * 100))}%`,
-                      background: usage?.exhausted ? '#ff5252' : '#34d399',
-                    }}
-                  />
-                </div>
                 <p className="text-[9px]" style={{ color: colors.textMuted }}>
-                  {usage?.exhausted
-                    ? 'Your free AI credit is used up. Subscribe to Cloud for $5/mo to keep using AI features, or add your own key below.'
-                    : 'The app includes free AI to get you started. When it runs out, subscribe to Cloud ($5/mo) or add your own key.'}
+                  {usage?.outOfCredit
+                    ? 'You are out of credits. AI features and adaptive blocking are paused until you top up or subscribe. Your built-in and manual blocks keep working.'
+                    : 'Credits power the AI. Top up any time, or subscribe for unlimited AI plus more custom analytics.'}
                 </p>
                 <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={() => void subscribe()}
-                    disabled={checkingOut}
-                    className="flex-1 py-2 text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
-                    style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontFamily: '"Share Tech Mono", monospace' }}
-                  >
-                    {checkingOut ? 'Opening…' : 'Subscribe $5/mo'}
-                  </button>
+                  {(['5', '10', '20'] as const).map((pack) => (
+                    <button
+                      key={pack}
+                      onClick={() => void purchaseCredits(pack)}
+                      disabled={checkingOut}
+                      className="flex-1 py-2 text-[10px] font-bold tabular-nums transition-all disabled:opacity-50"
+                      style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', fontFamily: '"Share Tech Mono", monospace' }}
+                    >
+                      +${pack}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="password"
-                    value={licenseInput}
-                    onChange={(e) => setLicenseInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && void saveLicense()}
-                    placeholder="Have a license? pd_live_…"
-                    className="flex-1 px-3 py-2 text-[10px] outline-none"
-                    style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.1)', color: colors.textPrimary }}
-                  />
-                  <button
-                    onClick={() => void saveLicense()}
-                    disabled={!licenseInput.trim() || licenseBusy}
-                    className="px-3 py-2 text-[9px] font-bold uppercase tracking-widest disabled:opacity-40"
-                    style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', color: '#6366f1', fontFamily: '"Share Tech Mono", monospace' }}
-                  >
-                    {licenseBusy ? '…' : 'Link'}
-                  </button>
-                </div>
-                {cloud?.license && !cloud.active && (
-                  <p className="text-[9px]" style={{ color: '#ff8866' }}>That license isn’t active yet, check your subscription or re-enter it.</p>
-                )}
+                <button
+                  onClick={() => void subscribe()}
+                  disabled={checkingOut}
+                  className="w-full py-2 text-[9px] font-bold uppercase tracking-widest transition-all disabled:opacity-50"
+                  style={{ background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)', color: '#34d399', fontFamily: '"Share Tech Mono", monospace' }}
+                >
+                  {checkingOut ? 'Opening…' : 'Subscribe $9.99/mo, unlimited'}
+                </button>
               </>
             )}
           </div>

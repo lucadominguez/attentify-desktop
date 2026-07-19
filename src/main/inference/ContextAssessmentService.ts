@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { canUseAi, recordUsage } from '../billing'
 import { resolveModel } from '../agent/modelRouter'
+import { buildAiClient } from '../aiClient'
 import { contextFingerprint } from '../feedback/fingerprint'
 import { debugLog } from '../debug/logger'
 
@@ -45,16 +46,10 @@ class ContextAssessmentService {
   private lastCallTs = 0
   private chain: Promise<unknown> = Promise.resolve()
 
-  init(apiKey: string): void {
-    const isOpenRouter = apiKey.startsWith('sk-or-')
+  init(): void {
+    const { client, isOpenRouter } = buildAiClient()
+    this.client = client
     this.model = resolveModel('cheap', isOpenRouter)
-    this.client = new Anthropic({
-      apiKey,
-      ...(isOpenRouter ? {
-        baseURL: OPENROUTER_BASE,
-        defaultHeaders: { 'HTTP-Referer': 'https://attentify.ai', 'X-Title': 'Attentify' },
-      } : {}),
-    })
   }
 
   ready(): boolean { return this.client != null }

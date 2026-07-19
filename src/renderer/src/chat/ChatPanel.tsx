@@ -630,6 +630,15 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
     setCheckingOut(false)
   }, [])
 
+  const handleBuyCredits = useCallback(async (pack: string): Promise<void> => {
+    setCheckingOut(true)
+    try {
+      const res = await api.buyCredits(pack)
+      if (res.url) await api.openExternal(res.url)
+    } catch { /* ignore */ }
+    setCheckingOut(false)
+  }, [])
+
   const showQuickCommands = messages.length <= 1 ||
     (messages.length === 1 && messages[0]?.id === 'welcome')
 
@@ -883,16 +892,32 @@ export default function ChatPanel({ onClose, onRefresh, initialMessage = '', var
         </div>
       )}
 
-      {/* Paywall — free AI exhausted */}
+      {/* Paywall — out of AI credits */}
       {paywalled && (
-        <div className="px-4 pb-2 flex-shrink-0">
+        <div className="px-4 pb-2 flex-shrink-0 space-y-2">
+          <p className="text-[10px] text-center" style={{ color: colors.textMuted }}>
+            You are out of AI credits. Top up or subscribe to keep going.
+          </p>
+          <div className="flex items-center gap-2">
+            {(['5', '10', '20'] as const).map((pack) => (
+              <button
+                key={pack}
+                onClick={() => void handleBuyCredits(pack)}
+                disabled={checkingOut}
+                className="flex-1 py-2 text-[11px] font-bold tabular-nums transition-all disabled:opacity-50 rounded-xl"
+                style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.35)', color: '#818cf8' }}
+              >
+                +${pack}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => void handleSubscribe()}
             disabled={checkingOut}
             className="w-full py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 rounded-xl"
             style={{ background: 'rgba(52,211,153,0.15)', border: '1px solid rgba(52,211,153,0.35)', color: '#34d399' }}
           >
-            {checkingOut ? 'Opening checkout…' : 'Subscribe for $5/month'}
+            {checkingOut ? 'Opening checkout…' : 'Subscribe $9.99/mo, unlimited'}
           </button>
         </div>
       )}

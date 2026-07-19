@@ -587,6 +587,8 @@ declare global {
       setCloudLicense: (license: string) => Promise<import('@shared/types').CloudState>
       clearCloudLicense: () => Promise<import('@shared/types').CloudState>
       cloudCheckout: (email?: string) => Promise<{ url?: string; error?: string }>
+      buyCredits: (pack: string) => Promise<{ url?: string; error?: string }>
+      refreshCloud: () => Promise<import('@shared/types').UsageState>
       getAuth: () => Promise<import('@shared/types').AuthState>
       signUp: (email: string, password: string) => Promise<import('@shared/types').AuthResult>
       signIn: (email: string, password: string) => Promise<import('@shared/types').AuthResult>

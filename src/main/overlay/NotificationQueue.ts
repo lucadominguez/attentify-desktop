@@ -2,7 +2,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import { BrowserWindow, screen } from 'electron'
 import { join } from 'path'
 import { getActiveGoals } from '../data/repository'
-import { getEffectiveApiKey, canUseAi, recordUsage } from '../billing'
+import { canUseAi, recordUsage } from '../billing'
+import { buildAiClient } from '../aiClient'
 import { resolveModel } from '../agent/modelRouter'
 import { debugLog } from '../debug/logger'
 
@@ -60,14 +61,9 @@ class NotificationQueue {
   }
 
   refreshClient(): void {
-    const key = getEffectiveApiKey()
-    if (!key) { this.client = null; return }
-    const isOR = key.startsWith('sk-or-')
-    this.model = resolveModel('micro', isOR)
-    this.client = new Anthropic({
-      apiKey: key,
-      ...(isOR ? { baseURL: OPENROUTER_BASE, defaultHeaders: { 'HTTP-Referer': 'https://attentify.ai', 'X-Title': 'Attentify' } } : {}),
-    })
+    const { client, isOpenRouter } = buildAiClient()
+    this.client = client
+    this.model = resolveModel('micro', isOpenRouter)
   }
 
   createWindow(): void {

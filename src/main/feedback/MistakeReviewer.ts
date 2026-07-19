@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { canUseAi, recordUsage } from '../billing'
 import { resolveModel } from '../agent/modelRouter'
+import { buildAiClient } from '../aiClient'
 import { reportIssue } from '../diagnostics/report'
 import { debugLog } from '../debug/logger'
 import {
@@ -38,16 +39,10 @@ export class MistakeReviewer {
   private running = false
   private active = false
 
-  init(apiKey: string): void {
-    const isOpenRouter = apiKey.startsWith('sk-or-')
+  init(): void {
+    const { client, isOpenRouter } = buildAiClient()
+    this.client = client
     this.model = resolveModel('cheap', isOpenRouter)
-    this.client = new Anthropic({
-      apiKey,
-      ...(isOpenRouter ? {
-        baseURL: OPENROUTER_BASE,
-        defaultHeaders: { 'HTTP-Referer': 'https://attentify.ai', 'X-Title': 'Attentify' },
-      } : {}),
-    })
   }
 
   start(): void {

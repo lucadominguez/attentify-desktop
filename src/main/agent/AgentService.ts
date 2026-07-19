@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages'
 import { STATIC_INSTRUCTIONS, buildDynamicContext, type SystemContext } from './systemPrompt'
 import { resolveModel, chatTier } from './modelRouter'
+import { buildAiClient } from '../aiClient'
 import { TOOL_DEFINITIONS, executeTool, VALID_ACTION_TOOLS, type ToolDeps } from './tools'
 import type { CustomAnalyticsCard } from '../../shared/types'
 import {
@@ -59,18 +60,10 @@ export class AgentService {
     this.deps = deps
   }
 
-  init(apiKey: string): void {
-    this.isOpenRouter = apiKey.startsWith('sk-or-')
-    this.client = new Anthropic({
-      apiKey,
-      ...(this.isOpenRouter ? {
-        baseURL: OPENROUTER_BASE,
-        defaultHeaders: {
-          'HTTP-Referer': 'https://attentify.ai',
-          'X-Title': 'Attentify',
-        },
-      } : {}),
-    })
+  init(): void {
+    const { client, isOpenRouter } = buildAiClient()
+    this.client = client
+    this.isOpenRouter = isOpenRouter
   }
 
   isReady(): boolean {

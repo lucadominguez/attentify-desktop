@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { getActiveGoals, getPreferences, bufferEvent } from '../data/repository'
 import { canUseAi, recordUsage } from '../billing'
 import { resolveModel } from '../agent/modelRouter'
+import { buildAiClient } from '../aiClient'
 
 const OPENROUTER_BASE  = 'https://openrouter.ai/api'
 
@@ -111,19 +112,10 @@ export class UrlGuardService {
   private pendingUrl: string | null = null
   private pendingTitle: string | null = null
 
-  init(apiKey: string): void {
-    const isOpenRouter = apiKey.startsWith('sk-or-')
+  init(): void {
+    const { client, isOpenRouter } = buildAiClient()
+    this.client = client
     this.model = resolveModel('micro', isOpenRouter)
-    this.client = new Anthropic({
-      apiKey,
-      ...(isOpenRouter ? {
-        baseURL: OPENROUTER_BASE,
-        defaultHeaders: {
-          'HTTP-Referer': 'https://attentify.ai',
-          'X-Title': 'Attentify',
-        },
-      } : {}),
-    })
   }
 
   setAlertCallback(cb: (alert: GuardAlert) => void): void {

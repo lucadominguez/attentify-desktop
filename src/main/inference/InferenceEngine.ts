@@ -300,10 +300,11 @@ export class InferenceEngine {
     this.blockingEngine = engine
   }
 
-  init(apiKey: string): void {
+  init(aiReady: boolean): void {
     // The actual model client lives in ContextAssessmentService (inited alongside this in
-    // ipc.ts). We only note that AI is configured.
-    this.aiReady = !!apiKey
+    // ipc.ts). We only note whether AI is usable right now: false when signed out OR out of
+    // credit, which pauses adaptive AI classification (static + manual blocking still run).
+    this.aiReady = aiReady
   }
 
   setCallbacks(opts: {

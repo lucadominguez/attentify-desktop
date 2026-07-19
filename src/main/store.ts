@@ -31,6 +31,7 @@ const defaultStore: AppStore = {
   settings: defaultSettings,
   blockEventCount: 0,
   aiUsageUsd: 0,
+  creditMicros: 0,
   cloudActive: false,
   // Shown in the Overview as feed-level blocks (enforced by the browser extension).
   feedBlocks: [
