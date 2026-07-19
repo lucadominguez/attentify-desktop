@@ -39,3 +39,16 @@ export function estimateCostUsd(model: string, inputTokens: number, outputTokens
   const [inPrice, outPrice] = MODEL_PRICING[model] ?? DEFAULT_PRICING
   return (inputTokens / 1_000_000) * inPrice + (outputTokens / 1_000_000) * outPrice
 }
+
+// Browser extension. Installing it upgrades the app from address-bar scraping (a
+// fallback) onto an accurate, richer sensor. Once the extension is published to the
+// Chrome Web Store, set EXTENSION_STORE_ID to its ID: the app then offers a true
+// one-click install (and, on managed setups, a registry force-install). Until then,
+// install is a guided sideload of the downloadable build.
+export const EXTENSION_STORE_ID = ''   // e.g. 'abcdefghijklmnopabcdefghijklmnop' once listed
+export const EXTENSION_WEBSTORE_URL = EXTENSION_STORE_ID
+  ? `https://chromewebstore.google.com/detail/${EXTENSION_STORE_ID}`
+  : ''
+// Where the sideloadable build lives until the store listing exists. Points at the LIVE
+// deployment (attentify.ca isn't on Cloudflare yet); clicking Install downloads the zip.
+export const EXTENSION_DOWNLOAD_URL = 'https://productivity-daemon.pages.dev/ext/attentify-extension.zip'
