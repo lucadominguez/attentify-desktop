@@ -306,7 +306,9 @@ async function handle(req: IncomingMessage, res: ServerResponse, deps: Deps): Pr
 
       await new Promise<void>((resolve, reject) => {
         svc.chat(message, {
-          onChunk: (c) => { fullContent += c },
+          // onChunk emits the FULL sanitized reply-so-far each time (not a delta), so
+          // REPLACE — appending produced "TheThe existing…" style duplication downstream.
+          onChunk: (c) => { fullContent = c },
           onToolUse: (t) => { toolsUsed.push(t) },
           onDone: () => resolve(),
           onError: (e) => reject(new Error(e)),
