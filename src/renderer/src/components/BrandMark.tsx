@@ -1,12 +1,12 @@
 import React from 'react'
 import logoUrl from '../assets/logo.png'
 
-// The Attentify mark, the real brand logo (friendly robot).
+// The Attentify mark, the real brand logo (the "A" monogram on its dark field).
 //
-// The art carries its own dark field and its corners are already rounded transparent by
-// scripts/make-robot-icon.mjs, so this no longer forces a white tile behind it. It used
-// to: the previous source sat on a white field and needed one to read as a badge. With
-// the current art a white tile would ring the dark icon.
+// The art carries its own dark field, so this does not force a white tile behind it. It
+// used to (the earlier robot source sat on a white field and needed one to read as a
+// badge); with the current art a white tile would ring the dark icon. `rounded` just
+// clips the corners of the square art.
 export default function BrandMark({
   size = 28,
   className,
