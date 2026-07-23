@@ -1,5 +1,7 @@
 import React from 'react'
-import logoUrl from '../assets/logo.png'
+import logoDark from '../assets/logo.png'
+import logoLight from '../assets/logo-light.png'
+import { useTheme } from '../context/ThemeContext'
 
 // The Attentify mark, the real brand logo (the "A" monogram on its dark field).
 //
@@ -18,6 +20,9 @@ export default function BrandMark({
   style?: React.CSSProperties
   rounded?: boolean
 }): React.ReactElement {
+  // Theme-aware: the dark-tile "A" on dark, the light-tile "A" on light.
+  const { theme } = useTheme()
+  const logoUrl = theme === 'light' ? logoLight : logoDark
   return (
     <div
       className={className}
